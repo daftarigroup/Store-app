@@ -771,7 +771,7 @@ export default () => {
                 emailBody?: string;
             } = {
                 file,
-                folderId: import.meta.env.VITE_PURCHASE_ORDERS_FOLDER || '',
+                folderId: 'po_image',
                 uploadType: 'upload',
             };
 

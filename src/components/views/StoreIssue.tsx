@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/select';
 import { ClipLoader as Loader } from 'react-spinners';
 import { ClipboardList, Trash, Search } from 'lucide-react';
-import { postToIssueSheet, postToSheet, uploadFile } from '@/lib/fetchers';
+import { uploadFile } from '@/lib/fetchers';
 import type { IndentSheet } from '@/types';
 
 import type { IssueSheet } from '@/types';

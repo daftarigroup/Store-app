@@ -436,13 +436,13 @@ export default function PIApprovals() {
             setUploadingFile(true);
             const driveLink = await uploadFile({
                 file: file,
-                folderId: import.meta.env.VITE_BILL_PHOTO_FOLDER
+                folderId: 'photo_of_bill'
             });
 
             form.setValue('file', driveLink);
-            toast.success('File uploaded successfully to Google Drive');
+            toast.success('File uploaded successfully');
         } catch (error) {
-            toast.error('Failed to upload file to Google Drive');
+            toast.error('Failed to upload file');
             console.error('Upload error:', error);
         } finally {
             setUploadingFile(false);
@@ -812,7 +812,7 @@ export default function PIApprovals() {
                                                             {uploadingFile && (
                                                                 <div className="flex items-center gap-2 text-sm text-blue-600">
                                                                     <Loader size={16} color="blue" />
-                                                                    Uploading to Google Drive...
+                                                                    Uploading...
                                                                 </div>
                                                             )}
                                                             {field.value && !uploadingFile && (
