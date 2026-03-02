@@ -31,6 +31,7 @@ import { Truck } from 'lucide-react';
 import { Tabs, TabsContent } from '../ui/tabs';
 import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
+import { formatDateTime, parseCustomDate } from '@/lib/utils';
 import { Pill } from '../ui/pill';
 
 interface StoreInPendingData {
@@ -54,6 +55,7 @@ interface StoreInPendingData {
     priceAsPerPo?: number;
     remark?: string;
     planned7Date: string;
+    timestamp: string;
 }
 
 interface StoreInHistoryData {
@@ -79,6 +81,7 @@ interface StoreInHistoryData {
     priceAsPerPo?: number;
     remark?: string;
     planned7Date: string;
+    timestamp: string;
 }
 
 // ✅ Safe date formatter
@@ -174,6 +177,7 @@ export default () => {
                     remark: i.remark || '',
                     firmNameMatch: i.firmNameMatch || '',
                     planned7Date: i.planned7 || '',
+                    timestamp: i.timestamp || '',
                 }))
         );
 
@@ -203,6 +207,7 @@ export default () => {
                     remark: i.remark || '',
                     firmNameMatch: i.firmNameMatch || '',
                     planned7Date: i.planned7 || '',
+                    timestamp: i.timestamp || '',
                 }))
         );
     }, [storeInRecords, user.firmNameMatch]);
@@ -296,6 +301,11 @@ export default () => {
                 },
             ]
             : []),
+        {
+            accessorKey: 'timestamp',
+            header: 'Timestamp',
+            cell: ({ getValue }) => <div>{getValue() ? formatDateTime(parseCustomDate(getValue())) : '-'}</div>,
+        },
         { accessorKey: 'liftNumber', header: 'Lift Number' },
         { accessorKey: 'indentNumber', header: 'Indent No.' },
         { accessorKey: 'billNo', header: 'Bill No.' },
@@ -336,6 +346,11 @@ export default () => {
     ];
 
     const historyColumns: ColumnDef<StoreInHistoryData>[] = [
+        {
+            accessorKey: 'timestamp',
+            header: 'Timestamp',
+            cell: ({ getValue }) => <div>{getValue() ? formatDateTime(parseCustomDate(getValue())) : '-'}</div>,
+        },
         { accessorKey: 'liftNumber', header: 'Lift Number' },
         { accessorKey: 'indentNumber', header: 'Indent No.' },
         { accessorKey: 'billNo', header: 'Bill No.' },

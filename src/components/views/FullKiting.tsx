@@ -22,10 +22,12 @@ import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
-import { Truck } from 'lucide-react';
+import { Truck, ExternalLink } from 'lucide-react';
 import Heading from '../element/Heading';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { fetchFullkittingRecords, updateFullkittingRecord, uploadBiltyImage, type FullkittingRecord } from '@/services/fullkittingService';
 import { createPaymentEntry } from '@/services/storeInService';
+import { formatDateTime, parseCustomDate } from '@/lib/utils';
 
 // Helper function to format date as "YYYY-MM-DD"
 function formatDate(date: Date): string {
@@ -91,6 +93,11 @@ export default function FullKiting() {
                 );
             },
         },
+        {
+            accessorKey: 'timestamp',
+            header: 'Timestamp',
+            cell: ({ getValue }) => <div>{getValue() ? formatDateTime(parseCustomDate(getValue())) : '-'}</div>,
+        },
         { accessorKey: 'indentNumber', header: 'Indent Number' },
         { accessorKey: 'firmNameMatch', header: 'Firm Name Match' },
         { accessorKey: 'vendorName', header: 'Vendor Name' },
@@ -104,7 +111,7 @@ export default function FullKiting() {
                 const plannedDate = getValue() as string;
                 return (
                     <div className={`${!plannedDate ? 'text-muted-foreground italic' : ''}`}>
-                        {plannedDate ? formatDate(new Date(plannedDate)) : 'Not Set'}
+                        {plannedDate ? formatDateTime(parseCustomDate(plannedDate)) : 'Not Set'}
                     </div>
                 );
             }
@@ -112,6 +119,35 @@ export default function FullKiting() {
         { accessorKey: 'transportingInclude', header: 'Transporting Include' },
         { accessorKey: 'transporterName', header: 'Transporter Name' },
         { accessorKey: 'amount', header: 'Amount' },
+    ];
+
+    const historyColumns: ColumnDef<FullkittingRecord>[] = [
+        {
+            accessorKey: 'timestamp',
+            header: 'Timestamp',
+            cell: ({ getValue }) => <div>{getValue() ? formatDateTime(parseCustomDate(getValue())) : '-'}</div>,
+        },
+        { accessorKey: 'indentNumber', header: 'Indent Number' },
+        { accessorKey: 'firmNameMatch', header: 'Firm Name Match' },
+        { accessorKey: 'vendorName', header: 'Vendor Name' },
+        { accessorKey: 'productName', header: 'Product Name' },
+        { accessorKey: 'qty', header: 'Qty' },
+        { accessorKey: 'actual', header: 'Actual Date', cell: ({ getValue }) => getValue() ? formatDateTime(parseCustomDate(getValue() as string)) : '-' },
+        { accessorKey: 'vehicleNumber', header: 'Vehicle Number' },
+        { accessorKey: 'biltyNumber', header: 'Bilty Number' },
+        { accessorKey: 'amount1', header: 'Freight Amount' },
+        {
+            accessorKey: 'biltyImage',
+            header: 'Bilty Image',
+            cell: ({ getValue }) => {
+                const url = getValue() as string;
+                return url ? (
+                    <Button variant="ghost" size="sm" onClick={() => window.open(url, '_blank')}>
+                        <ExternalLink className="h-4 w-4 mr-1" /> View
+                    </Button>
+                ) : '-';
+            }
+        }
     ];
 
     const schema = z.object({
@@ -206,18 +242,33 @@ export default function FullKiting() {
     return (
         <div>
             <Dialog open={openDialog} onOpenChange={setOpenDialog}>
-                <Heading heading="Full Kitting" subtext="Manage full kitting details">
-                    <Truck size={50} className="text-primary" />
-                </Heading>
+                <Tabs defaultValue="pending">
+                    <Heading heading="Full Kitting" subtext="Manage full kitting details" tabs>
+                        <Truck size={50} className="text-primary" />
+                    </Heading>
 
-                <div className="p-5">
-                    <DataTable
-                        data={pendingData}
-                        columns={columns}
-                        searchFields={['indentNumber', 'productName', 'vendorName', 'firmNameMatch']}
-                        dataLoading={dataLoading}
-                    />
-                </div>
+                    <TabsContent value="pending">
+                        <div className="p-5">
+                            <DataTable
+                                data={pendingData}
+                                columns={columns}
+                                searchFields={['indentNumber', 'productName', 'vendorName', 'firmNameMatch']}
+                                dataLoading={dataLoading}
+                            />
+                        </div>
+                    </TabsContent>
+
+                    <TabsContent value="history">
+                        <div className="p-5">
+                            <DataTable
+                                data={historyData}
+                                columns={historyColumns}
+                                searchFields={['indentNumber', 'productName', 'vendorName', 'firmNameMatch', 'vehicleNumber', 'biltyNumber']}
+                                dataLoading={dataLoading}
+                            />
+                        </div>
+                    </TabsContent>
+                </Tabs>
 
                 {selectedIndent && (
                     <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">

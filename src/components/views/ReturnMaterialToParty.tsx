@@ -24,6 +24,7 @@ import { Tabs, TabsContent } from '../ui/tabs';
 import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
 import { Pill } from '../ui/pill';
+import { formatDateTime, parseCustomDate } from '@/lib/utils';
 import { fetchStoreInRecords, updateStoreInReturnToParty } from '@/services/storeInService';
 
 interface StoreInPendingData {
@@ -42,6 +43,7 @@ interface StoreInPendingData {
     transporterName: string;
     amount: number;
     firmNameMatch: string;
+    timestamp: string;
 }
 
 interface StoreInHistoryData {
@@ -62,6 +64,7 @@ interface StoreInHistoryData {
     billNumber: string;
     statusPurchaser: string;
     firmNameMatch: string;
+    timestamp: string;
 }
 
 export default () => {
@@ -101,6 +104,7 @@ export default () => {
                     transporterName: i.transporterName,
                     amount: i.amount,
                     firmNameMatch: i.firmNameMatch,
+                    timestamp: i.timestamp || '',
                 }));
 
             setPendingData(pending);
@@ -125,6 +129,7 @@ export default () => {
                     billNumber: i.billNumber,
                     statusPurchaser: i.statusPurchaser,
                     firmNameMatch: i.firmNameMatch,
+                    timestamp: i.timestamp || '',
                 }));
 
             setHistoryData(history);
@@ -165,6 +170,11 @@ export default () => {
                 },
             ]
             : []),
+        {
+            accessorKey: 'timestamp',
+            header: 'Timestamp',
+            cell: ({ getValue }) => <div>{getValue() ? formatDateTime(parseCustomDate(getValue())) : '-'}</div>,
+        },
         { accessorKey: 'liftNumber', header: 'Lift Number' },
         { accessorKey: 'firmNameMatch', header: 'Firm Name' },
         { accessorKey: 'indentNumber', header: 'Indent No.' },
@@ -196,6 +206,11 @@ export default () => {
     ];
 
     const historyColumns: ColumnDef<StoreInHistoryData>[] = [
+        {
+            accessorKey: 'timestamp',
+            header: 'Timestamp',
+            cell: ({ getValue }) => <div>{getValue() ? formatDateTime(parseCustomDate(getValue())) : '-'}</div>,
+        },
         { accessorKey: 'liftNumber', header: 'Lift Number' },
         { accessorKey: 'firmNameMatch', header: 'Firm Name' },
         { accessorKey: 'indentNumber', header: 'Indent No.' },

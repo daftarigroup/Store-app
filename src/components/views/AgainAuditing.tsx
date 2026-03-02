@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import type { ColumnDef, Row } from '@tanstack/react-table';
 import DataTable from '../element/DataTable';
 import { useAuth } from '@/context/AuthContext';
+import { formatDateTime, parseCustomDate } from '@/lib/utils';
 import { Button } from '../ui/button';
 import {
   Dialog,
@@ -149,6 +150,11 @@ export default function AgainAuditingTable() {
           </DialogTrigger>
         );
       },
+    },
+    {
+      accessorKey: 'timestamp',
+      header: 'Timestamp',
+      cell: ({ getValue }) => <div>{getValue() ? formatDateTime(parseCustomDate(getValue())) : '-'}</div>,
     },
     { accessorKey: 'indentNumber', header: 'Indent Number' },
     {

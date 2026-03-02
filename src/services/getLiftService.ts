@@ -23,6 +23,7 @@ export interface GetLiftIndentRecord {
     pendingQty: number;
     liftingStatus: string;
     cancelQty: number;
+    timestamp: string;
 }
 
 export interface GetLiftStoreInRecord {
@@ -31,6 +32,7 @@ export interface GetLiftStoreInRecord {
     vendorName: string;
     receivedQuantity: number;
     photoOfBill: string;
+    timestamp: string;
 }
 
 export interface VendorOption {
@@ -100,6 +102,7 @@ export async function fetchIndentRecords() {
             pendingQty: Number(r.pending_qty) || 0,
             liftingStatus: r.lifting_status || '',
             cancelQty: Number(r.cancel_qty) || 0,
+            timestamp: r.timestamp || '',
         }));
     } catch (error) {
         console.error('Error fetching indent records:', error);
@@ -126,6 +129,7 @@ export async function fetchStoreInRecords() {
             vendorName: r.vendor_name || '',
             receivedQuantity: Number(r.received_quantity) || 0,
             photoOfBill: r.photo_of_bill || '',
+            timestamp: r.timestamp || '',
         }));
     } catch (error) {
         console.error('Error fetching store-in records:', error);

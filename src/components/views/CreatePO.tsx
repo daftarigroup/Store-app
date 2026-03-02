@@ -20,6 +20,8 @@ import {
     calculateTotalGst,
     cn,
     formatDate,
+    formatDateTime,
+    parseCustomDate,
 } from '@/lib/utils';
 import { toast } from 'sonner';
 import { ClipLoader as Loader } from 'react-spinners';
@@ -163,40 +165,6 @@ interface MasterDetails {
 }
 
 
-
-function parseCustomDate(dateStr: any): Date {
-    if (!dateStr) return new Date();
-    if (dateStr instanceof Date) return isNaN(dateStr.getTime()) ? new Date() : dateStr;
-
-    // Try standard parsing first (handles ISO strings)
-    const d = new Date(dateStr);
-    if (!isNaN(d.getTime())) return d;
-
-    // Handle DD/MM/YY HH:mm:ss or DD/MM/YYYY
-    if (typeof dateStr === 'string') {
-        const cleanStr = dateStr.trim();
-        // Regex for DD/MM/YY or DD/MM/YYYY with optional time
-        const match = cleanStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/);
-
-        if (match) {
-            const day = parseInt(match[1], 10);
-            const month = parseInt(match[2], 10) - 1; // 0-based
-            let year = parseInt(match[3], 10);
-
-            if (year < 100) year += 2000; // Assume 20xx for 2-digit years
-
-            const hours = match[4] ? parseInt(match[4], 10) : 0;
-            const minutes = match[5] ? parseInt(match[5], 10) : 0;
-            const seconds = match[6] ? parseInt(match[6], 10) : 0;
-
-            const newD = new Date(year, month, day, hours, minutes, seconds);
-            if (!isNaN(newD.getTime())) return newD;
-        }
-    }
-
-    console.warn("Could not parse date, defaulting to now:", dateStr);
-    return new Date();
-}
 
 export default () => {
     const { user } = useAuth();
@@ -787,15 +755,7 @@ export default () => {
             const rows: PoMasterSheet[] = values.indents.map((v) => {
                 const indent = indentSheet.find((i: IndentSheetItem) => i.indentNumber === v.indentNumber);
 
-                const formatDateTime = (date: Date) => {
-                    const pad = (n: number) => n.toString().padStart(2, '0');
-                    return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date
-                        .getFullYear()
-                        .toString()
-                        .slice(-2)} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(
-                            date.getSeconds()
-                        )}`;
-                };
+
 
                 return {
                     timestamp: values.poDate.toISOString(),
@@ -845,9 +805,10 @@ export default () => {
 
             await insertPoRecords(rows);
 
-            // Update indents to mark PO as created (set actual4)
+            // Update indents to mark PO as created (set actual4 and delivery_date)
             const indentNumbers = values.indents.map(v => v.indentNumber);
-            await updateIndentsAfterPoCreation(indentNumbers);
+            const deliveryDateFormatted = formatDateTime(values.deliveryDate);
+            await updateIndentsAfterPoCreation(indentNumbers, deliveryDateFormatted);
 
             toast.success(`Successfully ${mode}d purchase order`);
             form.reset();

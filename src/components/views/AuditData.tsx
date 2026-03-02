@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import type { ColumnDef, Row } from '@tanstack/react-table';
 import DataTable from '../element/DataTable';
 import { useAuth } from '@/context/AuthContext';
+import { formatDateTime, parseCustomDate } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Button } from '../ui/button';
 import {
@@ -184,6 +185,7 @@ interface ProcessedTallyData {
   status3: string;
   status4: string;
   status5: string;
+  timestamp: string;
 }
 
 // Define form values type
@@ -280,6 +282,7 @@ export default function PcReportTable() {
           status3: item.status3,
           status4: item.status4,
           status5: item.status5,
+          timestamp: item.timestamp || '',
         };
       }).filter((item): item is ProcessedTallyData => item !== null);
 
@@ -442,6 +445,11 @@ export default function PcReportTable() {
           </DialogTrigger>
         );
       },
+    },
+    {
+      accessorKey: 'timestamp',
+      header: 'Timestamp',
+      cell: ({ getValue }) => <div>{getValue() ? formatDateTime(parseCustomDate(getValue())) : '-'}</div>,
     },
     {
       accessorKey: 'indentNumber',
@@ -651,6 +659,11 @@ export default function PcReportTable() {
 
   // Update completedColumns to show all status and remarks
   const completedColumns: ColumnDef<ProcessedTallyData>[] = [
+    {
+      accessorKey: 'timestamp',
+      header: 'Timestamp',
+      cell: ({ getValue }) => <div>{getValue() ? formatDateTime(parseCustomDate(getValue())) : '-'}</div>,
+    },
     {
       accessorKey: 'indentNumber',
       header: 'Indent No.'

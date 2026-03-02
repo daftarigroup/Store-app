@@ -24,7 +24,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { ShoppingCart, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
-import { formatDate } from '@/lib/utils';
+import { formatDate, formatDateTime, parseCustomDate } from '@/lib/utils';
 import {
     fetchIndentRecords,
     fetchStoreInRecords,
@@ -50,6 +50,7 @@ interface GetPurchaseData {
     receivedQty?: number;
     pendingPoQty?: number;
     plannedDate?: string;
+    timestamp?: string;
 }
 
 interface HistoryData {
@@ -65,6 +66,7 @@ interface HistoryData {
     pendingLiftQty?: number;
     receivedQty?: number;
     pendingPoQty?: number;
+    timestamp?: string;
 }
 
 interface AuthUser {
@@ -152,18 +154,19 @@ export default function GetPurchase() {
                         firmNameMatch: sheet.firmNameMatch || '',
                         vendorName: sheet.approvedVendorName || '',
                         poNumber: sheet.poNumber || '',
-                        poDate: sheet.actual4 ? formatDate(new Date(sheet.actual4)) : '',
+                        poDate: sheet.actual4 ? formatDate(parseCustomDate(sheet.actual4)) : '',
                         deliveryDate: sheet.deliveryDate
-                            ? formatDate(new Date(sheet.deliveryDate))
+                            ? formatDate(parseCustomDate(sheet.deliveryDate))
                             : '',
                         plannedDate: sheet.planned5
-                            ? formatDate(new Date(sheet.planned5))
+                            ? formatDate(parseCustomDate(sheet.planned5))
                             : 'Not Set',
                         product: sheet.productName || '',
                         quantity: Number(sheet.totalQty) || Number(sheet.quantity) || 0,
                         pendingLiftQty: pendingPoQty,
                         receivedQty: receivedQty,
                         pendingPoQty: pendingPoQty,
+                        timestamp: sheet.timestamp || '',
                     };
                 })
         );
@@ -190,9 +193,9 @@ export default function GetPurchase() {
                 sheet.indentNumber?.toString() || '',
                 {
                     poNumber: sheet.poNumber || '',
-                    poDate: sheet.actual4 ? formatDate(new Date(sheet.actual4)) : '',
+                    poDate: sheet.actual4 ? formatDate(parseCustomDate(sheet.actual4)) : '',
                     deliveryDate: sheet.deliveryDate
-                        ? formatDate(new Date(sheet.deliveryDate))
+                        ? formatDate(parseCustomDate(sheet.deliveryDate))
                         : '',
                     approvedVendorName: sheet.approvedVendorName || '',
                     productName: sheet.productName || '',
@@ -245,6 +248,7 @@ export default function GetPurchase() {
                         receivedQty: receivedQty,
                         pendingPoQty: Math.max(0, pendingLift),
                         photoOfBill: sheet.photoOfBill || '',
+                        timestamp: sheet.timestamp || '',
                     };
                 })
                 .sort((a, b) => b.indentNo.localeCompare(a.indentNo))
@@ -279,6 +283,11 @@ export default function GetPurchase() {
                 },
             ]
             : []),
+        {
+            accessorKey: 'timestamp',
+            header: 'Timestamp',
+            cell: ({ getValue }) => <div>{getValue() ? formatDateTime(parseCustomDate(getValue())) : '-'}</div>,
+        },
         {
             accessorKey: 'indentNo',
             header: 'Indent No.',
@@ -341,6 +350,11 @@ export default function GetPurchase() {
     ];
 
     const historyColumns: ColumnDef<HistoryData>[] = [
+        {
+            accessorKey: 'timestamp',
+            header: 'Timestamp',
+            cell: ({ getValue }) => <div>{getValue() ? formatDateTime(parseCustomDate(getValue())) : '-'}</div>,
+        },
         {
             accessorKey: 'indentNo',
             header: 'Indent No.',

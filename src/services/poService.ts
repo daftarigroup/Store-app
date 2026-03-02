@@ -245,14 +245,20 @@ export async function insertPoRecords(poRecords: any[]) {
 
 /**
  * Update indent records to mark them as having PO created
- * Sets actual4 timestamp for indents that are included in the PO
+ * Sets actual4 timestamp and delivery_date for indents that are included in the PO
  * @param indentNumbers - Array of indent numbers to update
+ * @param deliveryDate - The delivery date from the PO
  */
-export async function updateIndentsAfterPoCreation(indentNumbers: string[]) {
+export async function updateIndentsAfterPoCreation(indentNumbers: string[], deliveryDate?: string) {
     try {
+        const updateData: any = { actual4: new Date().toISOString() };
+        if (deliveryDate) {
+            updateData.delivery_date = deliveryDate;
+        }
+
         const { error } = await supabase
             .from('indent')
-            .update({ actual4: new Date().toISOString() })
+            .update(updateData)
             .in('indent_number', indentNumbers);
 
         if (error) throw error;

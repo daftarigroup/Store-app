@@ -26,7 +26,7 @@ import { Truck, Search } from 'lucide-react';
 import { Tabs, TabsContent } from '../ui/tabs';
 import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
-import { formatDate } from '@/lib/utils';
+import { formatDate, formatDateTime, parseCustomDate } from '@/lib/utils';
 import { Pill } from '../ui/pill';
 import {
     fetchStoreInRecords,
@@ -64,6 +64,7 @@ interface StoreInPendingData {
     discountAmount: number;
     firmNameMatch: string;
     planned6Date: string;
+    timestamp: string;
 }
 
 interface StoreInHistoryData {
@@ -255,6 +256,7 @@ export default () => {
                     discountAmount: i.discountAmount || 0,
                     firmNameMatch: i.firmNameMatch || '',
                     planned6Date: i.planned6 || '',
+                    timestamp: i.timestamp || '',
                 }))
         );
     }, [storeInRecords, user.firmNameMatch]);
@@ -297,13 +299,13 @@ export default () => {
                     vendor: i.vendorName || '',
                     product: i.productName || '',
                     orderQuantity: i.qty || 0,
-                    receivedDate: i.timestamp ? formatDate(new Date(i.timestamp)) : '',
+                    receivedDate: i.timestamp ? formatDateTime(parseCustomDate(i.timestamp)) : '',
                     warrantyStatus: '',
                     warrantyEndDate: '',
                     billNumber: i.billNumber || String(i.billNo) || '',
                     anyTransport: i.transportationInclude || '',
                     transportingAmount: i.amount || 0,
-                    timestamp: i.timestamp ? formatDate(new Date(i.timestamp)) : '',
+                    timestamp: i.timestamp ? formatDateTime(parseCustomDate(i.timestamp)) : '',
                     leadTimeToLiftMaterial: i.leadTimeToLiftMaterial || 0,
                     discountAmount: i.discountAmount || 0,
                     billReceived: i.billStatus || '',
@@ -337,6 +339,11 @@ export default () => {
                 },
             ]
             : []),
+        {
+            accessorKey: 'timestamp',
+            header: 'Timestamp',
+            cell: ({ getValue }) => <div>{getValue() ? formatDateTime(parseCustomDate(getValue())) : '-'}</div>,
+        },
         { accessorKey: 'liftNumber', header: 'Lift Number' },
         { accessorKey: 'indentNo', header: 'Indent No.' },
         { accessorKey: 'poNumber', header: 'PO Number' },
