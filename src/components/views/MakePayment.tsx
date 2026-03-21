@@ -280,8 +280,8 @@ export default function MakePayment() {
                         amountToBePaid: Number(r.amount_to_be_paid) || 0,
                         remarks: r.remarks || '',
                         anyAttachments: r.any_attachments || '',
-                        planned: '', // Not in payment_history schema
-                        paymentTerms: r.payment_type || '',
+                        planned: r.planned || '',
+                        paymentTerms: r.payment_terms || '',
                         billImage: r.photo_of_bill || r.any_attachments || '',
                         poImage: r.any_attachments || '',
                         billImageStatus: r.bill_status || '',
@@ -463,6 +463,8 @@ export default function MakePayment() {
                     remarks: item.remark || `Payment completed for ${item.uniqueNo}`,
                     any_attachments: item.file || item.pdf || '',
                     timestamp1: currentDate,
+                    planned: item.planned || '',
+                    payment_terms: item.paymentTerms || '',
                     indent_no: item.internalCode,
                     po_number: item.poNumber,
                     product_name: item.product,
@@ -760,15 +762,6 @@ export default function MakePayment() {
             )
         },
         {
-            accessorKey: 'planned',
-            header: 'Planned Date',
-            cell: ({ row }) => (
-                <span className="text-sm text-gray-600">
-                    {formatDate(row.original.planned) || '-'}
-                </span>
-            )
-        },
-        {
             accessorKey: 'uniqueNumber',
             header: 'Unique Number',
             cell: ({ row }) => (
@@ -778,10 +771,13 @@ export default function MakePayment() {
             )
         },
         {
-            accessorKey: 'fmsName',
-            header: 'FMS Name',
+            accessorKey: 'apPaymentNumber',
+            header: 'AP Payment No.',
+            size: 130,
             cell: ({ row }) => (
-                <span className="font-medium">{row.original.fmsName || '-'}</span>
+                <div className="bg-gray-50 py-1 px-2 rounded-md inline-block border text-xs font-medium whitespace-nowrap">
+                    {row.original.apPaymentNumber || '-'}
+                </div>
             )
         },
         {
@@ -792,20 +788,20 @@ export default function MakePayment() {
             )
         },
         {
-            accessorKey: 'paymentTerms',
-            header: 'Payment Terms',
-            cell: ({ row }) => (
-                <span className="text-sm italic text-gray-600">
-                    {row.original.paymentTerms || '-'}
-                </span>
-            )
-        },
-        {
             accessorKey: 'amountToBePaid',
             header: 'Amount',
             cell: ({ row }) => (
                 <span className="font-bold text-green-600">
                     ₹{row.original.amountToBePaid?.toLocaleString('en-IN')}
+                </span>
+            )
+        },
+        {
+            accessorKey: 'paymentTerms',
+            header: 'Payment Terms',
+            cell: ({ row }) => (
+                <span className="text-sm italic text-gray-600">
+                    {row.original.paymentTerms || '-'}
                 </span>
             )
         },
@@ -830,6 +826,15 @@ export default function MakePayment() {
                     </span>
                 );
             }
+        },
+        {
+            accessorKey: 'planned',
+            header: 'Planned Date',
+            cell: ({ row }) => (
+                <span className="text-sm text-gray-600">
+                    {formatDate(row.original.planned) || '-'}
+                </span>
+            )
         },
         {
             id: 'bill_image',
@@ -909,34 +914,20 @@ export default function MakePayment() {
         {
             accessorKey: 'remarks',
             header: 'Remarks',
+            size: 160,
             cell: ({ row }) => (
-                <span className="text-sm text-gray-600 max-w-xs truncate">
+                <span className="text-sm text-gray-600 break-words whitespace-normal leading-snug block max-w-[160px]">
                     {row.original.remarks || '-'}
                 </span>
             )
         },
-        { accessorKey: 'liftNumber', header: 'Lift Number' },
-        { accessorKey: 'indentNo', header: 'Indent No.' },
-        { accessorKey: 'poNumber', header: 'PO Number' },
-        { accessorKey: 'vendorName', header: 'Vendor Name' },
-        { accessorKey: 'productName', header: 'Product Name' },
-        { accessorKey: 'billStatus', header: 'Bill Status' },
-        { accessorKey: 'billNo', header: 'Bill No.' },
-        { accessorKey: 'qty', header: 'Qty' },
-        { accessorKey: 'typeOfBill', header: 'Type Of Bill' },
-        { accessorKey: 'billAmount', header: 'Bill Amount' },
-        { accessorKey: 'discountAmount', header: 'Discount Amount' },
-        { accessorKey: 'paymentType', header: 'Payment Type' },
-        { accessorKey: 'advanceAmountIfAny', header: 'Advance Amount If Any' },
-        { accessorKey: 'transportationInclude', header: 'Transportation' },
-        { accessorKey: 'transporterName', header: 'Transporter' },
-        { accessorKey: 'amount', header: 'Amount (Total)' },
-        { accessorKey: 'billRemark', header: 'Bill Remark' },
-        { accessorKey: 'apPaymentNumber', header: 'AP Payment No.' },
-        { accessorKey: 'timestamp1', header: 'Processed Date' },
-        { accessorKey: 'vehicle_no', header: 'Vehicle No.' },
-        { accessorKey: 'driver_name', header: 'Driver Name' },
-        { accessorKey: 'driver_mobile_no', header: 'Driver Mobile' },
+        {
+            accessorKey: 'fmsName',
+            header: 'FMS Name',
+            cell: ({ row }) => (
+                <span className="font-medium">{row.original.fmsName || '-'}</span>
+            )
+        },
     ];
 
     const handleRefresh = () => {
