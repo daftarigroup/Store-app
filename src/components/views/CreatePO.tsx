@@ -794,7 +794,7 @@ export default () => {
         }
     }
 
-    function onError(e: any) {
+    function onError() {
         toast.error('Please fill all required fields');
     }
 
@@ -1046,12 +1046,12 @@ export default () => {
                                                     {(details as MasterDetails)?.paymentTerms?.map((term, idx) => (
                                                         <SelectItem key={idx} value={term}>{term}</SelectItem>
                                                     )) || (
-                                                        <>
-                                                            <SelectItem value="Advance">Advance</SelectItem>
-                                                            <SelectItem value="Partly PI">Partly PI</SelectItem>
-                                                            <SelectItem value="After Delivery">After Delivery</SelectItem>
-                                                        </>
-                                                    )}
+                                                            <>
+                                                                <SelectItem value="Advance">Advance</SelectItem>
+                                                                <SelectItem value="Partly PI">Partly PI</SelectItem>
+                                                                <SelectItem value="After Delivery">After Delivery</SelectItem>
+                                                            </>
+                                                        )}
                                                 </SelectContent>
                                             </Select>
                                         </FormItem>
