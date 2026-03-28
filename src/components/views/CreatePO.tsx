@@ -546,7 +546,7 @@ export default () => {
 
         return {
             companyName: 'Passary Mineral Madhya Pvt.Ltd',
-            companyPhone: '+7223844007',
+            companyPhone: '+91 7223844007',
             companyGstin: (details as MasterDetails)?.companyGstin || '',
             companyPan: (details as MasterDetails)?.companyPan || '',
             companyAddress: 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212',
@@ -632,7 +632,7 @@ export default () => {
 
             const pdfProps: POPdfProps = {
                 companyName: 'Passary Mineral Madhya Pvt.Ltd',
-                companyPhone: '+7223844007',
+                companyPhone: '+91 7223844007',
                 companyGstin: (details as MasterDetails)?.companyGstin || '',
                 companyPan: (details as MasterDetails)?.companyPan || '',
                 companyAddress: 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212',
@@ -835,7 +835,7 @@ export default () => {
                                         <p className="text-sm">
                                             {firmCompanyAddress || 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212'}
                                         </p>
-                                        <p className="text-sm">Phone No: +7223844007</p>
+                                        <p className="text-sm">Phone No: +91 7223844007</p>
                                     </div>
                                 </div>
                             </div>
