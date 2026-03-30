@@ -157,7 +157,7 @@ interface ProcessedTallyData {
   partyName: string;
   billAmt: number;
   billImage: string;
-  billRecievedLater: string;
+  billReceivedLater: string;
   location: string;
   typeOfBills: string;
   productImage: string;
@@ -268,7 +268,7 @@ export default function PcReportTable() {
           partyName: item.partyName,
           billAmt: item.billAmt,
           billImage: item.billImage,
-          billRecievedLater: item.billRecievedLater,
+          billReceivedLater: item.billReceivedLater,
           location: item.location,
           typeOfBills: item.typeOfBills,
           productImage: item.productImage,

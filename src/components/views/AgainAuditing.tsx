@@ -81,24 +81,23 @@ export default function AgainAuditingTable() {
     fetchData();
   }, [user.firmNameMatch]);
 
-  // Reset form when dialog closes
-  useEffect(() => {
-    if (!openDialog) {
-      form.reset({ status: 'okey' });
-    }
-  }, [openDialog]);
-
   // Validation schema
   const schema = z.object({
-    status: z.enum(['okey', 'not okey']),
+    status: z.enum(['okay', 'not okay']),
   });
 
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
     defaultValues: {
-      status: 'okey',
+      status: 'okay',
     },
   });
+
+  useEffect(() => {
+    if (!openDialog) {
+      form.reset({ status: 'okay' });
+    }
+  }, [openDialog, form]);
 
   // Handle form submission
   async function onSubmit(values: z.infer<typeof schema>) {
@@ -190,7 +189,7 @@ export default function AgainAuditingTable() {
         ) : null;
       },
     },
-    { accessorKey: 'billRecievedLater', header: 'Bill Received Later' },
+    { accessorKey: 'billReceivedLater', header: 'Bill Received Later' },
     { accessorKey: 'location', header: 'Location' },
     { accessorKey: 'typeOfBills', header: 'Type Of Bills' },
     {
@@ -296,8 +295,8 @@ export default function AgainAuditingTable() {
                               <SelectValue placeholder="Select status" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="okey">Okey</SelectItem>
-                              <SelectItem value="not okey">Not Okey</SelectItem>
+                                <SelectItem value="okay">Okay</SelectItem>
+                                <SelectItem value="not okay">Not Okay</SelectItem>
                             </SelectContent>
                           </Select>
                         </FormControl>

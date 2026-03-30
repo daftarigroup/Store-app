@@ -952,13 +952,6 @@ export default function MakePayment() {
                 </span>
             )
         },
-        {
-            accessorKey: 'fmsName',
-            header: 'FMS Name',
-            cell: ({ row }) => (
-                <span className="font-medium">{row.original.fmsName || '-'}</span>
-            )
-        },
     ];
 
     const handleRefresh = () => {

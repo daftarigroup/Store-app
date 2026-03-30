@@ -134,7 +134,7 @@ export default function RectifyTheMistake() {
                 ) : null;
             },
         },
-        { accessorKey: 'billRecievedLater', header: 'Bill Received Later' },
+        { accessorKey: 'billReceivedLater', header: 'Bill Received Later' },
         { accessorKey: 'location', header: 'Location' },
         { accessorKey: 'typeOfBills', header: 'Type Of Bills' },
         {
@@ -184,7 +184,7 @@ export default function RectifyTheMistake() {
                 ) : null;
             },
         },
-        { accessorKey: 'billRecievedLater', header: 'Bill Received Later' },
+        { accessorKey: 'billReceivedLater', header: 'Bill Received Later' },
         { accessorKey: 'location', header: 'Location' },
         { accessorKey: 'typeOfBills', header: 'Type Of Bills' },
         {

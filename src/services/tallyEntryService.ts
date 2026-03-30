@@ -30,7 +30,7 @@ export interface TallyEntryRecord {
     rate: number;
     indentQty: number;
     totalRate: number;
-    billRecievedLater: string;
+    billReceivedLater: string;
     planned1: string;
     actual1: string;
     delay1: string;
@@ -96,7 +96,7 @@ export async function fetchTallyEntryRecords(): Promise<TallyEntryRecord[]> {
             rate: Number(r.rate) || 0,
             indentQty: Number(r.indent_qty) || 0,
             totalRate: Number(r.total_rate) || 0,
-            billRecievedLater: r.bill_recieved_later || '',
+            billReceivedLater: r.bill_recieved_later || '',
             planned1: r.planned1 || '',
             actual1: r.actual1 || '',
             delay1: r.delay1 || '',

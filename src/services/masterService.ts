@@ -31,6 +31,7 @@ export interface MasterData {
     firmsnames: string[];
     fmsNames: string[];
     locations: string[];
+    allGroupHeads: string[];
     firmCompanyMap: Record<string, { companyName: string; companyAddress: string; destinationAddress: string; }>;
 }
 
@@ -53,6 +54,7 @@ export async function fetchMasterOptions(): Promise<MasterData> {
         const fmsNames = Array.from(new Set(records.map(r => r.fms_name).filter(Boolean)));
         const paymentTerms = Array.from(new Set(records.map(r => r.payment_term).filter(Boolean)));
         const locations = Array.from(new Set(records.map(r => r.where).filter(Boolean)));
+        const allGroupHeads = Array.from(new Set(records.map(r => r.group_head).filter(Boolean))).sort();
 
         // Aggregate vendors
         const vendors = records
@@ -109,6 +111,7 @@ export async function fetchMasterOptions(): Promise<MasterData> {
         return {
             departments,
             groupHeads,
+            allGroupHeads,
             products,
             uoms,
             firms,
@@ -133,6 +136,7 @@ export async function fetchMasterOptions(): Promise<MasterData> {
         return {
             departments: [],
             groupHeads: {},
+            allGroupHeads: [],
             products: {},
             uoms: [],
             firms: [],

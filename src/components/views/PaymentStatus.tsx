@@ -25,6 +25,14 @@ import { toast } from 'sonner';
 import { Input } from '../ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Separator } from '../ui/separator';
+import { useMemo } from 'react';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '../ui/select';
 
 // ✅ UPDATED INTERFACE
 interface PIPendingData {
@@ -85,12 +93,33 @@ export default function PIApprovals() {
     const [selectedItem, setSelectedItem] = useState<PIPendingData | null>(null);
     const [openDialog, setOpenDialog] = useState(false);
     const [uploadingFile, setUploadingFile] = useState(false);
+    const [filterTerm, setFilterTerm] = useState('All');
 
-    const [stats, setStats] = useState({
-        total: 0,
-        totalAmount: 0,
-        pendingCount: 0
-    });
+    // ✅ Memoized filtered data
+    const filteredData = useMemo(() => {
+        if (filterTerm === 'All') return pendingData;
+        return pendingData.filter(item => item.paymentTerms === filterTerm);
+    }, [pendingData, filterTerm]);
+
+    // ✅ Get unique payment terms for the filter
+    const uniquePaymentTerms = useMemo(() => {
+        const terms = new Set<string>();
+        pendingData.forEach(item => {
+            if (item.paymentTerms) {
+                terms.add(item.paymentTerms);
+            }
+        });
+        return Array.from(terms).sort();
+    }, [pendingData]);
+
+    const stats = useMemo(() => {
+        const totalOutstanding = filteredData.reduce((sum, item) => sum + item.outstandingAmount, 0);
+        return {
+            total: filteredData.length,
+            totalAmount: totalOutstanding,
+            pendingCount: filteredData.length
+        };
+    }, [filteredData]);
 
 
 
@@ -153,7 +182,7 @@ export default function PIApprovals() {
                     // or if it matches the PI terms for pre-receipt payment.
                     const paymentTerms = (record.paymentTerms || record.payment_terms || '').toString().trim();
                     const isPI = paymentTerms === "Partly PI / Party Advance" || paymentTerms === "Partly PI";
-                    
+
                     if (!isReceived && !isPI) {
                         return false;
                     }
@@ -268,35 +297,28 @@ export default function PIApprovals() {
 
             setPendingData(allPendingItems);
 
-            const totalOutstanding = allPendingItems.reduce((sum, item) => sum + item.outstandingAmount, 0);
-
-            setStats({
-                total: allPendingItems.length,
-                totalAmount: totalOutstanding,
-                pendingCount: allPendingItems.length
-            });
-
         } catch (error) {
             console.error('❌ Error in HOD Approval logic:', error);
             setPendingData([]);
         }
     }, [poMasterSheet, paymentsSheet, storeInSheet, user?.firmNameMatch]);
 
+
     const pendingColumns: ColumnDef<PIPendingData>[] = [
         {
             header: 'Action',
             cell: ({ row }: { row: Row<PIPendingData> }) => (
                 <Button
-                    variant="default"
+                    variant="outline"
                     size="sm"
                     onClick={() => {
                         setSelectedItem(row.original);
                         setOpenDialog(true);
                     }}
-                    className="bg-purple-600 hover:bg-purple-700 shadow-sm"
+                    className="border-purple-200 text-purple-700 hover:bg-purple-50 hover:text-purple-800 shadow-sm"
                 >
-                    <FileText className="mr-2 h-3 w-3" />
-                    Against PI
+                    <FileText className="mr-2 h-3.5 w-3.5" />
+                    Process Payment
                 </Button>
             ),
         },
@@ -304,7 +326,7 @@ export default function PIApprovals() {
             accessorKey: 'poNumber',
             header: 'PO Number',
             cell: ({ row }) => (
-                <span className="font-medium text-purple-700">{row.original.poNumber || '-'}</span>
+                <span className="font-medium text-gray-700">{row.original.poNumber || '-'}</span>
             )
         },
         {
@@ -318,7 +340,7 @@ export default function PIApprovals() {
             accessorKey: 'internalCode',
             header: 'Indent No.',
             cell: ({ row }) => (
-                <div className="bg-gray-50 py-1 px-3 rounded-md inline-block border">
+                <div className="bg-slate-100 text-slate-700 py-1 px-2.5 rounded text-[11px] font-bold inline-block border border-slate-200 uppercase tracking-wider">
                     {row.original.internalCode || '-'}
                 </div>
             )
@@ -327,32 +349,34 @@ export default function PIApprovals() {
             accessorKey: 'product',
             header: 'Product',
             cell: ({ row }) => (
-                <span className="text-sm">{row.original.product || '-'}</span>
+                <span className="text-sm font-medium text-slate-700">{row.original.product || '-'}</span>
             )
         },
         {
             accessorKey: 'totalPoAmount',
-            header: 'Total PO Amount',
+            header: () => <div className="text-right">Total PO Amount</div>,
             cell: ({ row }) => (
-                <span className="font-bold text-purple-600">₹{row.original.totalPoAmount?.toLocaleString('en-IN')}</span>
+                <div className="text-right font-bold text-slate-900">
+                    ₹{row.original.totalPoAmount?.toLocaleString('en-IN')}
+                </div>
             )
         },
         {
             accessorKey: 'totalPaidAmount',
-            header: 'Total Paid',
+            header: () => <div className="text-right">Total Paid</div>,
             cell: ({ row }) => (
-                <span className="font-semibold text-green-600">
+                <div className="text-right font-semibold text-emerald-600">
                     ₹{row.original.totalPaidAmount?.toLocaleString('en-IN')}
-                </span>
+                </div>
             )
         },
         {
             accessorKey: 'outstandingAmount',
-            header: 'Outstanding',
+            header: () => <div className="text-right text-rose-600">Outstanding</div>,
             cell: ({ row }) => (
-                <span className="font-semibold text-red-600">
+                <div className="text-right font-bold text-rose-600">
                     ₹{row.original.outstandingAmount?.toLocaleString('en-IN')}
-                </span>
+                </div>
             )
         },
         {
@@ -364,11 +388,11 @@ export default function PIApprovals() {
                 const isComplete = status === 'complete' || status === 'completed';
 
                 return (
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${isComplete
-                        ? 'bg-green-100 text-green-800 border border-green-300'
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-tight ${isComplete
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                         : isPending
-                            ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                            : 'bg-gray-100 text-gray-800 border border-gray-300'
+                            ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                            : 'bg-slate-50 text-slate-700 border border-slate-200'
                         }`}>
                         {isComplete && <CheckCircle className="mr-1 h-3 w-3" />}
                         {isPending && <AlertCircle className="mr-1 h-3 w-3" />}
@@ -407,8 +431,8 @@ export default function PIApprovals() {
             accessorKey: 'firmNameMatch',
             header: 'Firm',
             cell: ({ row }) => (
-                <div className="flex items-center gap-1 text-gray-700">
-                    <Building className="h-3 w-3 text-gray-500" />
+                <div className="flex items-center gap-1.5 text-slate-600 font-medium">
+                    <Building className="h-3.5 w-3.5 text-slate-400" />
                     {row.original.firmNameMatch || '-'}
                 </div>
             )
@@ -650,7 +674,7 @@ export default function PIApprovals() {
 
                 {/* Main Content Card */}
                 <Card className="bg-white shadow-lg border-0 mb-6">
-                    <CardHeader className="pb-4">
+                    <CardHeader className="">
                         <div className="flex items-center justify-between">
                             <div>
                                 <CardTitle className="text-xl font-bold text-gray-800">Pending Payments</CardTitle>
@@ -670,13 +694,31 @@ export default function PIApprovals() {
                         </div>
                     </CardHeader>
                     <CardContent>
-                        {pendingData.length > 0 ? (
+                        {filteredData.length > 0 ? (
                             <DataTable
-                                data={pendingData}
+                                data={filteredData}
                                 columns={pendingColumns}
                                 searchFields={['poNumber', 'partyName', 'product', 'internalCode', 'firmNameMatch']}
                                 dataLoading={poMasterLoading}
                                 className="border rounded-lg"
+                                extraActions={
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm font-medium text-slate-600 whitespace-nowrap mr-2">Payment Terms:</span>
+                                        <Select value={filterTerm} onValueChange={setFilterTerm}>
+                                            <SelectTrigger className="w-[180px] h-9 bg-white border-slate-200">
+                                                <SelectValue placeholder="Select Term" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="All">All Terms</SelectItem>
+                                                {uniquePaymentTerms.map(term => (
+                                                    <SelectItem key={term} value={term}>
+                                                        {term}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                }
                             />
                         ) : (
                             <div className="text-center py-12">

@@ -99,7 +99,7 @@ export default function FullKiting() {
             cell: ({ getValue }) => <div>{getValue() ? formatDateTime(parseCustomDate(getValue())) : '-'}</div>,
         },
         { accessorKey: 'indentNumber', header: 'Indent Number' },
-        { accessorKey: 'firmNameMatch', header: 'Firm Name Match' },
+        { accessorKey: 'firmNameMatch', header: 'Firm Name' },
         { accessorKey: 'vendorName', header: 'Vendor Name' },
         { accessorKey: 'productName', header: 'Product Name' },
         { accessorKey: 'qty', header: 'Qty' },
@@ -116,7 +116,7 @@ export default function FullKiting() {
                 );
             }
         },
-        { accessorKey: 'transportingInclude', header: 'Transporting Include' },
+        { accessorKey: 'transportingInclude', header: 'Transportation Include' },
         { accessorKey: 'transporterName', header: 'Transporter Name' },
         { accessorKey: 'amount', header: 'Amount' },
     ];
@@ -128,7 +128,7 @@ export default function FullKiting() {
             cell: ({ getValue }) => <div>{getValue() ? formatDateTime(parseCustomDate(getValue())) : '-'}</div>,
         },
         { accessorKey: 'indentNumber', header: 'Indent Number' },
-        { accessorKey: 'firmNameMatch', header: 'Firm Name Match' },
+        { accessorKey: 'firmNameMatch', header: 'Firm Name' },
         { accessorKey: 'vendorName', header: 'Vendor Name' },
         { accessorKey: 'productName', header: 'Product Name' },
         { accessorKey: 'qty', header: 'Qty' },

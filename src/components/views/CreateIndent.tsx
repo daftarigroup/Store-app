@@ -30,10 +30,14 @@ export default () => {
     const [searchTermUOM, setSearchTermUOM] = useState('');
     const [searchTermFirmName, setSearchTermFirmName] = useState('');
 
+    const [indenterOptions, setIndenterOptions] = useState<string[]>([]);
+    const [indenterLoading, setIndenterLoading] = useState(false);
+    const [searchTermIndenter, setSearchTermIndenter] = useState('');
+
     const schema = z.object({
         indenterName: z.string().nonempty(),
         firmName: z.string().nonempty({ message: 'Select Firm Name' }),
-        indentStatus: z.enum(['Critical', 'None Critical'], {
+        indentStatus: z.enum(['Critical', 'Non-Critical'], {
             required_error: 'Select indent status',
         }),
         products: z
@@ -210,6 +214,7 @@ export default () => {
                     },
                 ],
             });
+            setIndenterOptions([]);
         } catch (error) {
             console.error('Error in onSubmit:', error);
             toast.error('Error while creating indent! Please try again');
@@ -241,20 +246,33 @@ export default () => {
                                     <Select
                                         onValueChange={async (val) => {
                                             field.onChange(val);
+                                            form.setValue('indenterName', '');
+                                            setIndenterOptions([]);
+                                            setIndenterLoading(true);
                                             try {
                                                 const { data, error } = await supabase
                                                     .from('master')
                                                     .select('indenter_name')
-                                                    .eq('firm_name', val)
-                                                    .limit(1);
+                                                    .eq('firm_name', val);
 
-                                                if (data && data.length > 0) {
-                                                    form.setValue('indenterName', data[0].indenter_name || '');
-                                                } else {
-                                                    form.setValue('indenterName', '');
+                                                if (!error && data) {
+                                                    // Deduplicate indenter names
+                                                    const unique = Array.from(
+                                                        new Set(
+                                                            data
+                                                                .map((r: any) => r.indenter_name)
+                                                                .filter(Boolean)
+                                                        )
+                                                    ) as string[];
+                                                    setIndenterOptions(unique);
+                                                    if (unique.length === 1) {
+                                                        form.setValue('indenterName', unique[0]);
+                                                    }
                                                 }
                                             } catch (err) {
-                                                console.error('Error fetching indenter name:', err);
+                                                console.error('Error fetching indenter names:', err);
+                                            } finally {
+                                                setIndenterLoading(false);
                                             }
                                         }}
                                         value={field.value}
@@ -300,12 +318,54 @@ export default () => {
                                         Indenter Name
                                         <span className="text-destructive">*</span>
                                     </FormLabel>
-                                    <FormControl>
-                                        <Input
-                                            placeholder="Indenter name (auto-fills)"
-                                            {...field}
-                                        />
-                                    </FormControl>
+                                    {indenterLoading ? (
+                                        <div className="flex items-center h-10 px-3 border rounded-md text-sm text-muted-foreground gap-2">
+                                            <svg className="animate-spin h-4 w-4 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                                            </svg>
+                                            Fetching indenters...
+                                        </div>
+                                    ) : indenterOptions.length > 1 ? (
+                                        // Multiple indenters → show dropdown
+                                        <Select onValueChange={field.onChange} value={field.value}>
+                                            <FormControl>
+                                                <SelectTrigger className="w-full">
+                                                    <SelectValue placeholder="Select Indenter Name" />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                <div className="flex items-center border-b px-3 pb-3">
+                                                    <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                                                    <input
+                                                        placeholder="Search indenter..."
+                                                        value={searchTermIndenter}
+                                                        onChange={(e) => setSearchTermIndenter(e.target.value)}
+                                                        onKeyDown={(e) => e.stopPropagation()}
+                                                        className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
+                                                    />
+                                                </div>
+                                                {indenterOptions
+                                                    .filter((name) =>
+                                                        name.toLowerCase().includes(searchTermIndenter.toLowerCase())
+                                                    )
+                                                    .map((name, i) => (
+                                                        <SelectItem key={i} value={name}>
+                                                            {name}
+                                                        </SelectItem>
+                                                    ))}
+                                            </SelectContent>
+                                        </Select>
+                                    ) : (
+                                        // Single or no indenter → auto-filled read-only input
+                                        <FormControl>
+                                            <Input
+                                                placeholder={indenterOptions.length === 0 ? 'Select a Firm Name first' : 'Indenter name (auto-filled)'}
+                                                readOnly={indenterOptions.length === 1}
+                                                {...field}
+                                            />
+                                        </FormControl>
+                                    )}
                                 </FormItem>
                             )}
                         />
@@ -326,8 +386,8 @@ export default () => {
                                         </FormControl>
                                         <SelectContent>
                                             <SelectItem value="Critical">Critical</SelectItem>
-                                            <SelectItem value="None Critical">
-                                                None Critical
+                                            <SelectItem value="Non-Critical">
+                                                Non-Critical
                                             </SelectItem>
                                         </SelectContent>
                                     </Select>
@@ -364,7 +424,7 @@ export default () => {
                         {fields.map((field, index) => {
                             const currentDept = products[index]?.department;
                             const currentGroupHead = products[index]?.groupHead;
-                            const groupHeadOptions = options?.groupHeads[currentDept] || [];
+                            const groupHeadOptions = options?.allGroupHeads || [];
                             const productOptions = options?.products[currentGroupHead] || [];
 
                             return (
@@ -466,9 +526,18 @@ export default () => {
                                                                 field.onChange(val);
                                                                 // Reset dependent fields
                                                                 form.setValue(`products.${index}.productName`, '');
+
+                                                                // ✅ Auto-select department if group head belongs to a certain dept
+                                                                if (options?.groupHeads) {
+                                                                    for (const dept in options.groupHeads) {
+                                                                        if (options.groupHeads[dept].includes(val)) {
+                                                                            form.setValue(`products.${index}.department`, dept);
+                                                                            break;
+                                                                        }
+                                                                    }
+                                                                }
                                                             }}
                                                             value={field.value}
-                                                            disabled={!currentDept}
                                                         >
                                                             <FormControl>
                                                                 <SelectTrigger className="w-full">
