@@ -461,31 +461,6 @@ export async function createPaymentEntry(storeInData: {
             return null;
         }
 
-        // Insert into payment_history for traceability
-        try {
-            const historyRow = {
-                timestamp: nowIso,
-                ap_payment_number: null,
-                status: 'Created',
-                unique_number: uniqueNo,
-                fms_name: storeInData.firm_name_match, // Kept original fms_name as per existing code
-                pay_to: storeInData.vendor_name,
-                amount_to_be_paid: String(storeInData.bill_amount),
-                remarks: `Store In payment for ${storeInData.indent_number}`,
-                any_attachments: billPhotoUrl || storeInData.photo_of_bill || '',
-                indent_no: storeInData.indent_number,
-                po_number: storeInData.po_number,
-                vendor_name: storeInData.vendor_name,
-                product_name: storeInData.product_name,
-            };
-
-            await supabase
-                .from('payment_history')
-                .insert([historyRow]);
-        } catch (historyErr) {
-            console.warn('Failed to insert payment_history row:', historyErr);
-        }
-
         return data;
     } catch (error) {
         console.error('Error creating payment entry:', error);

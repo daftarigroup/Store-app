@@ -181,6 +181,24 @@ export default function MakePayment() {
         return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear().toString().slice(-2)}`;
     };
 
+    // Formats an ISO timestamp (with or without timezone) to DD/MM/YY HH:MM:SS
+    const formatTimestamp = (raw: string): string => {
+        if (!raw) return '-';
+        try {
+            const date = new Date(raw);
+            if (isNaN(date.getTime())) return raw;
+            const dd = date.getDate().toString().padStart(2, '0');
+            const mm = (date.getMonth() + 1).toString().padStart(2, '0');
+            const yy = date.getFullYear().toString().slice(-2);
+            const hh = date.getHours().toString().padStart(2, '0');
+            const min = date.getMinutes().toString().padStart(2, '0');
+            const ss = date.getSeconds().toString().padStart(2, '0');
+            return `${dd}/${mm}/${yy} ${hh}:${min}:${ss}`;
+        } catch {
+            return raw;
+        }
+    };
+
     useEffect(() => {
         // fetch payments and payment_history from Supabase
         const fetchData = async () => {
@@ -195,7 +213,8 @@ export default function MakePayment() {
 
                 const { data: storeInData, error: storeInError } = await supabase
                     .from('store_in')
-                    .select('*'); // Get all columns for history insertion
+                    .select('*')
+                    .order('indent_no', { ascending: false }); // Get all columns for history insertion
 
                 const { data: historyDbData, error: historyDbError } = await supabase
                     .from('payment_history')
@@ -380,7 +399,7 @@ export default function MakePayment() {
         const now = new Date();
         const day = now.getDate().toString().padStart(2, '0');
         const month = (now.getMonth() + 1).toString().padStart(2, '0');
-        const year = now.getFullYear();
+        const year = now.getFullYear().toString().slice(-2);
         const hours = now.getHours().toString().padStart(2, '0');
         const minutes = now.getMinutes().toString().padStart(2, '0');
         const seconds = now.getSeconds().toString().padStart(2, '0');
@@ -768,8 +787,8 @@ export default function MakePayment() {
             accessorKey: 'timestamp',
             header: 'Timestamp',
             cell: ({ row }) => (
-                <div className="text-sm text-gray-600">
-                    {row.original.timestamp || '-'}
+                <div className="text-sm text-gray-600 whitespace-nowrap">
+                    {formatTimestamp(row.original.timestamp)}
                 </div>
             )
         },
