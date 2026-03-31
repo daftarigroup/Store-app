@@ -124,6 +124,10 @@ interface IndentSheetItem {
     approvedQuantity?: number;
     uom?: string;
     approvedRate?: number;
+    quotationNumber?: string;
+    quotationDate?: string;
+    approvedPaymentTerm?: string;
+    approvedAdvancePercent?: string;
 }
 
 interface MasterDetails {
@@ -164,8 +168,8 @@ export default () => {
     const [readOnly, setReadOnly] = useState(-1);
     const [mode, setMode] = useState<'create' | 'revise'>('create');
     const [isEditingDestination, setIsEditingDestination] = useState(false);
-    const [destinationAddress, setDestinationAddress] = useState('');
-    const [firmCompanyName, setFirmCompanyName] = useState('Passary Mineral Madhya Pvt.Ltd');
+    const [destinationAddress, setDestinationAddress] = useState('M/S Passary Mineral Madhya Pvt.Ltd, Khasra No 297/2 & 297/6 Village AKoli, Near Tarpongi Toll Plaza, PO- Devri, Raipur - 493221 (CG)');
+    const [firmCompanyName, setFirmCompanyName] = useState('M/S Passary Mineral Madhya Pvt.Ltd');
     const [firmCompanyAddress, setFirmCompanyAddress] = useState('Shri Ram Business Park , Block - C, 2nd floor , Room No. 212');
     const [showPreview, setShowPreview] = useState(false);
     const [previewData, setPreviewData] = useState<POPdfProps | null>(null);
@@ -213,8 +217,8 @@ export default () => {
 
         quotationNumber: z.string().nonempty(),
         quotationDate: z.coerce.date(),
-        ourEnqNo: z.string(),
-        enquiryDate: z.coerce.date(),
+        ourEnqNo: z.string().optional(),
+        enquiryDate: z.coerce.date().optional(),
         description: z.string(),
         indents: z.array(
             z.object({
@@ -340,6 +344,16 @@ export default () => {
                 setFirmCompanyAddress((details as MasterDetails).companyAddress || 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212');
                 setDestinationAddress((details as MasterDetails).destinationAddress || '');
             }
+        }
+
+        if (matchingIndents.length > 0) {
+            const first = matchingIndents[0];
+            form.setValue('quotationNumber', first.quotationNumber || '');
+            if (first.quotationDate) {
+                form.setValue('quotationDate', new Date(first.quotationDate));
+            }
+            form.setValue('paymentTerms', first.approvedPaymentTerm || '');
+            form.setValue('numberOfDays', Number(first.approvedAdvancePercent) || 0);
         }
 
         form.setValue(
@@ -545,13 +559,13 @@ export default () => {
         );
 
         return {
-            companyName: 'Passary Mineral Madhya Pvt.Ltd',
+            companyName: 'M/S Passary Mineral Madhya Pvt.Ltd',
             companyPhone: '+91 7223844007',
-            companyGstin: (details as MasterDetails)?.companyGstin || '',
-            companyPan: (details as MasterDetails)?.companyPan || '',
+            companyGstin: '22AAHCP9274B1ZI',
+            companyPan: 'AACCJ1154B',
             companyAddress: 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212',
-            billingAddress: 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212',
-            destinationAddress: destinationAddress || '',
+            billingAddress: 'M/S Passary Mineral Madhya Pvt.Ltd, Shri Ram Business Park , Block - C, 2nd floor , Room No. 212',
+            destinationAddress: destinationAddress || 'M/S Passary Mineral Madhya Pvt.Ltd, Khasra No 297/2 & 297/6 Village AKoli, Near Tarpongi Toll Plaza, PO- Devri, Raipur - 493221 (CG)',
             supplierName: values.supplierName,
             supplierAddress: values.supplierAddress,
             supplierGstin: values.gstin,
@@ -560,8 +574,6 @@ export default () => {
             deliveryDate: formatDate(values.deliveryDate),
             quotationNumber: values.quotationNumber,
             quotationDate: formatDate(values.quotationDate),
-            enqNo: values.ourEnqNo,
-            enqDate: formatDate(values.enquiryDate),
             description: values.description,
             items: values.indents.map((item) => {
                 const indent = indentSheet.find((i: IndentSheetItem) => i.indentNumber === item.indentNumber);
@@ -631,13 +643,13 @@ export default () => {
             const logoBase64 = await getLogoBase64();
 
             const pdfProps: POPdfProps = {
-                companyName: 'Passary Mineral Madhya Pvt.Ltd',
+                companyName: 'M/S Passary Mineral Madhya Pvt.Ltd',
                 companyPhone: '+91 7223844007',
-                companyGstin: (details as MasterDetails)?.companyGstin || '',
-                companyPan: (details as MasterDetails)?.companyPan || '',
+                companyGstin: '22AAHCP9274B1ZI',
+                companyPan: 'AACCJ1154B',
                 companyAddress: 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212',
-                billingAddress: 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212',
-                destinationAddress: destinationAddress || (details as MasterDetails)?.destinationAddress || '',
+                billingAddress: 'M/S Passary Mineral Madhya Pvt.Ltd, Shri Ram Business Park , Block - C, 2nd floor , Room No. 212',
+                destinationAddress: destinationAddress || 'M/S Passary Mineral Madhya Pvt.Ltd, Khasra No 297/2 & 297/6 Village AKoli, Near Tarpongi Toll Plaza, PO- Devri, Raipur - 493221 (CG)',
                 supplierName: values.supplierName,
                 supplierAddress: values.supplierAddress,
                 supplierGstin: values.gstin,
@@ -646,8 +658,6 @@ export default () => {
                 deliveryDate: formatDate(values.deliveryDate),
                 quotationNumber: values.quotationNumber,
                 quotationDate: formatDate(values.quotationDate),
-                enqNo: values.ourEnqNo,
-                enqDate: formatDate(values.enquiryDate),
                 description: values.description,
 
                 items: values.indents.map((item) => {
@@ -748,8 +758,8 @@ export default () => {
                     pdf: url,
                     quotationNumber: values.quotationNumber,
                     quotationDate: formatDateTime(values.quotationDate),
-                    enquiryNumber: values.ourEnqNo,
-                    enquiryDate: formatDateTime(values.enquiryDate),
+                    enquiryNumber: values.ourEnqNo || '',
+                    enquiryDate: values.enquiryDate ? formatDateTime(values.enquiryDate) : '',
                     term1: values.terms[0],
                     term2: values.terms[1],
                     term3: values.terms[2],
@@ -829,11 +839,11 @@ export default () => {
                                 <img src="/Passary.jpeg" alt="Company Logo" className="w-40  object-contain" />
                                 <div className="text-center">
                                     <h1 className="text-2xl font-bold">
-                                        {firmCompanyName || 'Passary Mineral Madhya Pvt.Ltd'}
+                                        Passary Mineral Madhya Pvt.Ltd
                                     </h1>
                                     <div>
                                         <p className="text-sm">
-                                            {firmCompanyAddress || 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212'}
+                                            Shri Ram Business Park , Block - C, 2nd floor , Room No. 212
                                         </p>
                                         <p className="text-sm">Phone No: +91 7223844007</p>
                                     </div>
@@ -905,12 +915,10 @@ export default () => {
                                                             {[...new Map(
                                                                 indentSheet
                                                                     .filter((i: IndentSheetItem) => {
-                                                                        // ✅ FIX: Check if approvedVendorName exists and is a string
                                                                         const vendorName = i.approvedVendorName;
                                                                         const hasVendor = vendorName && typeof vendorName === 'string' && vendorName.trim() !== '';
                                                                         const hasPlannedDate = i.planned4 !== '';
                                                                         const hasNoActualDate = i.actual4 === '';
-
                                                                         return hasVendor && hasPlannedDate && hasNoActualDate;
                                                                     })
                                                                     .map((i) => [i.approvedVendorName, i])
@@ -933,6 +941,26 @@ export default () => {
                                             )}
                                         </FormItem>
                                     )} />
+                                    <FormField control={form.control} name="quotationNumber" render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Quotation Number</FormLabel>
+                                            <FormControl>
+                                                <Input className="h-9" placeholder="Enter Quotation number" {...field} readOnly />
+                                            </FormControl>
+                                        </FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="quotationDate" render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Quotation Date</FormLabel>
+                                            <FormControl>
+                                                <Input className="h-9" type="date" value={field.value && !isNaN(field.value.getTime()) ? field.value.toISOString().split('T')[0] : ''}
+                                                    readOnly />
+                                            </FormControl>
+                                        </FormItem>
+                                    )} />
+                                </div>
+
+                                <div className="grid grid-cols-3 gap-x-5">
                                     {/* Supplier Address - Changed to always be editable */}
                                     <FormField control={form.control} name="supplierAddress" render={({ field }) => (
                                         <FormItem>
@@ -983,44 +1011,7 @@ export default () => {
                                     )} />
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-x-5">
-                                    <FormField control={form.control} name="quotationNumber" render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Quotation Number</FormLabel>
-                                            <FormControl>
-                                                <Input className="h-9" placeholder="Enter Quotation number" {...field} />
-                                            </FormControl>
-                                        </FormItem>
-                                    )} />
-                                    <FormField control={form.control} name="quotationDate" render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Quotation Date</FormLabel>
-                                            <FormControl>
-                                                <Input className="h-9" type="date" value={field.value && !isNaN(field.value.getTime()) ? field.value.toISOString().split('T')[0] : ''}
-                                                    onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)} />
-                                            </FormControl>
-                                        </FormItem>
-                                    )} />
-                                </div>
-
                                 <div className="grid grid-cols-3 gap-x-5">
-                                    <FormField control={form.control} name="ourEnqNo" render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Our Enq No.</FormLabel>
-                                            <FormControl>
-                                                <Input className="h-9" placeholder="Enter Our Enq No." {...field} />
-                                            </FormControl>
-                                        </FormItem>
-                                    )} />
-                                    <FormField control={form.control} name="enquiryDate" render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Enquiry Date</FormLabel>
-                                            <FormControl>
-                                                <Input className="h-9" type="date" value={field.value && !isNaN(field.value.getTime()) ? field.value.toISOString().split('T')[0] : ''}
-                                                    onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)} />
-                                            </FormControl>
-                                        </FormItem>
-                                    )} />
                                     <FormField control={form.control} name="deliveryDate" render={({ field }) => (
                                         <FormItem>
                                             <FormLabel>Delivery Date</FormLabel>
@@ -1030,30 +1021,12 @@ export default () => {
                                             </FormControl>
                                         </FormItem>
                                     )} />
-                                </div>
-
-                                <div className="grid grid-cols-3 gap-x-5">
                                     <FormField control={form.control} name="paymentTerms" render={({ field }) => (
                                         <FormItem>
                                             <FormLabel>Payment Terms</FormLabel>
-                                            <Select onValueChange={field.onChange} value={field.value || ""}>
-                                                <FormControl>
-                                                    <SelectTrigger size="sm" className="w-full h-9">
-                                                        <SelectValue placeholder="Select payment terms" />
-                                                    </SelectTrigger>
-                                                </FormControl>
-                                                <SelectContent>
-                                                    {(details as MasterDetails)?.paymentTerms?.map((term, idx) => (
-                                                        <SelectItem key={idx} value={term}>{term}</SelectItem>
-                                                    )) || (
-                                                            <>
-                                                                <SelectItem value="Advance">Advance</SelectItem>
-                                                                <SelectItem value="Partly PI">Partly PI</SelectItem>
-                                                                <SelectItem value="After Delivery">After Delivery</SelectItem>
-                                                            </>
-                                                        )}
-                                                </SelectContent>
-                                            </Select>
+                                            <FormControl>
+                                                <Input className="h-9" placeholder="Enter payment terms" {...field} readOnly />
+                                            </FormControl>
                                         </FormItem>
                                     )} />
                                 </div>
@@ -1079,8 +1052,8 @@ export default () => {
                                         <CardTitle className="text-center">Our Commercial Details</CardTitle>
                                     </CardHeader>
                                     <CardContent className="p-5 text-sm">
-                                        <p><span className="font-medium">GSTIN</span> {(details as MasterDetails)?.companyGstin}</p>
-                                        <p><span className="font-medium">Pan No.</span> {(details as MasterDetails)?.companyPan}</p>
+                                        <p><span className="font-semibold">GSTIN:</span> 22AAHCP9274B1ZI</p>
+                                        <p><span className="font-semibold">Pan No.</span> AACCJ1154B</p>
                                     </CardContent>
                                 </Card>
 
@@ -1091,8 +1064,8 @@ export default () => {
                                     <CardContent className="p-5 text-sm">
                                         {vendor ? (
                                             <>
-                                                <p>M/S {firmCompanyName || (details as MasterDetails)?.companyName}</p>
-                                                <p>{firmCompanyAddress || (details as MasterDetails)?.billingAddress}</p>
+                                                <p className="font-semibold text-xs">M/S Passary Mineral Madhya Pvt.Ltd</p>
+                                                <p className="text-xs">Shri Ram Business Park , Block - C, 2nd floor , Room No. 212</p>
                                             </>
                                         ) : (
                                             <p className="text-gray-400 text-center">Select Supplier</p>
@@ -1120,7 +1093,7 @@ export default () => {
                                     <CardContent className="p-5 text-sm">
                                         {vendor ? (
                                             <>
-                                                <p>M/S {firmCompanyName || (details as MasterDetails)?.companyName}</p>
+                                                <p className="font-semibold text-xs">M/S Passary Mineral Madhya Pvt.Ltd</p>
                                                 {isEditingDestination ? (
                                                     <div className="flex items-center gap-2 mt-1">
                                                         <Input value={destinationAddress} onChange={(e) => setDestinationAddress(e.target.value)}
@@ -1198,7 +1171,7 @@ export default () => {
                                                             <FormField control={form.control} name={`indents.${index}.quantity`} render={({ field }) => (
                                                                 <FormItem className="flex justify-center">
                                                                     <FormControl>
-                                                                        <Input type="number" className="h-9 w-20 text-center" value={field.value || 0} onChange={field.onChange} />
+                                                                        <Input type="number" readOnly className="h-9 w-20 text-center bg-gray-50 cursor-not-allowed" value={field.value || 0} onChange={field.onChange} />
                                                                     </FormControl>
                                                                 </FormItem>
                                                             )} />
@@ -1207,7 +1180,7 @@ export default () => {
                                                             <FormField control={form.control} name={`indents.${index}.unit`} render={({ field }) => (
                                                                 <FormItem className="flex justify-center">
                                                                     <FormControl>
-                                                                        <Input className="h-9 w-20 text-center" value={field.value || ''} onChange={field.onChange} />
+                                                                        <Input readOnly className="h-9 w-20 text-center bg-gray-50 cursor-not-allowed" value={field.value || ''} onChange={field.onChange} />
                                                                     </FormControl>
                                                                 </FormItem>
                                                             )} />
@@ -1216,7 +1189,7 @@ export default () => {
                                                             <FormField control={form.control} name={`indents.${index}.rate`} render={({ field }) => (
                                                                 <FormItem className="flex justify-center">
                                                                     <FormControl>
-                                                                        <Input type="number" className="h-9 w-24 text-center" value={field.value || 0} onChange={field.onChange} />
+                                                                        <Input type="number" readOnly className="h-9 w-24 text-center bg-gray-50 cursor-not-allowed" value={field.value || 0} onChange={field.onChange} />
                                                                     </FormControl>
                                                                 </FormItem>
                                                             )} />
@@ -1225,7 +1198,7 @@ export default () => {
                                                             <FormField control={form.control} name={`indents.${index}.gst`} render={({ field }) => (
                                                                 <FormItem className="flex items-center justify-center gap-1">
                                                                     <FormControl>
-                                                                        <Input type="number" className="h-9 w-16 text-center" value={field.value || 0} onChange={field.onChange} />
+                                                                        <Input type="number" readOnly className="h-9 w-16 text-center bg-gray-50 cursor-not-allowed" value={field.value || 0} onChange={field.onChange} />
                                                                     </FormControl>
                                                                     <span>%</span>
                                                                 </FormItem>
@@ -1235,7 +1208,7 @@ export default () => {
                                                             <FormField control={form.control} name={`indents.${index}.discount`} render={({ field }) => (
                                                                 <FormItem className="flex items-center justify-center gap-1">
                                                                     <FormControl>
-                                                                        <Input type="number" className="h-9 w-16 text-center" value={field.value || 0} onChange={field.onChange} />
+                                                                        <Input type="number" readOnly className="h-9 w-16 text-center bg-gray-50 cursor-not-allowed" value={field.value || 0} onChange={field.onChange} />
                                                                     </FormControl>
                                                                     <span>%</span>
                                                                 </FormItem>

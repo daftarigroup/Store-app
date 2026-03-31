@@ -27,6 +27,7 @@ export interface GetLiftIndentRecord {
     timestamp: string;
     department?: string;
     areaOfUse?: string;
+    approvedQuantity: number;
 }
 
 export interface GetLiftStoreInRecord {
@@ -115,6 +116,7 @@ export async function fetchIndentRecords() {
             department: r.department || '',
             areaOfUse: r.area_of_use || '',
             timestamp: r.timestamp || '',
+            approvedQuantity: Number(r.approved_quantity) || 0,
         }));
     } catch (error) {
         console.error('Error fetching indent records:', error);

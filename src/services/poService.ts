@@ -27,6 +27,10 @@ export async function fetchIndents() {
             approvedQuantity: r.approved_quantity || r.quantity || 0,
             uom: r.uom || '',
             approvedRate: r.approved_rate || 0,
+            quotationNumber: r.approved_quotation_no || '',
+            quotationDate: r.approved_quotation_date || '',
+            approvedPaymentTerm: r.approved_payment_term || '',
+            approvedAdvancePercent: r.approved_advance_percent || '',
         }));
     } catch (error) {
         console.error('Error fetching indents:', error);

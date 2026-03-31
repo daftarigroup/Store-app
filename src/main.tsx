@@ -12,6 +12,7 @@ import App from './App';
 import ApproveIndent from '@/components/views/ApproveIndent';
 import { SheetsProvider } from './context/SheetsContext';
 import VendorUpdate from './components/views/VendorUpdate';
+import DepartmentApproval from './components/views/TechnicalApproval';
 import RateApproval from './components/views/RateApproval';
 import StoreOutApproval from './components/views/StoreOutApproval';
 import TrainnigVideo from './components/views/TrainingVideo';
@@ -187,16 +188,31 @@ const routes: RouteAttributes[] = [
             sheets.filter((sheet: any) => sheet.planned2 !== '' && sheet.actual2 === '').length,
     },
     {
-        path: 'three-party-approval',
+        path: 'technical-approval',
         gateKey: 'threePartyApprovalView',
-        name: 'Store Head Approval',
-        icon: <ShieldCheck size={20} />,
-        element: <RateApproval />,
+        name: 'Technical Approval',
+        icon: <Users size={20} />,
+        element: <DepartmentApproval />,
         notifications: (sheets: any[]) =>
             sheets.filter(
                 (sheet: any) =>
                     sheet.planned3 !== '' &&
                     sheet.actual3 === '' &&
+                    sheet.vendorType === 'Three Party'
+            ).length,
+    },
+    {
+        path: 'department-approval',
+        gateKey: 'threePartyApprovalView',
+        name: 'Department Approval',
+        icon: <ShieldCheck size={20} />,
+        element: <RateApproval />,
+        notifications: (sheets: any[]) =>
+            sheets.filter(
+                (sheet: any) =>
+                    sheet.planned4 &&
+                    sheet.planned4 !== '' &&
+                    sheet.actual4 === '' &&
                     sheet.vendorType === 'Three Party'
             ).length,
     },
@@ -390,7 +406,7 @@ const routes: RouteAttributes[] = [
                     // ✅ Relaxed Payment Terms Check
                     const paymentTerms = (record.paymentTerms || record.payment_terms || '').toString().trim();
                     const isPI = paymentTerms === "Partly PI / Party Advance" || paymentTerms === "Partly PI";
-                    
+
                     if (!isReceived && !isPI) {
                         return false;
                     }

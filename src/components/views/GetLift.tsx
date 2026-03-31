@@ -37,6 +37,7 @@ import {
     type GetLiftIndentRecord,
     type GetLiftStoreInRecord,
 } from '@/services/getLiftService';
+import { fetchPoMaster } from '@/services/poService';
 
 interface GetPurchaseData {
     indentNo: string;
@@ -97,21 +98,24 @@ export default function GetPurchase() {
     const [loading, setLoading] = useState(false);
     const [indentRecords, setIndentRecords] = useState<GetLiftIndentRecord[]>([]);
     const [storeInRecords, setStoreInRecords] = useState<GetLiftStoreInRecord[]>([]);
+    const [poMasterData, setPoMasterData] = useState<any[]>([]);
 
     // Fetch all data from Supabase
     useEffect(() => {
         const fetchAllData = async () => {
             setLoading(true);
             try {
-                const [vendors, indents, storeIns] = await Promise.all([
+                const [vendors, indents, storeIns, poMaster] = await Promise.all([
                     fetchVendorOptions(),
                     fetchIndentRecords(),
                     fetchStoreInRecords(),
+                    fetchPoMaster(),
                 ]);
 
                 setVendorOptions(vendors);
                 setIndentRecords(indents);
                 setStoreInRecords(storeIns);
+                setPoMasterData(poMaster);
             } catch (error) {
                 console.error('Failed to fetch data:', error);
                 toast.error('Failed to load data');
@@ -146,7 +150,7 @@ export default function GetPurchase() {
                         );
 
                     // Use pendingPoQty from sheet if available, otherwise calculate
-                    const pendingPoQty = (Number(sheet.totalQty) || Number(sheet.quantity) || 0) - receivedQty;
+                    const pendingPoQty = (Number(sheet.approvedQuantity) || 0) - receivedQty;
 
                     return { ...sheet, pendingPoQty, receivedQty };
                 })
@@ -156,8 +160,12 @@ export default function GetPurchase() {
                     const hasActual5 = item.actual5 && item.actual5.toString().trim() !== '';
                     const isPending = item.liftingStatus === 'Pending' || item.liftingStatus === '' || item.liftingStatus === null;
 
+                    // Check if PO is created in po_master
+                    const indentStr = item.indentNumber?.toString().trim();
+                    const isPoCreated = poMasterData.some(po => po.internalCode?.toString().trim() === indentStr);
+
                     // ✅ Hide if no quantity left to lift
-                    return isPending && hasPlanned5 && !hasActual5 && item.pendingPoQty > 0;
+                    return isPending && hasPlanned5 && !hasActual5 && item.pendingPoQty > 0 && isPoCreated;
                 })
                 .map((item) => {
                     return {
@@ -173,7 +181,7 @@ export default function GetPurchase() {
                             ? formatDate(parseCustomDate(item.planned5))
                             : 'Not Set',
                         product: item.productName || '',
-                        quantity: Number(item.totalQty) || Number(item.quantity) || 0,
+                        quantity: Number(item.approvedQuantity) || 0,
                         pendingLiftQty: item.pendingPoQty,
                         receivedQty: item.receivedQty,
                         pendingPoQty: item.pendingPoQty,
@@ -186,7 +194,7 @@ export default function GetPurchase() {
                     };
                 })
         );
-    }, [indentRecords, storeInRecords, user?.firmNameMatch]);
+    }, [indentRecords, storeInRecords, poMasterData, user?.firmNameMatch]);
 
     // Process history data
     useEffect(() => {
@@ -239,7 +247,7 @@ export default function GetPurchase() {
                     );
 
                     const approvedQty =
-                        Number(indentRecord?.quantity) || 0;
+                        Number(indentRecord?.approvedQuantity) || 0;
 
                     const receivedQty = filteredStoreIn
                         .filter((store) => store.indentNo === sheet.indentNo)
@@ -596,9 +604,14 @@ export default function GetPurchase() {
 
     async function onSubmit(values: z.infer<typeof formSchema>) {
         try {
-            console.log('🔄 Starting form submission...');
             console.log('📝 Selected indent:', selectedIndent);
             console.log('📋 Form values:', values);
+
+            // ✅ VALIDATION: Ensure lifting quantity does not exceed pending lift quantity
+            if (Number(values.qty) > (selectedIndent?.pendingLiftQty || 0)) {
+                toast.error(`Lifting quantity (${values.qty}) cannot exceed pending quantity (${selectedIndent?.pendingLiftQty || 0})`);
+                return;
+            }
 
             // Handle cancel pending quantity first (independent of bill status)
             if (values.cancelPendingQty && values.cancelPendingQty > 0) {

@@ -37,7 +37,6 @@ interface RateApprovalData {
     date: string;
     firmNameMatch?: string;
     plannedDate: string; // ✅ ADD THIS
-
 }
 
 interface HistoryData {
@@ -69,8 +68,8 @@ export default () => {
             let query = supabase
                 .from('indent')
                 .select('*')
-                .not('planned4', 'is', null)
-                .is('actual4', null)
+                .not('planned3', 'is', null)
+                .is('actual3', null)
                 .in('vendor_type', ['Three Party', 'Regular']);
 
             if (user.firmNameMatch.toLowerCase() !== 'all') {
@@ -91,7 +90,7 @@ export default () => {
                     product: r.product_name || '',
                     comparisonSheet: r.comparison_sheet || '',
                     date: formatDateTime(new Date(r.timestamp)).replace(/\//g, '-'),
-                    plannedDate: r.planned4 ? formatDate(new Date(r.planned4)) : 'Not Set',
+                    plannedDate: r.planned3 ? formatDate(new Date(r.planned3)) : 'Not Set',
                     vendors: [
                         [
                             r.vendor_name1 || '',
@@ -151,8 +150,8 @@ export default () => {
             let query = supabase
                 .from('indent')
                 .select('*')
-                .not('planned4', 'is', null)
-                .not('actual4', 'is', null)
+                .not('planned3', 'is', null)
+                .not('actual3', 'is', null)
                 .in('vendor_type', ['Three Party', 'Regular']);
 
             if (user.firmNameMatch.toLowerCase() !== 'all') {
@@ -308,33 +307,32 @@ export default () => {
     ];
 
     const schema = z.object({
-        vendor: z.coerce.number(),
+        ranks: z.record(z.string()),
     });
 
     const form = useForm<z.infer<typeof schema>>({
         resolver: zodResolver(schema),
         defaultValues: {
-            vendor: undefined,
+            ranks: {},
         },
     });
 
     async function onSubmit(values: z.infer<typeof schema>) {
         try {
-            const selectedVendor = selectedIndent?.vendors[values.vendor];
-
-            const updates = {
-                actual4: new Date().toISOString(),
-                planned5: new Date().toISOString(),
-                po_requred: 'Yes', // Automatically set PO Required to Yes
-                approved_vendor_name: selectedVendor?.[0] || '',
-                approved_rate: selectedVendor?.[1] || '0',
-                approved_payment_term: selectedVendor?.[2] || '',
-                with_tax_or_not4: selectedVendor?.[4] || 'Yes',
-                tax_value4: selectedVendor?.[5] || '0',
-                approved_quotation_no: selectedVendor?.[6] || '',
-                approved_quotation_date: selectedVendor?.[7] || '',
-                vendor_rate: selectedVendor?.[8] || '',  // Store pre-assigned rank from VendorUpdate
+            const updates: any = {
+                actual3: new Date().toISOString(),
+                planned4: new Date().toISOString(),
             };
+
+            // Map ranks back to their original vendor index logic.
+            // Our vendors array has original elements [0], [1], [2] in `selectedIndent.vendors`.
+            selectedIndent?.vendors.forEach((_, idx) => {
+                const rankVal = values.ranks[idx.toString()] || '';
+                // Assume vendor[0] was vendor1, vendor[1] was vendor2...
+                if (idx === 0) updates.vendor1_rank = rankVal;
+                if (idx === 1) updates.vendor2_rank = rankVal;
+                if (idx === 2) updates.vendor3_rank = rankVal;
+            });
 
             const { error } = await supabase
                 .from('indent')
@@ -343,7 +341,7 @@ export default () => {
 
             if (error) throw error;
 
-            toast.success(`Approved vendor for ${selectedIndent?.indentNo}`);
+            toast.success(`Completed Technical Approval for ${selectedIndent?.indentNo}`);
             setOpenDialog(false);
             form.reset();
 
@@ -404,8 +402,8 @@ export default () => {
             <Dialog open={openDialog} onOpenChange={setOpenDialog}>
                 <Tabs defaultValue="pending">
                     <Heading
-                        heading="Department Approval"
-                        subtext="Approve rates the updated vendors"
+                        heading="Technical Approval"
+                        subtext="Set the technical details of the vendors"
                         tabs
                         pendingCount={tableData.length}
                         historyCount={historyData.length}
@@ -438,9 +436,9 @@ export default () => {
                                 className="space-y-6"
                             >
                                 <DialogHeader>
-                                    <DialogTitle>Management Approval</DialogTitle>
+                                    <DialogTitle>Technical Approval</DialogTitle>
                                     <DialogDescription>
-                                        Finalize and approve the preferred vendor for Indent <span className="font-bold text-foreground">{selectedIndent.indentNo}</span>
+                                        Assign T1, T2, T3 ranks for vendor quotes in Indent <span className="font-bold text-foreground">{selectedIndent.indentNo}</span>
                                     </DialogDescription>
                                 </DialogHeader>
 
@@ -462,83 +460,73 @@ export default () => {
 
                                 {/* Minimal Vendor Table */}
                                 <div className="rounded-md border overflow-hidden text-sm">
-                                    <FormField
-                                        control={form.control}
-                                        name="vendor"
-                                        render={({ field }) => (
-                                            <FormItem className="space-y-0 m-0">
-                                                <FormControl>
-                                                    <RadioGroup
-                                                        onValueChange={field.onChange}
-                                                        value={field.value?.toString()}
-                                                        className="gap-0"
-                                                    >
-                                                        <table className="w-full text-left">
-                                                            <thead className="bg-muted">
-                                                                <tr>
-                                                                    <th className="px-4 py-3 font-medium w-12 text-center">Select</th>
-                                                                    <th className="px-4 py-3 font-medium">Vendor</th>
-                                                                    <th className="px-4 py-3 font-medium text-center">Tech Rank</th>
-                                                                    <th className="px-4 py-3 font-medium text-right">Effective Rate</th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody className="divide-y divide-border">
-                                                                {(() => {
-                                                                    const processedVendors = selectedIndent.vendors.map((v, i) => {
-                                                                        const rate = parseFloat(v[1]) || 0;
-                                                                        const tax = parseFloat(v[5]) || 0;
-                                                                        const total = v[3] === 'Basic Rate' ? rate * (1 + tax / 100) : rate;
-                                                                        return { vendor: v, originalIndex: i, total };
-                                                                    }).sort((a, b) => a.total - b.total);
+                                    <table className="w-full text-left">
+                                        <thead className="bg-muted">
+                                            <tr>
+                                                <th className="px-4 py-3 font-medium">Vendor</th>
+                                                <th className="px-4 py-3 font-medium text-right">Effective Rate</th>
+                                                <th className="px-4 py-3 font-medium text-center">Rank</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-border">
+                                            {(() => {
+                                                const processedVendors = selectedIndent.vendors.map((v, i) => {
+                                                    const rate = parseFloat(v[1]) || 0;
+                                                    const tax = parseFloat(v[5]) || 0;
+                                                    const total = v[3] === 'Basic Rate' ? rate * (1 + tax / 100) : rate;
+                                                    return { vendor: v, originalIndex: i, total };
+                                                }).sort((a, b) => a.total - b.total);
 
-                                                                    return processedVendors.map(({ vendor, originalIndex, total }, idx) => {
-                                                                        const isSelected = field.value?.toString() === originalIndex.toString();
-                                                                        return (
-                                                                            <tr key={originalIndex} className={`transition-colors ${isSelected ? 'bg-primary/5' : 'hover:bg-muted/10'}`}>
-                                                                                <td className="px-4 py-3 text-center">
-                                                                                    <RadioGroupItem value={`${originalIndex}`} id={`vendor-${originalIndex}`} className={isSelected ? 'text-primary' : ''} />
-                                                                                </td>
-                                                                                <td className="px-4 py-3">
-                                                                                    <label htmlFor={`vendor-${originalIndex}`} className="cursor-pointer block w-full">
-                                                                                        <div className="font-semibold text-foreground">{vendor[0]}</div>
-                                                                                        <div className="text-xs text-muted-foreground mt-0.5">
-                                                                                            {vendor[6] ? `Quote: ${vendor[6]}` : ''} | {vendor[2]}
-                                                                                        </div>
-                                                                                    </label>
-                                                                                </td>
-                                                                                <td className="px-4 py-3 text-center">
-                                                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase
-                                                                                        ${vendor[8] ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}
-                                                                                    `}>
-                                                                                        {vendor[8] || (idx === 0 ? 'L1' : `L${idx + 1}`)}
-                                                                                    </span>
-                                                                                </td>
-                                                                                <td className="px-4 py-3 text-right">
-                                                                                    <div className="font-bold text-primary">
-                                                                                        &#8377;{total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                                                    </div>
-                                                                                    <div className="text-[10px] text-muted-foreground">
-                                                                                        {vendor[3]} {vendor[3] === 'Basic Rate' ? `(+${vendor[5]}% tax)` : ''}
-                                                                                    </div>
-                                                                                </td>
-                                                                            </tr>
-                                                                        );
-                                                                    });
-                                                                })()}
-                                                            </tbody>
-                                                        </table>
-                                                    </RadioGroup>
-                                                </FormControl>
-                                            </FormItem>
-                                        )}
-                                    />
+                                                return processedVendors.map(({ vendor, originalIndex, total }) => (
+                                                    <tr key={originalIndex} className="hover:bg-muted/10 transition-colors">
+                                                        <td className="px-4 py-3">
+                                                            <div className="font-semibold text-foreground">{vendor[0]}</div>
+                                                            <div className="text-xs text-muted-foreground mt-0.5">
+                                                                {vendor[6] ? `Quote: ${vendor[6]}` : ''} | {vendor[2]}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right">
+                                                            <div className="font-bold text-primary">
+                                                                &#8377;{total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                            </div>
+                                                            <div className="text-[10px] text-muted-foreground">
+                                                                {vendor[3]} {vendor[3] === 'Basic Rate' ? `(+${vendor[5]}% tax)` : ''}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-center w-36">
+                                                            <FormField
+                                                                control={form.control}
+                                                                name={`ranks.${originalIndex}`}
+                                                                render={({ field }) => (
+                                                                    <FormItem className="space-y-0">
+                                                                        <FormControl>
+                                                                            <select
+                                                                                {...field}
+                                                                                className="w-full h-8 px-2 rounded border border-input bg-background text-sm ring-offset-background disabled:cursor-not-allowed disabled:opacity-50"
+                                                                                value={field.value || ''}
+                                                                            >
+                                                                                <option value="">None</option>
+                                                                                <option value="T1">T1</option>
+                                                                                <option value="T2">T2</option>
+                                                                                <option value="T3">T3</option>
+                                                                            </select>
+                                                                        </FormControl>
+                                                                    </FormItem>
+                                                                )}
+                                                            />
+                                                        </td>
+                                                    </tr>
+                                                ));
+                                            })()}
+                                        </tbody>
+                                    </table>
                                 </div>
 
                                 <DialogFooter>
                                     <DialogClose asChild>
                                         <Button variant="outline" type="button">Cancel</Button>
                                     </DialogClose>
-                                    <Button type="submit" disabled={form.formState.isSubmitting || form.watch('vendor') === undefined}>
+                                    <Button type="submit" disabled={form.formState.isSubmitting}>
                                         {form.formState.isSubmitting && <Loader size={16} color="white" className="mr-2" />}
                                         Save Approval
                                     </Button>

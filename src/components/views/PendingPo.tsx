@@ -2,7 +2,7 @@ import { CheckCircle } from 'lucide-react';
 import Heading from '../element/Heading';
 import { useEffect, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { formatDate } from '@/lib/utils';
+import { formatDate, formatDateTime } from '@/lib/utils';
 import DataTable from '../element/DataTable';
 import { useAuth } from '@/context/AuthContext';
 import { Pill } from '../ui/pill';
@@ -89,18 +89,18 @@ export default function ApprovedPOs() {
 
                     try {
                         if (sheet.timestamp) {
-                            formattedDate = formatDate(new Date(sheet.timestamp));
+                            formattedDate = formatDateTime(new Date(sheet.timestamp)).replace(/\//g, '-');
                         }
                     } catch (error) {
                         console.warn('Invalid timestamp format:', sheet.timestamp);
                     }
 
                     try {
-                        if (sheet.planned4) {
-                            formattedPlannedDate = formatDate(new Date(sheet.planned4));
+                        if (sheet.planned5) {
+                            formattedPlannedDate = formatDate(new Date(sheet.planned5));
                         }
                     } catch (error) {
-                        console.warn('Invalid planned date format:', sheet.planned4);
+                        console.warn('Invalid planned date format:', sheet.planned5);
                     }
 
                     let rawExpected = sheet.expected_req_date || sheet.delivery_date || null;
@@ -160,7 +160,7 @@ export default function ApprovedPOs() {
     const approvedColumns: ColumnDef<ApprovedPOData>[] = [
         {
             accessorKey: 'date',
-            header: 'Date',
+            header: 'Timestamp',
             cell: ({ getValue }) => <div className="px-2">{getValue() as string || '-'}</div>
         },
         {

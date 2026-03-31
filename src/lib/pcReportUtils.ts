@@ -11,9 +11,9 @@ export const calculatePcReportCounts = (
     const calculateCounts = (data: any[], pendingFilter: (item: any) => boolean, completeFilter: (item: any) => boolean, stageName: string): PcReportSheet => {
         const firms = ['PMPL', 'PURAB', 'PMMPL', 'REFRASYNTH'];
         const firmData: Record<string, number> = {};
-        
+
         firms.forEach(firm => {
-            firmData[firm] = data.filter(item => 
+            firmData[firm] = data.filter(item =>
                 (item.firmNameMatch || item.firm_name_match)?.toUpperCase() === firm && pendingFilter(item)
             ).length;
         });
@@ -52,7 +52,7 @@ export const calculatePcReportCounts = (
             indentSheet || [],
             (item) => item.planned3 && !item.actual3,
             (item) => !!item.actual3,
-            'Store Head Approval'
+            'Department Approval'
         ),
         calculateCounts(
             indentSheet || [],

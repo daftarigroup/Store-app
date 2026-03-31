@@ -114,7 +114,7 @@ export default () => {
                 indenter: r.indenter_name || '',
                 department: r.department || '',
                 product: r.product_name || '',
-                quantity: r.approved_quantity || r.quantity || 0,
+                quantity: r.approved_quantity || 0,
                 uom: r.uom || '',
                 vendorType: (r.vendor_type || 'Regular') as VendorUpdateData['vendorType'],
                 planned2: r.planned2 || '',
@@ -160,7 +160,7 @@ export default () => {
                 indenter: r.indenter_name || '',
                 department: r.department || '',
                 product: r.product_name || '',
-                quantity: r.quantity || 0,
+                quantity: r.approved_quantity || r.quantity || 0,
                 uom: r.uom || '',
                 rate: parseFloat(r.approved_rate) || 0,
                 vendorType: (r.vendor_type || 'Regular') as HistoryData['vendorType'],
@@ -266,7 +266,7 @@ export default () => {
     const handleSaveEdit = async (indentNo: string) => {
         try {
             const updates = {
-                quantity: editValues.quantity,
+                approved_quantity: editValues.quantity,
                 uom: editValues.uom,
                 vendor_type: editValues.vendorType,
             };
@@ -640,6 +640,8 @@ export default () => {
         gstPercent: z.coerce.number().min(0, 'GST % is required'),
         paymentTerm: z.string().min(1, "Payment term is required"),
         advancePercent: z.coerce.number().min(0).max(100).optional(),
+        quotationNo: z.string().optional(),
+        quotationDate: z.string().optional(),
     });
 
     type RegularFormValues = z.infer<typeof regularSchema>;
@@ -670,6 +672,8 @@ export default () => {
                 tax_value1: (values.gstPercent || 0).toString(),
                 payment_term1: values.paymentTerm,
                 advance_percent1: values.advancePercent?.toString(),
+                quotation_no1: values.quotationNo || '',
+                quotation_date1: values.quotationDate || '',
                 approved_vendor_name: values.vendorName,
                 approved_rate: finalRate.toString(),
                 approved_payment_term: values.paymentTerm,
@@ -705,6 +709,8 @@ export default () => {
             advancePercent: z.coerce.number().optional(),
             whatsappNumber: z.string().optional(),
             emailId: z.string().optional(),
+            quotationNo: z.string().optional(),
+            quotationDate: z.string().optional(),
         })).length(3).superRefine((vendors, ctx) => {
             // Vendors 1 and 2 are mandatory
             [0, 1].forEach(index => {
@@ -760,6 +766,8 @@ export default () => {
                     advancePercent: 0,
                     whatsappNumber: '',
                     emailId: '',
+                    quotationNo: '',
+                    quotationDate: '',
                 },
                 {
                     vendorName: '',
@@ -769,6 +777,8 @@ export default () => {
                     advancePercent: 0,
                     whatsappNumber: '',
                     emailId: '',
+                    quotationNo: '',
+                    quotationDate: '',
                 },
                 {
                     vendorName: '',
@@ -778,6 +788,8 @@ export default () => {
                     advancePercent: 0,
                     whatsappNumber: '',
                     emailId: '',
+                    quotationNo: '',
+                    quotationDate: '',
                 },
             ],
         },
@@ -856,6 +868,8 @@ export default () => {
                     withTaxOrNot,
                     taxValue,
                     advancePercent: vendor.advancePercent?.toString() || '0',
+                    quotationNo: vendor.quotationNo || '',
+                    quotationDate: vendor.quotationDate || '',
                 };
             };
 
@@ -877,6 +891,8 @@ export default () => {
                 advance_percent1: vendor1Data.advancePercent,
                 whatsapp_number1: values.vendors[0].whatsappNumber,
                 email_id1: values.vendors[0].emailId,
+                quotation_no1: vendor1Data.quotationNo,
+                quotation_date1: vendor1Data.quotationDate,
 
                 // Vendor 2
                 vendor_name2: values.vendors[1].vendorName,
@@ -888,6 +904,8 @@ export default () => {
                 advance_percent2: vendor2Data.advancePercent,
                 whatsapp_number2: values.vendors[1].whatsappNumber,
                 email_id2: values.vendors[1].emailId,
+                quotation_no2: vendor2Data.quotationNo,
+                quotation_date2: vendor2Data.quotationDate,
 
                 // Vendor 3
                 vendor_name3: values.vendors[2].vendorName,
@@ -899,6 +917,8 @@ export default () => {
                 advance_percent3: vendor3Data.advancePercent,
                 whatsapp_number3: values.vendors[2].whatsappNumber,
                 email_id3: values.vendors[2].emailId,
+                quotation_no3: vendor3Data.quotationNo,
+                quotation_date3: vendor3Data.quotationDate,
 
                 comparison_sheet: url,
                 product_code: values.productCode || '',
@@ -1200,7 +1220,6 @@ export default () => {
                                 <DialogHeader className="grid gap-2">
                                     <DialogTitle>Step 1: Determine Vendor Type</DialogTitle>
                                     <DialogDescription>
-                                        Type the amount of the item to decide the vendor type for indent{' '}
                                         <span className="font-medium">{selectedIndent.indentNo}</span>
                                     </DialogDescription>
                                 </DialogHeader>
@@ -1213,20 +1232,55 @@ export default () => {
                                             onChange={(e) => {
                                                 const val = Number(e.target.value);
                                                 setAmountToDetermineType(val);
-                                                setComputedVendorType(val >= 5000 ? 'Three Party' : 'Regular');
+                                                if (val >= 5000) {
+                                                    setComputedVendorType('Three Party');
+                                                } else if (val > 0) {
+                                                    // Default to Regular for < 5000, but allow user selection
+                                                    if (computedVendorType !== 'Three Party' && computedVendorType !== 'Regular') {
+                                                        setComputedVendorType('Regular');
+                                                    }
+                                                }
                                             }}
                                             placeholder="Enter amount"
                                         />
                                     </div>
-                                    <div className="p-3 bg-muted rounded-md text-sm">
-                                        Vendor Type: <Pill variant={computedVendorType === 'Regular' ? 'primary' : 'secondary'}>{computedVendorType}</Pill>
-                                    </div>
+
+                                    {amountToDetermineType < 5000 ? (
+                                        <div className="grid gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                                            <Label>Vendor Type Selection</Label>
+                                            <Select
+                                                value={computedVendorType}
+                                                onValueChange={(val: 'Regular' | 'Three Party') => setComputedVendorType(val)}
+                                            >
+                                                <SelectTrigger className="w-full">
+                                                    <SelectValue placeholder="Select Vendor Type" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="Regular">Regular Vendor</SelectItem>
+                                                    <SelectItem value="Three Party">Three Party (3 Party)</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                            <p className="text-[10px] text-muted-foreground font-medium italic">
+                                                * Amount is less than 5000. Please select vendor type manually.
+                                            </p>
+                                        </div>
+                                    ) : amountToDetermineType >= 5000 ? (
+                                        <div className="p-3 bg-muted rounded-md text-sm animate-in fade-in slide-in-from-top-1 duration-200">
+                                            <div className="flex items-center justify-between">
+                                                <span className="font-medium text-muted-foreground">Vendor Type:</span>
+                                                <Pill variant="secondary">Three Party</Pill>
+                                            </div>
+                                        </div>
+                                    ) : null}
                                 </div>
                                 <DialogFooter>
                                     <DialogClose asChild>
                                         <Button variant="outline">Close</Button>
                                     </DialogClose>
-                                    <Button onClick={() => setDialogStep(2)}>
+                                    <Button
+                                        onClick={() => setDialogStep(2)}
+                                        disabled={!amountToDetermineType || amountToDetermineType <= 0}
+                                    >
                                         Next
                                     </Button>
                                 </DialogFooter>
@@ -1246,7 +1300,7 @@ export default () => {
                                     </DialogHeader>
                                     {/* Copy existing form fields... */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div className="md:col-span-2">
+                                        <div className="md:col-span-1">
                                             <FormField
                                                 control={regularForm.control}
                                                 name="vendorName"
@@ -1281,6 +1335,33 @@ export default () => {
                                                                     ))}
                                                             </SelectContent>
                                                         </Select>
+                                                    </FormItem>
+                                                )}
+                                            />
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <FormField
+                                                control={regularForm.control}
+                                                name="quotationNo"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Quotation No</FormLabel>
+                                                        <FormControl>
+                                                            <Input {...field} placeholder="Quotation no." />
+                                                        </FormControl>
+                                                    </FormItem>
+                                                )}
+                                            />
+                                            <FormField
+                                                control={regularForm.control}
+                                                name="quotationDate"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Quotation Date</FormLabel>
+                                                        <FormControl>
+                                                            <Input type="date" {...field} />
+                                                        </FormControl>
                                                     </FormItem>
                                                 )}
                                             />
@@ -1363,6 +1444,7 @@ export default () => {
                                                 )}
                                             />
                                         )}
+
                                     </div>
                                     <DialogFooter>
                                         <Button variant="outline" onClick={() => setDialogStep(1)}>Back</Button>
@@ -1406,22 +1488,6 @@ export default () => {
                                                 <FormLabel>Product Code (Optional)</FormLabel>
                                                 <FormControl>
                                                     <Input {...field} placeholder="Enter product code" />
-                                                </FormControl>
-                                            </FormItem>
-                                        )}
-                                    />
-                                    <FormField
-                                        control={threePartyForm.control}
-                                        name="comparisonSheet"
-                                        render={({ field: { value, onChange, ...field } }) => (
-                                            <FormItem>
-                                                <FormLabel>Comparison Sheet (Optional)</FormLabel>
-                                                <FormControl>
-                                                    <Input
-                                                        type="file"
-                                                        onChange={(e) => onChange(e.target.files?.[0])}
-                                                        {...field}
-                                                    />
                                                 </FormControl>
                                             </FormItem>
                                         )}
@@ -1470,6 +1536,35 @@ export default () => {
                                                         </FormItem>
                                                     )}
                                                 />
+
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <FormField
+                                                        control={threePartyForm.control}
+                                                        name={`vendors.${index}.quotationNo`}
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>Quotation No</FormLabel>
+                                                                <FormControl>
+                                                                    <Input {...field} placeholder="Quotation no." />
+                                                                </FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                    <FormField
+                                                        control={threePartyForm.control}
+                                                        name={`vendors.${index}.quotationDate`}
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>Quotation Date</FormLabel>
+                                                                <FormControl>
+                                                                    <Input type="date" {...field} />
+                                                                </FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                </div>
 
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <FormField

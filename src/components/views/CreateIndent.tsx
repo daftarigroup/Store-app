@@ -461,9 +461,6 @@ export default () => {
                                                         <Select
                                                             onValueChange={(val) => {
                                                                 field.onChange(val);
-                                                                // Reset dependent fields
-                                                                form.setValue(`products.${index}.groupHead`, '');
-                                                                form.setValue(`products.${index}.productName`, '');
                                                             }}
                                                             value={field.value}
                                                         >
@@ -524,18 +521,6 @@ export default () => {
                                                         <Select
                                                             onValueChange={(val) => {
                                                                 field.onChange(val);
-                                                                // Reset dependent fields
-                                                                form.setValue(`products.${index}.productName`, '');
-
-                                                                // ✅ Auto-select department if group head belongs to a certain dept
-                                                                if (options?.groupHeads) {
-                                                                    for (const dept in options.groupHeads) {
-                                                                        if (options.groupHeads[dept].includes(val)) {
-                                                                            form.setValue(`products.${index}.department`, dept);
-                                                                            break;
-                                                                        }
-                                                                    }
-                                                                }
                                                             }}
                                                             value={field.value}
                                                         >
