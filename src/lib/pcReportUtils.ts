@@ -70,7 +70,7 @@ export const calculatePcReportCounts = (
             storeInSheet || [],
             (item) => (item.planned6 || item.planned_6) && !(item.actual6 || item.actual_6),
             (item) => !!(item.actual6 || item.actual_6),
-            'Quality Check'
+            'Store Check'
         ),
         calculateCounts(
             fullkittingSheet || [],

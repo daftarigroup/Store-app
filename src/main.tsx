@@ -327,7 +327,7 @@ const routes: RouteAttributes[] = [
     {
         path: 'store-in',
         gateKey: 'storeIn',
-        name: 'Quality Check',
+        name: 'Store Check',
         icon: <CheckCircle2 size={20} />,
         element: <StoreIn />,
         notifications: (sheets: any[]) =>

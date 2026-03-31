@@ -614,7 +614,7 @@ export default () => {
             <Dialog open={openDialog} onOpenChange={setOpenDialog}>
                 <Tabs defaultValue="pending">
                     <Heading
-                        heading="Quality Check for Receive Items"
+                        heading="Store Check for Receive Items"
                         subtext="Receive items from purchase orders"
                         tabs
                         pendingCount={tableData.length}

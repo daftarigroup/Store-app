@@ -409,7 +409,7 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                     partyName: r.partyName,
                     billAmt: r.billAmt,
                     billImage: r.billImage,
-                    billReceivedLater: r.billRecievedLater,
+                    billReceivedLater: r.billReceivedLater,
                     location: r.location,
                     typeOfBills: r.typeOfBills,
                     productImage: r.productImage,
