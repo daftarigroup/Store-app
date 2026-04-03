@@ -157,7 +157,7 @@ export default () => {
 
         setPendingData(
             filteredByFirm
-                .filter((i) => i.planned7 !== '' && i.actual7 === '')
+                .filter((i) => i.planned7 !== '' && i.actual7 === '' && i.hodStatus === 'Rejected')
                 .map((i) => ({
                     liftNumber: i.liftNumber || '',
                     indentNumber: i.indentNo || '',
@@ -186,7 +186,7 @@ export default () => {
 
         setHistoryData(
             filteredByFirm
-                .filter((i) => i.planned7 !== '' && i.actual7 !== '')
+                .filter((i) => i.planned7 !== '' && i.actual7 !== '' && i.hodStatus === 'Rejected')
                 .map((i) => ({
                     liftNumber: i.liftNumber || '',
                     indentNumber: i.indentNo || '',

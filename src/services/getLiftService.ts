@@ -31,6 +31,7 @@ export interface GetLiftIndentRecord {
     department?: string;
     areaOfUse?: string;
     approvedQuantity: number;
+    receivedQuantity: number;
 }
 
 export interface GetLiftStoreInRecord {
@@ -38,6 +39,7 @@ export interface GetLiftStoreInRecord {
     firmNameMatch: string;
     vendorName: string;
     receivedQuantity: number;
+    qty: number;
     photoOfBill: string;
     timestamp: string;
 }
@@ -123,6 +125,7 @@ export async function fetchIndentRecords() {
             timestamp: r.timestamp || '',
             expectedDate: r.expected_req_date || '',
             approvedQuantity: Number(r.approved_quantity) || 0,
+            receivedQuantity: Number(r.received_quantity) || 0,
         }));
     } catch (error) {
         console.error('Error fetching indent records:', error);
@@ -148,6 +151,7 @@ export async function fetchStoreInRecords() {
             indentNo: r.indent_no || '',
             firmNameMatch: r.firm_name_match || '',
             vendorName: r.vendor_name || '',
+            qty: Number(r.qty) || 0,
             receivedQuantity: Number(r.received_quantity) || 0,
             photoOfBill: r.photo_of_bill || '',
             timestamp: r.timestamp || '',

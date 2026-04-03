@@ -105,11 +105,17 @@ export default function PIApprovals() {
     const [selectedItem, setSelectedItem] = useState<PIPendingData | null>(null);
     const [openDialog, setOpenDialog] = useState(false);
     const [uploadingFile, setUploadingFile] = useState(false);
-    const [filterTerm, setFilterTerm] = useState('Partly PI / Party Advance');
+    const [filterTerm, setFilterTerm] = useState('Advance Terms');
 
     // ✅ Memoized filtered data
     const filteredData = useMemo(() => {
         if (filterTerm === 'All') return pendingData;
+        if (filterTerm === 'Advance Terms') {
+            return pendingData.filter(item => {
+                const pt = (item.paymentTerms || '').toLowerCase();
+                return pt.includes('advance') || pt.includes('pi');
+            });
+        }
         return pendingData.filter(item => item.paymentTerms === filterTerm);
     }, [pendingData, filterTerm]);
 
@@ -884,6 +890,7 @@ export default function PIApprovals() {
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="All">All Terms</SelectItem>
+                                                <SelectItem value="Advance Terms">Advance Terms (PI/Advance)</SelectItem>
                                                 {uniquePaymentTerms.map(term => (
                                                     <SelectItem key={term} value={term}>
                                                         {term}

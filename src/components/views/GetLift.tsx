@@ -140,21 +140,21 @@ export default function GetPurchase() {
         const processedData = filteredByFirm
             .map((sheet) => {
                 // Calculate received quantity from STORE IN records
-                const receivedQty = storeInRecords
+                const receivedQty = (Number(sheet.receivedQuantity) || 0) + storeInRecords
                     .filter(
                         (store) =>
                             store.indentNo === sheet.indentNumber?.toString()
                     )
                     .reduce(
                         (sum, store) =>
-                            sum + (Number(store.receivedQuantity) || 0),
+                            sum + (Number(store.qty) || 0),
                         0
                     );
 
                 // Use pendingPoQty from sheet if available, otherwise calculate
                 const pendingPoQty = (Number(sheet.approvedQuantity) || 0) - receivedQty;
 
-                return { ...sheet, pendingPoQty, receivedQty };
+                return { ...sheet, pendingPoQty, receivedQty, receivedQuantity: sheet.receivedQuantity };
             })
             .filter((item) => {
                 // Show only Pending items with planned date but no actual date
@@ -275,11 +275,11 @@ export default function GetPurchase() {
                     const approvedQty =
                         Number(indentRecord?.approvedQuantity) || 0;
 
-                    const receivedQty = filteredStoreIn
+                    const receivedQty = (Number(indentRecord?.receivedQuantity) || 0) + filteredStoreIn
                         .filter((store) => store.indentNo === sheet.indentNo)
                         .reduce(
                             (sum, store) =>
-                                sum + (Number(store.receivedQuantity) || 0),
+                                sum + (Number(store.qty) || 0),
                             0
                         );
 

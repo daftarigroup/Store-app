@@ -436,9 +436,13 @@ const routes: RouteAttributes[] = [
                     const isPending = status === 'pending' || status === '';
 
                     if (outstanding > 0 && isPending) {
-                        const billNo = linkedStoreIn?.billNo || linkedStoreIn?.bill_no || 'NoBill';
-                        const uniqueKey = `${record.partyName || record.party_name || 'NoVendor'}-${billNo}`;
-                        uniqueBills.add(uniqueKey);
+                        // ✅ Count ONLY if it matches the 'Advance Terms' logical filter
+                        const pt = (record.paymentTerms || record.payment_terms || '').toLowerCase();
+                        if (pt.includes('advance') || pt.includes('pi')) {
+                            const billNo = linkedStoreIn?.billNo || linkedStoreIn?.bill_no || 'NoBill';
+                            const uniqueKey = `${record.partyName || record.party_name || 'NoVendor'}-${billNo}`;
+                            uniqueBills.add(uniqueKey);
+                        }
                     }
                 });
 
@@ -453,17 +457,21 @@ const routes: RouteAttributes[] = [
                     const notScheduled = !payment.planned || String(payment.planned || '').trim() === '';
 
                     if (isPending && notScheduled) {
-                        const linkedStoreIn = (storeInSheet || []).find((s: any) =>
-                            (s.indentNo || s.indentNumber) === (payment.internalCode || payment.internal_code)
-                        );
-                        if (linkedStoreIn) {
-                           if (linkedStoreIn.typeOfBill && linkedStoreIn.typeOfBill.toLowerCase() !== 'independent') return;
-                           if ((linkedStoreIn.hodStatus || linkedStoreIn.hod_status) !== 'Approved') return;
-                        }
+                        // ✅ Count ONLY if it matches 'Advance Terms'
+                        const pt = (payment.paymentTerms || payment.payment_terms || '').toLowerCase();
+                        if (pt.includes('advance') || pt.includes('pi')) {
+                            const linkedStoreIn = (storeInSheet || []).find((s: any) =>
+                                (s.indentNo || s.indentNumber) === (payment.internalCode || payment.internal_code)
+                            );
+                            if (linkedStoreIn) {
+                                if (linkedStoreIn.typeOfBill && linkedStoreIn.typeOfBill.toLowerCase() !== 'independent') return;
+                                if ((linkedStoreIn.hodStatus || linkedStoreIn.hod_status) !== 'Approved') return;
+                            }
 
-                        const billNo = payment.billNo || payment.bill_no || linkedStoreIn?.billNo || linkedStoreIn?.bill_no || 'NoBill';
-                        const uniqueKey = `${payment.partyName || payment.party_name || 'NoVendor'}-${billNo}`;
-                        uniqueBills.add(uniqueKey);
+                            const billNo = payment.billNo || payment.bill_no || linkedStoreIn?.billNo || linkedStoreIn?.bill_no || 'NoBill';
+                            const uniqueKey = `${payment.partyName || payment.party_name || 'NoVendor'}-${billNo}`;
+                            uniqueBills.add(uniqueKey);
+                        }
                     }
                 });
 
@@ -571,7 +579,8 @@ const routes: RouteAttributes[] = [
             sheets.filter((sheet: any) =>
                 sheet.planned7 &&
                 sheet.planned7.toString().trim() !== '' &&
-                (!sheet.actual7 || sheet.actual7.toString().trim() === '')
+                (!sheet.actual7 || sheet.actual7.toString().trim() === '') &&
+                (sheet.hodStatus === 'Rejected' || sheet.hod_status === 'Rejected')
             ).length,
     },
     {
