@@ -38,6 +38,8 @@ interface PaymentsRecord {
     firmNameMatch?: string;
     paymentDone?: boolean;
     billImageStatus?: string;
+    billNo?: string;
+    rowIds?: number[];
 }
 
 interface PaymentHistoryRecord {
@@ -78,6 +80,8 @@ interface DisplayPayment {
     paymentForm: string;
     firmNameMatch: string;
     billImageStatus?: string;
+    billNo?: string;
+    rowIds: number[];
 }
 
 interface DisplayPaymentHistory {
@@ -229,8 +233,12 @@ export default function MakePayment() {
                 if (storeInData) {
                     setStoreInRecords(storeInData);
                     storeInData.forEach((item: any) => {
-                        if (item.po_number) {
-                            storeInMap.set(item.po_number, item.bill_image_status);
+                        const indentKey = item.indent_no || item.indent_number || '';
+                        if (indentKey) {
+                            storeInMap.set(indentKey, {
+                                billImageStatus: item.bill_image_status || '',
+                                billNo: item.bill_no || ''
+                            });
                         }
                     });
                 }
@@ -259,11 +267,12 @@ export default function MakePayment() {
                     planned: r.planned,
                     actual: r.actual,
                     delay: r.delay,
-                    status1: r.status1,
                     paymentForm: r.payment_form,
                     firmNameMatch: r.firm_name,
                     paymentDone: r.payment_done || false,
-                    billImageStatus: storeInMap.get(r.po_number) || '',
+                    billImageStatus: storeInMap.get(r.internal_code)?.billImageStatus || '',
+                    billNo: storeInMap.get(r.internal_code)?.billNo || '',
+                    rowIds: [r.id],
                 }));
 
                 setOriginalData(mappedPayments);
@@ -276,6 +285,14 @@ export default function MakePayment() {
                         const hasPlanned = plannedValue !== '';
                         const status = String(sheet?.status || '').toLowerCase();
                         const isCompleted = status === 'completed';
+
+                        // Check payment terms: Only show if Partly Advance or Partly PI
+                        const terms = String(sheet?.paymentTerms || '').toLowerCase();
+                        const isPartlyTerms = terms.includes('partly') && (terms.includes('advance') || terms.includes('pi'));
+
+                        if (!isPartlyTerms) {
+                            return false;
+                        }
 
                         // Check linked Store In for HOD status: Only show if Approved
                         const linkedStoreIn = storeInRecords.find((s: any) =>
@@ -299,7 +316,7 @@ export default function MakePayment() {
                     }
                 }
 
-                const pendingItems = latestPending.map((sheet: PaymentsRecord, index) => ({
+                const pendingItems: DisplayPayment[] = latestPending.map((sheet: PaymentsRecord, index) => ({
                     rowIndex: sheet?.rowIndex || index,
                     uniqueNo: sheet?.uniqueNo || '',
                     partyName: sheet?.partyName || '',
@@ -324,13 +341,38 @@ export default function MakePayment() {
                     paymentForm: sheet?.paymentForm || '',
                     firmNameMatch: sheet?.firmNameMatch || '',
                     billImageStatus: sheet?.billImageStatus || '',
+                    billNo: sheet?.billNo || '',
+                    rowIds: sheet?.rowIds || [],
                 }));
 
-                // Sort pending items by planned date descending
-                const sortedPending = [...pendingItems].sort((a, b) => {
-                    return b.rowIndex - a.rowIndex;
+                // Group by Bill No + Party Name
+                const groupedPendingMap = new Map<string, DisplayPayment>();
+                pendingItems.forEach(item => {
+                    const billKey = item.billNo || 'NoBill';
+                    const uniqueKey = `${item.partyName || 'NoVendor'}-${billKey}`;
+
+                    if (!groupedPendingMap.has(uniqueKey)) {
+                        groupedPendingMap.set(uniqueKey, { ...item });
+                    } else {
+                        const existing = groupedPendingMap.get(uniqueKey)!;
+                        // Add rowIds
+                        existing.rowIds = [...existing.rowIds, ...item.rowIds];
+
+                        // Concatenate products
+                        const existingProducts = existing.product.split(', ').map(p => p.trim());
+                        if (item.product && !existingProducts.includes(item.product.trim())) {
+                            existing.product = [...existingProducts, item.product.trim()].join(', ');
+                        }
+
+                        // Sum Amounts
+                        existing.payAmount += item.payAmount;
+                        existing.outstandingAmount += item.outstandingAmount;
+                        existing.totalPaidAmount += item.totalPaidAmount;
+                        // For unique numbers and other non-summing fields, keep the first one
+                    }
                 });
 
+                const sortedPending = Array.from(groupedPendingMap.values()).sort((a, b) => b.rowIndex - a.rowIndex);
                 setPendingData(sortedPending);
 
                 // 2. Fetch History directly from payment_history table

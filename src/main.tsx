@@ -345,13 +345,19 @@ const routes: RouteAttributes[] = [
         name: 'HOD Check',
         icon: <UserCheck size={20} />,
         element: <HodStoreApproval />,
-        notifications: (storeInSheet: any[]) => {
+        notifications: (storeInSheet: any[], user: any) => {
             const data = Array.isArray(storeInSheet[0]) ? storeInSheet[0] : storeInSheet;
-            return data.filter((sheet: any) =>
-                sheet.plannedHod &&
-                sheet.plannedHod.toString().trim() !== '' &&
-                (!sheet.actualHod || sheet.actualHod.toString().trim() === '')
-            ).length;
+            const firmFilter = user.firmNameMatch?.toLowerCase() === 'all' ? null : user.firmNameMatch;
+            
+            return data.filter((sheet: any) => {
+                const isFirmMatch = !firmFilter || (sheet.firmNameMatch || sheet.firm_name_match) === firmFilter;
+                const isPlanned = (sheet.plannedHod || sheet.hod_planned || sheet.hodPlanned);
+                const isActual = (sheet.actualHod || sheet.hod_actual || sheet.hodActual);
+                
+                return isFirmMatch && 
+                       isPlanned && isPlanned.toString().trim() !== '' && 
+                       (!isActual || isActual.toString().trim() === '');
+            }).length;
         },
     },
     {
@@ -397,106 +403,71 @@ const routes: RouteAttributes[] = [
                     }
                 });
 
-                // 3. Identify PO-based pending items (Filter by received status)
-                const poBasedPendingItems = poMasterSheet.filter((record: any) => {
-                    // Firm filtering
+                // 3. Collect unique bills by Party + Bill No
+                const uniqueBills = new Set<string>();
+
+                // Process PO-based items
+                poMasterSheet.forEach((record: any) => {
                     const firmMatch = !user || user.firmNameMatch?.toLowerCase() === "all" ||
                         record.firmNameMatch === user.firmNameMatch;
-                    if (!firmMatch) return false;
+                    if (!firmMatch) return;
 
-                    // Only show if received
-                    const isReceived = receivedPos.has(record.poNumber || '');
-                    if (!isReceived) return false;
+                    const poNum = record.poNumber || '';
+                    const isReceived = receivedPos.has(poNum);
+                    const paymentTerms = (record.paymentTerms || record.payment_terms || '').toString().trim().toLowerCase();
+                    const isPI = paymentTerms.includes("partly pi") || paymentTerms.includes("partly advance");
 
-                    // ✅ Check if Bill Type is "common" in Store In
+                    // Link with StoreIn for HOD and Bill checks
                     const linkedStoreIn = (storeInSheet || []).find((s: any) =>
-                        (s.poNumber || s.po_number || '') === (record.poNumber || record.po_number || record.po_no || '')
+                        (s.poNumber || s.po_number || '') === (record.poNumber || record.po_number || '')
                     );
 
                     if (linkedStoreIn) {
-                        if (linkedStoreIn.typeOfBill && linkedStoreIn.typeOfBill.toLowerCase() !== 'independent') {
-                            return false;
-                        }
-                        // ✅ HOD Status Check: Only show if Approved
-                        if ((linkedStoreIn.hodStatus || linkedStoreIn.hod_status) !== 'Approved') {
-                            return false;
-                        }
+                        if (linkedStoreIn.typeOfBill && linkedStoreIn.typeOfBill.toLowerCase() !== 'independent') return;
+                        if ((linkedStoreIn.hodStatus || linkedStoreIn.hod_status) !== 'Approved') return;
                     }
 
-                    // ✅ Relaxed Payment Terms Check
-                    const paymentTerms = (record.paymentTerms || record.payment_terms || '').toString().trim();
-                    const isPI = paymentTerms === "Partly PI / Party Advance" || paymentTerms === "Partly PI";
+                    if (!isReceived && !isPI) return;
 
-                    if (!isReceived && !isPI) {
-                        return false;
-                    }
-
-                    // Outstanding amount calculation
                     const totalPo = Number(record.totalPoAmount || 0);
-                    const totalPaid = paymentsByPo[record.poNumber || ''] || 0;
+                    const totalPaid = paymentsByPo[poNum] || 0;
                     const outstanding = totalPo - totalPaid;
-
-                    // Status filtering
                     const status = (record.status || '').toString().trim().toLowerCase();
-                    const isPending = status === 'pending' || status === '' || status === undefined;
+                    const isPending = status === 'pending' || status === '';
 
-                    return outstanding > 0 && isPending;
+                    if (outstanding > 0 && isPending) {
+                        const billNo = linkedStoreIn?.billNo || linkedStoreIn?.bill_no || 'NoBill';
+                        const uniqueKey = `${record.partyName || record.party_name || 'NoVendor'}-${billNo}`;
+                        uniqueBills.add(uniqueKey);
+                    }
                 });
 
-                // 3. Identify Payment-based pending items (Store-In and Freight)
-                const paymentBasedPendingItems = (paymentsSheet || []).filter((payment: any) => {
-                    // Firm filtering
+                // Process Payment-based items
+                (paymentsSheet || []).forEach((payment: any) => {
                     const firmMatch = !user || user.firmNameMatch?.toLowerCase() === "all" ||
                         (payment.firmNameMatch || payment.firm_name) === user.firmNameMatch;
+                    if (!firmMatch) return;
 
-                    // Status and planning filtering
                     const status = String(payment.status || '').toLowerCase();
                     const isPending = status === 'pending';
                     const notScheduled = !payment.planned || String(payment.planned || '').trim() === '';
 
-                    // ✅ Link with StoreIn to check Bill Type and HOD Status
-                    const linkedStoreIn = (storeInSheet || []).find((s: any) =>
-                        (s.indentNo || s.indentNumber) === (payment.internalCode || payment.internal_code)
-                    );
-
-                    if (linkedStoreIn) {
-                        if (linkedStoreIn.typeOfBill && linkedStoreIn.typeOfBill.toLowerCase() !== 'independent') {
-                            return false;
+                    if (isPending && notScheduled) {
+                        const linkedStoreIn = (storeInSheet || []).find((s: any) =>
+                            (s.indentNo || s.indentNumber) === (payment.internalCode || payment.internal_code)
+                        );
+                        if (linkedStoreIn) {
+                           if (linkedStoreIn.typeOfBill && linkedStoreIn.typeOfBill.toLowerCase() !== 'independent') return;
+                           if ((linkedStoreIn.hodStatus || linkedStoreIn.hod_status) !== 'Approved') return;
                         }
-                        // ✅ HOD Status Check: Only show if Approved
-                        if ((linkedStoreIn.hodStatus || linkedStoreIn.hod_status) !== 'Approved') {
-                            return false;
-                        }
-                    }
 
-                    // ✅ Relaxed Payment Terms
-                    const paymentTerms = (payment.paymentTerms || payment.payment_terms || '').toString().trim();
-                    const paymentForm = (payment.paymentForm || payment.payment_form || '').toString().trim().toLowerCase();
-                    const isPI = paymentTerms === "Partly PI / Party Advance" || paymentTerms === "Partly PI";
-                    const isStoreIn = paymentForm === 'store_in';
-
-                    if (!isPI && !isStoreIn && paymentTerms !== '') {
-                        // Allow if pending
-                    }
-
-                    return firmMatch && isPending && notScheduled;
-                });
-
-                // 4. Merge logic (same as page logic)
-                const poNumbersInList = new Set(poBasedPendingItems.map((item: any) => item.poNumber));
-                let count = poBasedPendingItems.length;
-
-                paymentBasedPendingItems.forEach((paymentItem: any) => {
-                    if (paymentItem.poNumber && !poNumbersInList.has(paymentItem.poNumber)) {
-                        count++;
-                        poNumbersInList.add(paymentItem.poNumber);
-                    } else if (!paymentItem.poNumber) {
-                        count++; // Items without PO number are also added
+                        const billNo = payment.billNo || payment.bill_no || linkedStoreIn?.billNo || linkedStoreIn?.bill_no || 'NoBill';
+                        const uniqueKey = `${payment.partyName || payment.party_name || 'NoVendor'}-${billNo}`;
+                        uniqueBills.add(uniqueKey);
                     }
                 });
 
-                return count;
-
+                return uniqueBills.size;
             } catch (error) {
                 console.error('Error calculating Payment-Status notifications:', error);
                 return 0;
@@ -517,10 +488,15 @@ const routes: RouteAttributes[] = [
 
             if (paymentsData.length === 0) return 0;
 
-            const pendingItems = paymentsData.filter((payment: any) => {
+             const pendingItems = paymentsData.filter((payment: any) => {
                 const firmMatch = !user || user.firmNameMatch.toLowerCase() === "all" ||
                     (payment.firmNameMatch || payment.firm_name) === user.firmNameMatch;
                 if (!firmMatch) return false;
+
+                // Check payment terms: Only count if Partly Advance or Partly PI
+                const terms = String(payment?.paymentTerms || payment?.payment_terms || '').toLowerCase();
+                const isPartlyTerms = terms.includes('partly') && (terms.includes('advance') || terms.includes('pi'));
+                if (!isPartlyTerms) return false;
 
                 // Check linked Store In for HOD status: Only count if Approved
                 const linkedStoreIn = storeInSheet.find((s: any) =>

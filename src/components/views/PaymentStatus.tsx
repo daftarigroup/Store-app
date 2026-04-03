@@ -23,6 +23,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { PuffLoader as Loader } from 'react-spinners';
 import { toast } from 'sonner';
 import { Input } from '../ui/input';
+import { createPaymentEntry, uploadProductPhoto, updateStoreInReceiving } from '@/services/storeInService';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Separator } from '../ui/separator';
 import { useMemo } from 'react';
@@ -59,8 +60,10 @@ interface PIPendingData {
     status: string;
     pdf?: string;
     paymentForm?: string;
+    billNo?: string;
     billAmount?: number;
     rowIds: number[];
+    liftNumber?: string;
 }
 
 interface POMasterRecord {
@@ -89,7 +92,14 @@ interface POMasterRecord {
 }
 
 export default function PIApprovals() {
-    const { poMasterSheet, paymentsSheet, storeInSheet, updateAll, allLoading: poMasterLoading } = useSheets();
+    const {
+        poMasterSheet,
+        paymentsSheet,
+        storeInSheet,
+        paymentHistorySheet,
+        updateAll,
+        allLoading: poMasterLoading
+    } = useSheets();
     const { user } = useAuth();
     const [pendingData, setPendingData] = useState<PIPendingData[]>([]);
     const [selectedItem, setSelectedItem] = useState<PIPendingData | null>(null);
@@ -188,8 +198,9 @@ export default function PIApprovals() {
                     // Allow everything if it's already been received,
                     // or if it matches the PI terms for pre-receipt payment.
                     const paymentTerms = (record.paymentTerms || record.payment_terms || '').toString().trim();
-                    const isPI = paymentTerms === "Partly PI / Party Advance" || paymentTerms === "Partly PI";
-
+                    const isPI = paymentTerms.toLowerCase().includes("partly pi") || 
+                                 paymentTerms.toLowerCase().includes("partly advance");
+                    
                     if (!isReceived && !isPI) {
                         return false;
                     }
@@ -229,8 +240,12 @@ export default function PIApprovals() {
                         outstandingAmount: totalPo - totalPaid,
                         status: record.status || 'Pending',
                         pdf: record.pdf || '',
+                        billNo: linkedStoreIn?.billNo || linkedStoreIn?.bill_no || '',
                         billAmount: Number(linkedStoreIn?.billAmount || linkedStoreIn?.bill_amount || 0),
+                        advanceAmount: Number(record.advanceAmount || record.advance_amount || 0),
+                        advancePercent: Number(record.advancePercent || record.advance_percent || record.advance_percentage || record.number_of_days || 0),
                         rowIds: [record.id || 0],
+                        liftNumber: linkedStoreIn?.liftNumber || linkedStoreIn?.lift_number || '',
                     };
                 });
 
@@ -275,89 +290,193 @@ export default function PIApprovals() {
 
                     return firmMatch && isPending && notScheduled;
                 })
-                .map((payment: any) => ({
-                    rowIndex: payment?.id || payment?.rowIndex || 0,
-                    timestamp: payment?.timestamp || '',
-                    partyName: payment?.partyName || payment?.party_name || '',
-                    poNumber: payment?.poNumber || payment?.po_number || '',
-                    internalCode: payment?.internalCode || payment?.internal_code || '',
-                    product: payment?.product || '',
-                    description: `${payment?.paymentForm || payment?.payment_form ? (payment.paymentForm || payment.payment_form).toUpperCase() + ' - ' : ''}${payment?.product || ''}`,
-                    quantity: 0,
-                    unit: '',
-                    rate: 0,
-                    gstPercent: 0,
-                    discountPercent: 0,
-                    amount: Number(payment?.payAmount || payment?.pay_amount || 0),
-                    totalPoAmount: Number(payment?.totalPoAmount || payment?.total_po_amount || payment?.payAmount || payment?.pay_amount || 0),
-                    deliveryDate: payment?.deliveryDate || payment?.delivery_date || '',
-                    paymentTerms: payment?.paymentTerms || payment?.payment_terms || '',
-                    numberOfDays: Number(payment?.numberOfDays || payment?.number_of_days || 0),
-                    firmNameMatch: payment?.firmNameMatch || payment?.firm_name || '',
-                    totalPaidAmount: Number(payment?.totalPaidAmount || payment?.total_paid_amount || 0),
-                    outstandingAmount: Number(payment?.outstandingAmount || payment?.outstanding_amount || payment?.payAmount || payment?.pay_amount || 0),
-                    status: payment?.status || 'Pending',
-                    pdf: payment?.pdf || payment?.file || '',
-                    billAmount: Number(payment?.billAmount || payment?.bill_amount || 0),
-                    rowIds: [payment?.id || 0],
-                }));
+                .map((payment: any) => {
+                    const linkedStoreIn = Array.isArray(safeStoreInSheet)
+                        ? safeStoreInSheet.find(s =>
+                            (s.indentNo || s.indentNumber) === (payment?.internalCode || payment?.internal_code)
+                        )
+                        : null;
 
-            // Combine both lists and remove duplicates by poNumber
-            const uniquePoMap = new Map<string, PIPendingData>();
+                    return {
+                        rowIndex: payment?.id || payment?.rowIndex || 0,
+                        timestamp: payment?.timestamp || '',
+                        partyName: payment?.partyName || payment?.party_name || '',
+                        poNumber: payment?.poNumber || payment?.po_number || '',
+                        internalCode: payment?.internalCode || payment?.internal_code || '',
+                        product: payment?.product || payment?.product_name || '',
+                        description: `${payment?.paymentForm || payment?.payment_form ? (payment.paymentForm || payment.payment_form).toUpperCase() + ' - ' : ''}${payment?.product || ''}`,
+                        quantity: 0,
+                        unit: '',
+                        rate: 0,
+                        gstPercent: 0,
+                        discountPercent: 0,
+                        amount: Number(payment?.payAmount || payment?.pay_amount || 0),
+                        totalPoAmount: Number(payment?.totalPoAmount || payment?.total_po_amount || payment?.payAmount || payment?.pay_amount || 0),
+                        deliveryDate: payment?.deliveryDate || payment?.delivery_date || '',
+                        paymentTerms: payment?.paymentTerms || payment?.payment_terms || '',
+                        numberOfDays: Number(payment?.numberOfDays || payment?.number_of_days || 0),
+                        firmNameMatch: payment?.firmNameMatch || payment?.firm_name || '',
+                        totalPaidAmount: Number(payment?.totalPaidAmount || payment?.total_paid_amount || 0),
+                        outstandingAmount: Number(payment?.outstandingAmount || payment?.outstanding_amount || payment?.payAmount || payment?.pay_amount || 0),
+                        status: payment?.status || 'Pending',
+                        pdf: payment?.pdf || payment?.file || '',
+                        billNo: payment?.billNo || payment?.bill_no || linkedStoreIn?.billNo || linkedStoreIn?.bill_no || '',
+                        billAmount: Number(payment?.billAmount || payment?.bill_amount || linkedStoreIn?.billAmount || linkedStoreIn?.bill_amount || 0),
+                        rowIds: [payment?.id || 0],
+                        liftNumber: linkedStoreIn?.liftNumber || linkedStoreIn?.lift_number || '',
+                    };
+                });
+
+            // Combine both lists and remove duplicates by Party Name + billNo
+            const uniqueBillMap = new Map<string, PIPendingData>();
 
             // Process poBasedPendingItems first
             poBasedPendingItems.forEach(item => {
-                const poKey = item.poNumber || `NOPO-${item.rowIndex}`;
-                if (!uniquePoMap.has(poKey)) {
-                    uniquePoMap.set(poKey, { ...item });
+                const billKey = item.billNo || 'NoBill';
+                const uniqueKey = `${item.partyName || 'NoVendor'}-${billKey}`;
+
+                if (!uniqueBillMap.has(uniqueKey)) {
+                    uniqueBillMap.set(uniqueKey, { ...item });
                 } else {
-                    const existing = uniquePoMap.get(poKey)!;
+                    const existing = uniqueBillMap.get(uniqueKey)!;
                     existing.rowIds = Array.from(new Set([...existing.rowIds, ...item.rowIds]));
-                    // Optionally combine product names if they are different
-                    if (item.product && !existing.product.includes(item.product)) {
-                        existing.product += `, ${item.product}`;
+
+                    // Concatenate unique products
+                    const existingProducts = existing.product.split(', ').map(p => p.trim());
+                    if (item.product && !existingProducts.includes(item.product.trim())) {
+                        existing.product = [...existingProducts, item.product.trim()].join(', ');
                     }
                 }
             });
 
             // Process paymentBasedItems
             paymentBasedItems.forEach(paymentItem => {
-                const poKey = paymentItem.poNumber || `NOPO-PAY-${paymentItem.rowIndex}`;
-                if (!uniquePoMap.has(poKey)) {
-                    uniquePoMap.set(poKey, { ...paymentItem });
+                const billKey = paymentItem.billNo || 'NoBill';
+                const uniqueKey = `${paymentItem.partyName || 'NoVendor'}-${billKey}`;
+
+                if (!uniqueBillMap.has(uniqueKey)) {
+                    uniqueBillMap.set(uniqueKey, { ...paymentItem });
                 } else {
-                    // If PO already exists from PO Master, we optionally sync rowIds if needed
-                    // But usually we prioritize PO Master for the display
-                    const existing = uniquePoMap.get(poKey)!;
+                    const existing = uniqueBillMap.get(uniqueKey)!;
                     existing.rowIds = Array.from(new Set([...existing.rowIds, ...paymentItem.rowIds]));
+
+                    // Concatenate unique products
+                    const existingProducts = (existing.product || '').split(', ').map(p => p.trim()).filter(Boolean);
+                    const newProduct = paymentItem.product?.trim();
+                    if (newProduct && !existingProducts.includes(newProduct)) {
+                        existing.product = [...existingProducts, newProduct].join(', ');
+                    }
                 }
             });
 
-            setPendingData(Array.from(uniquePoMap.values()));
+            // Final processing: Filter out items that are already "Processed"
+            // (meaning a payment record exists for this PO + Bill, OR it's in history)
+            const finalProcessedList = Array.from(uniqueBillMap.values()).filter(item => {
+                const paymentRecords = Array.isArray(safePaymentsSheet) ? safePaymentsSheet : [];
+                const historyRecords = Array.isArray(paymentHistorySheet) ? paymentHistorySheet : [];
 
+                // 1. Check if it exists in the payments table
+                const isProcessTable = paymentRecords.some(p => {
+                    const poMatch = (p.poNumber || p.po_number || p.po_no) === item.poNumber;
+                    const billMatch = item.billNo
+                        ? (p.remark || '').includes(`Bill: ${item.billNo}`) || (p as any).billNo === item.billNo || (p as any).bill_no === item.billNo
+                        : true;
+                    
+                    const statusVal = String(p.status1 || p.status || '').toLowerCase();
+                    // Processed if it's already scheduled or approved
+                    const isProcessedStatus = ['pending', 'approved', 'complete', 'completed', 'process'].includes(statusVal);
+                    // Also check for planned date as a sign of proceeding
+                    const hasPlannedDate = p.planned && p.planned.toString().trim() !== '';
+
+                    return poMatch && billMatch && (isProcessedStatus || hasPlannedDate);
+                });
+
+                // 2. Check if it exists in the payment history
+                const isInHistory = historyRecords.some(h => {
+                    const poMatch = (h.po_number || (h as any).po_number || (h as any).poNumber) === item.poNumber;
+                    const billMatch = item.billNo
+                        ? (h.bill_no || (h as any).billNo || (h as any).bill_no) === item.billNo
+                        : true;
+                    return poMatch && billMatch;
+                });
+
+                return !(isProcessTable || isInHistory);
+            });
+
+            setPendingData(finalProcessedList);
         } catch (error) {
             console.error('❌ Error in HOD Approval logic:', error);
             setPendingData([]);
         }
-    }, [poMasterSheet, paymentsSheet, storeInSheet, user?.firmNameMatch]);
-
+    }, [poMasterSheet, paymentsSheet, storeInSheet, paymentHistorySheet, user?.firmNameMatch]);
 
     const pendingColumns: ColumnDef<PIPendingData>[] = [
         {
             header: 'Action',
-            cell: ({ row }: { row: Row<PIPendingData> }) => (
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                        setSelectedItem(row.original);
-                        setOpenDialog(true);
-                    }}
-                    className="border-purple-200 text-purple-700 hover:bg-purple-50 hover:text-purple-800 shadow-sm"
-                >
-                    <FileText className="mr-2 h-3.5 w-3.5" />
-                    Process Payment
-                </Button>
+            cell: ({ row }: { row: Row<PIPendingData> }) => {
+                const item = row.original;
+                const paymentRecords = Array.isArray(paymentsSheet) ? paymentsSheet : [];
+                const historyRecords = Array.isArray(paymentHistorySheet) ? paymentHistorySheet : [];
+
+                // 1. Check if it exists in the payments table (already processed for payment)
+                const isProcessTable = paymentRecords.some(p => {
+                    const poMatch = (p.poNumber || p.po_number) === item.poNumber;
+                    // Check for bill match in remark or direct match if available
+                    const billMatch = item.billNo
+                        ? (p.remark || '').includes(`Bill: ${item.billNo}`) || (p as any).billNo === item.billNo || (p as any).bill_no === item.billNo
+                        : true;
+                    // If it has a planned date or is pending/approved, it's processed
+                    const statusVal = String(p.status1 || p.status || '').toLowerCase();
+                    const isProcessedStatus = ['pending', 'approved', 'complete', 'completed', 'process'].includes(statusVal);
+
+                    return poMatch && billMatch && isProcessedStatus;
+                });
+
+                // 2. Check if it exists in the payment history (already paid)
+                const isInHistory = historyRecords.some(h => {
+                    const poMatch = (h.po_number || (h as any).poNumber) === item.poNumber;
+                    const billMatch = item.billNo
+                        ? (h.bill_no || (h as any).billNo) === item.billNo
+                        : true;
+                    return poMatch && billMatch;
+                });
+
+                const isProcessed = isProcessTable || isInHistory;
+
+                return (
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={isProcessed}
+                        onClick={() => {
+                            setSelectedItem(item);
+                            setOpenDialog(true);
+                        }}
+                        className={`border-purple-200 text-purple-700 shadow-sm transition-all ${isProcessed
+                            ? 'opacity-40 cursor-not-allowed grayscale'
+                            : 'hover:bg-purple-50 hover:text-purple-800'
+                            }`}
+                    >
+                        {isProcessed ? (
+                            <>
+                                <CheckCircle className="mr-2 h-3.5 w-3.5" />
+                                Processed
+                            </>
+                        ) : (
+                            <>
+                                <FileText className="mr-2 h-3.5 w-3.5" />
+                                Process Payment
+                            </>
+                        )}
+                    </Button>
+                );
+            },
+        },
+        {
+            accessorKey: 'billNo',
+            header: 'Bill No.',
+            cell: ({ row }) => (
+                <span className="text-sm font-medium text-purple-800">{row.original.billNo || '-'}</span>
             ),
         },
         {
@@ -365,14 +484,14 @@ export default function PIApprovals() {
             header: 'PO Number',
             cell: ({ row }) => (
                 <span className="font-medium text-gray-700">{row.original.poNumber || '-'}</span>
-            )
+            ),
         },
         {
             accessorKey: 'partyName',
             header: 'Party Name',
             cell: ({ row }) => (
                 <span className="font-medium">{row.original.partyName || '-'}</span>
-            )
+            ),
         },
         {
             accessorKey: 'internalCode',
@@ -381,14 +500,14 @@ export default function PIApprovals() {
                 <div className="bg-slate-100 text-slate-700 py-1 px-2.5 rounded text-[11px] font-bold inline-block border border-slate-200 uppercase tracking-wider">
                     {row.original.internalCode || '-'}
                 </div>
-            )
+            ),
         },
         {
             accessorKey: 'product',
             header: 'Product',
             cell: ({ row }) => (
                 <span className="text-sm font-medium text-slate-700">{row.original.product || '-'}</span>
-            )
+            ),
         },
         {
             accessorKey: 'totalPoAmount',
@@ -397,7 +516,7 @@ export default function PIApprovals() {
                 <div className="text-right font-bold text-slate-900">
                     ₹{row.original.totalPoAmount?.toLocaleString('en-IN')}
                 </div>
-            )
+            ),
         },
         {
             accessorKey: 'billAmount',
@@ -406,7 +525,7 @@ export default function PIApprovals() {
                 <div className="text-right font-semibold text-purple-700">
                     ₹{row.original.billAmount?.toLocaleString('en-IN') || '0'}
                 </div>
-            )
+            ),
         },
         {
             accessorKey: 'totalPaidAmount',
@@ -415,7 +534,7 @@ export default function PIApprovals() {
                 <div className="text-right font-semibold text-emerald-600">
                     ₹{row.original.totalPaidAmount?.toLocaleString('en-IN')}
                 </div>
-            )
+            ),
         },
         {
             accessorKey: 'outstandingAmount',
@@ -424,7 +543,7 @@ export default function PIApprovals() {
                 <div className="text-right font-bold text-rose-600">
                     ₹{row.original.outstandingAmount?.toLocaleString('en-IN')}
                 </div>
-            )
+            ),
         },
         {
             accessorKey: 'status',
@@ -446,14 +565,14 @@ export default function PIApprovals() {
                         {row.original.status || 'Pending'}
                     </span>
                 );
-            }
+            },
         },
         {
             accessorKey: 'paymentTerms',
             header: 'Payment Terms',
             cell: ({ row }) => (
                 <span className="text-sm">{row.original.paymentTerms || '-'}</span>
-            )
+            ),
         },
         {
             accessorKey: 'deliveryDate',
@@ -472,7 +591,7 @@ export default function PIApprovals() {
                 } catch (error) {
                     return <span className="text-sm">{deliveryDate}</span>;
                 }
-            }
+            },
         },
         {
             accessorKey: 'firmNameMatch',
@@ -482,7 +601,7 @@ export default function PIApprovals() {
                     <Building className="h-3.5 w-3.5 text-slate-400" />
                     {row.original.firmNameMatch || '-'}
                 </div>
-            )
+            ),
         },
     ];
 
@@ -570,6 +689,10 @@ export default function PIApprovals() {
                 Array.isArray(paymentsSheet) &&
                 paymentsSheet.some((p: any) => p.id === selectedItem.rowIndex);
 
+            const finalRemark = selectedItem.billNo
+                ? `${values.remark} | Bill: ${selectedItem.billNo}`
+                : values.remark;
+
             if (isPaymentBased) {
                 // ✅ FOR PAYMENT-BASED ITEMS: Update the existing payment record
                 const { error: updatePaymentError } = await supabase
@@ -580,7 +703,7 @@ export default function PIApprovals() {
                         status1: 'approved',
                         pay_amount: payAmount,
                         file: values.file || '',
-                        remark: values.remark || '',
+                        remark: finalRemark,
                     })
                     .eq('id', selectedItem.rowIndex);
 
@@ -590,7 +713,7 @@ export default function PIApprovals() {
 
                 toast.success(`✅ Payment approved for: ${selectedItem.partyName}`);
             } else {
-                // ✅ FOR PO-BASED ITEMS: Create a new payment entry as before
+                // ✅ FOR PO-BASED ITEMS: Create a new payment entry
                 const uniqueNo = generateUniqueNo();
 
                 const paymentData = {
@@ -607,7 +730,7 @@ export default function PIApprovals() {
                     pdf: selectedItem.pdf || '',
                     pay_amount: String(payAmount),
                     file: values.file || '',
-                    remark: values.remark,
+                    remark: finalRemark,
                     total_paid_amount: String(newTotalPaid),
                     outstanding_amount: String(newOutstanding),
                     status: newStatus,
@@ -729,7 +852,7 @@ export default function PIApprovals() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <CardTitle className="text-xl font-bold text-gray-800">Pending Payments</CardTitle>
-                                <p className="text-gray-600 text-sm mt-1">Click "Make Payment" to process payment for purchase order</p>
+                                <p className="text-gray-600 text-sm mt-1">Click "Process Payment" to process the payment for purchase order</p>
                             </div>
                             {stats.total === 0 ? (
                                 <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800 border border-green-300">
@@ -848,12 +971,6 @@ export default function PIApprovals() {
                                                     </p>
                                                 </div>
                                                 <div className="space-y-1">
-                                                    <p className="text-xs font-medium text-gray-600 uppercase">Bill Amount</p>
-                                                    <p className="text-sm font-bold text-purple-700">
-                                                        ₹{selectedItem.billAmount?.toLocaleString('en-IN') || '0'}
-                                                    </p>
-                                                </div>
-                                                <div className="space-y-1">
                                                     <p className="text-xs font-medium text-gray-600">Status</p>
                                                     <div className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
                                                         {selectedItem.status || 'Pending'}
@@ -866,6 +983,14 @@ export default function PIApprovals() {
                                     {/* ✅ UPDATED Form Fields - Only Pay Amount, File, Remarks */}
                                     <div className="space-y-4">
 
+
+                                        {/* Bill Amount Display (Read-only) */}
+                                        <div className="space-y-1.5 p-3 bg-purple-50 rounded-md border border-purple-100">
+                                            <p className="text-xs font-semibold text-purple-600 uppercase tracking-wider">Bill Amount</p>
+                                            <p className="text-lg font-bold text-purple-900 flex items-center gap-1.5">
+                                                ₹{selectedItem.billAmount?.toLocaleString('en-IN') || '0'}
+                                            </p>
+                                        </div>
 
                                         <FormField
                                             control={form.control}

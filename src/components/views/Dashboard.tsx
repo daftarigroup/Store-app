@@ -294,6 +294,7 @@ export default function Dashboard() {
             'Vendor Assigned': indents.filter(i => i.actual1 && !i.actual2).length,
             'PO Created': indents.filter(i => i.actual4).length,
             'Material Received': storeIns.filter(s => s.actual6).length,
+            'HOD Check': storeIns.filter(s => s.plannedHod && !s.actualHod).length,
         };
         setStatusData(Object.entries(statusMap).map(([name, value]) => ({ name, value })));
 

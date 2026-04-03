@@ -393,8 +393,10 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
 
     function updateTallyEntrySheet() {
         setTallyEntryLoading(true);
+        console.log('🔄 Fetching Tally Entry records...');
         fetchTallyEntryRecords()
             .then((res) => {
+                console.log(`✅ Received ${res.length} Tally Entry records`);
                 const mapped = res.map(r => ({
                     timestamp: r.timestamp,
                     indentNo: r.indentNumber,
@@ -444,6 +446,15 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                     actual5: r.actual5,
                     status5: r.status5,
                     firmNameMatch: r.firmNameMatch,
+                    id: r.id,
+                    // Additional fields from join
+                    damageOrder: r.damageOrder,
+                    quantityAsPerBill: r.quantityAsPerBill,
+                    priceAsPerPoCheck: r.priceAsPerPoCheck,
+                    hodStatus: r.hodStatus,
+                    hodRemark: r.hodRemark,
+                    receivingStatus: r.receivingStatus,
+                    receivedQuantity: r.receivedQuantity,
                 }));
                 setTallyEntrySheet(mapped as unknown as TallyEntrySheet[]);
                 setTallyEntryLoading(false);

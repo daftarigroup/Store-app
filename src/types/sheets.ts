@@ -117,6 +117,11 @@ export type PaymentHistory = {
     Remarks?: string;
     'Any Attachments'?: string;
     firmNameMatch: string;
+    po_number?: string;
+    bill_no?: string;
+    product_name?: string;
+    indent_no?: string;
+    vendor_name?: string;
 };
 
 
@@ -317,6 +322,8 @@ export interface PaymentsSheet {
     paymentDone?: boolean;
     firmNameMatch: string;
     rowIndex?: number;
+    po_number?: string;
+    bill_no?: string;
 }
 
 export const allPermissionKeys = [
@@ -538,9 +545,18 @@ export type TallyEntrySheet = {
     planned5: string;
     actual5: string;
     status5: string;
+    remarks5?: string;
     rowIndex: string;
     firmNameMatch: string;
     firmName: string;
+    id: number;
+    hodStatus?: string;
+    hodRemark?: string;
+    damageOrder?: string;
+    quantityAsPerBill?: string;
+    priceAsPerPoCheck?: string;
+    receivingStatus?: string;
+    receivedQuantity?: number;
 };
 
 export type PcReportSheet = {

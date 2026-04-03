@@ -100,8 +100,10 @@ export default ({ items }: SidebarProps) => {
                                         case 'store-issue':
                                             sheetData = issueSheet || [];
                                             break;
+                                        case 'hod-store-check':
+                                            sheetData = storeInSheet || [];
+                                            break;
                                         case 'store-in':
-                                        case 'hod-store-approval':
                                             sheetData = storeInSheet || [];
                                             break;
                                         case 'Make-Payment':

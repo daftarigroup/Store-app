@@ -15,7 +15,7 @@ import {
     DialogTrigger,
     DialogClose,
 } from '../ui/dialog';
-import { Truck } from 'lucide-react';
+import { Truck, Building, FileText, IndianRupee } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel } from '../ui/form';
 import { PuffLoader as Loader } from 'react-spinners';
@@ -518,7 +518,7 @@ export default () => {
     ];
 
     const schema = z.object({
-        status: z.enum(['Received']),
+        status: z.enum(['Received', 'Not Received']),
         photoOfProduct: z.instanceof(File, {
             message: "Photo of product is required"
         }),
@@ -679,21 +679,65 @@ export default () => {
                                 onSubmit={form.handleSubmit(onSubmit, onError)}
                                 className="space-y-5"
                             >
-                                <DialogHeader className="space-y-1">
-                                    <DialogTitle>Store In</DialogTitle>
-                                    <DialogDescription>
-                                        Vendor: <span className="font-medium">{selectedIndent.vendorName}</span> | Bill No: <span className="font-medium">{selectedIndent.billNo}</span>
-                                    </DialogDescription>
+                                <DialogHeader className="space-y-4 pb-4 border-b">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-3 bg-primary/10 rounded-xl">
+                                                <Truck className="h-6 w-6 text-primary" />
+                                            </div>
+                                            <div>
+                                                <DialogTitle className="text-2xl font-bold tracking-tight">Store In Processing</DialogTitle>
+                                                <DialogDescription className="text-muted-foreground">
+                                                    Process reception and verify quality of delivered items
+                                                </DialogDescription>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border/50">
+                                            <div className="p-2 bg-background rounded-md shadow-sm">
+                                                <Building className="h-4 w-4 text-primary" />
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Vendor</span>
+                                                <span className="text-sm font-semibold truncate max-w-[150px]" title={selectedIndent.vendorName}>
+                                                    {selectedIndent.vendorName}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border/50">
+                                            <div className="p-2 bg-background rounded-md shadow-sm">
+                                                <FileText className="h-4 w-4 text-primary" />
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Bill Number</span>
+                                                <span className="text-sm font-semibold">{selectedIndent.billNo || 'N/A'}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
+                                            <div className="p-2 bg-primary/10 rounded-md shadow-sm">
+                                                <IndianRupee className="h-4 w-4 text-primary" />
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] uppercase font-bold text-primary/70 tracking-wider">Bill Amount</span>
+                                                <span className="text-sm font-bold text-primary">₹{selectedIndent.billAmount?.toLocaleString('en-IN') || '0'}</span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </DialogHeader>
 
-                                {/* Product list - click to switch */}
-                                {(selectedIndent.originalItems?.length || 0) > 1 && (
+                                {/* Product list - always show details table even for single products */}
+                                {(selectedIndent.originalItems?.length || 0) > 0 && (
                                     <div className="border rounded-md overflow-hidden">
                                         <div className="bg-muted px-3 py-2 text-sm font-semibold">Products in this shipment ({selectedIndent.originalItems?.length})</div>
                                         <table className="w-full text-sm">
                                             <thead className="bg-muted/40 border-b">
                                                 <tr>
                                                     <th className="px-3 py-2 text-left">S.No.</th>
+                                                    <th className="px-3 py-2 text-left">Lift No.</th>
                                                     <th className="px-3 py-2 text-left">Product</th>
                                                     <th className="px-3 py-2 text-left">Indent No.</th>
                                                     <th className="px-3 py-2 text-right">Lift Qty</th>
@@ -704,6 +748,7 @@ export default () => {
                                                 {itemFields.map((field, idx) => (
                                                     <tr key={field.id} className="hover:bg-muted/30 transition-colors">
                                                         <td className="px-3 py-2">{idx + 1}</td>
+                                                        <td className="px-3 py-2 text-muted-foreground">{field.liftNumber}</td>
                                                         <td className="px-3 py-2 font-medium">{field.productName}</td>
                                                         <td className="px-3 py-2 text-muted-foreground">{field.indentNo}</td>
                                                         <td className="px-3 py-2 text-right">{field.qty}</td>
@@ -742,13 +787,18 @@ export default () => {
                                             <FormItem>
                                                 <FormLabel>Receiving Status</FormLabel>
                                                 <FormControl>
-                                                    <Input
-                                                        type="text"
-                                                        disabled={true}
-                                                        readOnly
-                                                        className="bg-gray-100 cursor-not-allowed"
-                                                        {...field}
-                                                    />
+                                                    <Select
+                                                        onValueChange={field.onChange}
+                                                        value={field.value}
+                                                    >
+                                                        <SelectTrigger className="w-full">
+                                                            <SelectValue placeholder="Select status" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="Received">Received</SelectItem>
+                                                            <SelectItem value="Not Received">Not Received</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
                                                 </FormControl>
                                             </FormItem>
                                         )}
@@ -885,7 +935,7 @@ export default () => {
                                         <Button variant="outline">Close</Button>
                                     </DialogClose>
 
-                                    <Button type="submit" disabled={form.formState.isSubmitting}>
+                                    <Button type="submit" disabled={form.formState.isSubmitting || form.watch('status') === 'Not Received'}>
                                         {form.formState.isSubmitting && (
                                             <Loader
                                                 size={20}

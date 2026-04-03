@@ -195,10 +195,10 @@ export default () => {
             toast.success(`Indent ${nextIndentNumber} created successfully!`);
 
             // Reset form
-            form.reset({
+             form.reset({
                 indenterName: '',
                 firmName: '',
-                indentStatus: undefined,
+                indentStatus: '' as any,
                 products: [
                     {
                         attachment: undefined,
@@ -369,7 +369,7 @@ export default () => {
                                 </FormItem>
                             )}
                         />
-                        <FormField
+                         <FormField
                             control={form.control}
                             name="indentStatus"
                             render={({ field }) => (
@@ -378,7 +378,7 @@ export default () => {
                                         Indent Status
                                         <span className="text-destructive">*</span>
                                     </FormLabel>
-                                    <Select onValueChange={field.onChange} value={field.value}>
+                                    <Select onValueChange={field.onChange} value={field.value || ""}>
                                         <FormControl>
                                             <SelectTrigger className="w-full">
                                                 <SelectValue placeholder="Select status" />

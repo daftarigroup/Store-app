@@ -10,6 +10,8 @@ import {
     createPaymentEntry,
     type StoreInRecord,
 } from '@/services/storeInService';
+import { createTallyEntryRecord } from '@/services/tallyEntryService';
+import { useSheets } from '@/context/SheetsContext';
 
 import {
     Dialog,
@@ -27,7 +29,7 @@ import { PuffLoader as Loader } from 'react-spinners';
 import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Input } from '../ui/input';
-import { UserCheck, X } from 'lucide-react';
+import { UserCheck, X, Package2, FileCheck, CheckCircle2, XCircle, AlertCircle, Gavel, CheckSquare } from 'lucide-react';
 import { Tabs, TabsContent } from '../ui/tabs';
 import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
@@ -54,6 +56,8 @@ interface HodPendingData {
     photoOfBill: string;
     typeOfBill: string;
     transportationInclude: string;
+    billNo?: string;
+    paymentTerms: string;
 }
 
 interface HodHistoryData {
@@ -77,12 +81,14 @@ type FormValues = z.infer<typeof schema>;
 
 export default () => {
     const { user } = useAuth();
+    const { updateAll } = useSheets();
     const [storeInRecords, setStoreInRecords] = useState<StoreInRecord[]>([]);
     const [dataLoading, setDataLoading] = useState(false);
     const [pendingData, setPendingData] = useState<HodPendingData[]>([]);
     const [historyData, setHistoryData] = useState<HodHistoryData[]>([]);
     const [selectedItem, setSelectedItem] = useState<HodPendingData | null>(null);
     const [openDialog, setOpenDialog] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const form = useForm<FormValues>({
         resolver: zodResolver(schema),
@@ -137,6 +143,8 @@ export default () => {
                     photoOfBill: i.photoOfBill || '',
                     typeOfBill: i.typeOfBill || '',
                     transportationInclude: i.transportationInclude || '',
+                    billNo: i.billNo || '',
+                    paymentTerms: i.paymentTerms || '',
                 }))
         );
 
@@ -158,7 +166,9 @@ export default () => {
     }, [storeInRecords, user.firmNameMatch]);
 
     async function onSubmit(values: FormValues) {
-        if (!selectedItem) return;
+        if (!selectedItem || isSubmitting) return;
+
+        setIsSubmitting(true);
         try {
             const currentDateTime = new Date().toISOString();
 
@@ -179,8 +189,15 @@ export default () => {
 
             // ✅ Create Payment Entry ONLY if HOD approves
             if (values.status === 'Approved' && !triggerStage7) {
-                if (selectedItem.transportationInclude !== 'Yes' && selectedItem.typeOfBill !== 'common') {
-                    console.log('✅ HOD Approved. Creating payment entry...');
+                // ✅ ONLY Insert into Payments if term is Advance-related
+                const terms = (selectedItem.paymentTerms || '').toString().toLowerCase();
+                const isAdvanceTerm = terms.includes('partly pi') || 
+                                     terms.includes('partly advance') || 
+                                     terms.includes('100% advance') ||
+                                     terms.includes('advance');
+
+                if (isAdvanceTerm && selectedItem.transportationInclude !== 'Yes' && selectedItem.typeOfBill !== 'common') {
+                    console.log('✅ Advance payment detected. Creating payment entry...');
                     await createPaymentEntry({
                         indent_number: selectedItem.indentNo,
                         vendor_name: selectedItem.vendorName || '',
@@ -189,16 +206,44 @@ export default () => {
                         photo_of_bill: selectedItem.photoOfBill || '',
                         product_name: selectedItem.productName,
                         firm_name_match: selectedItem.firmNameMatch,
+                        payment_terms: selectedItem.paymentTerms,
                     });
+                }
+
+                // ✅ ALSO: Create entry in Tally Entry (Audit Data) table
+                try {
+                    console.log('📝 Creating Audit Data entry from HOD Approval...');
+                    const formattedDateOnly = currentDateTime.split('T')[0];
+                    await createTallyEntryRecord({
+                        timestamp: currentDateTime,
+                        lift_number: selectedItem.liftNumber || '',
+                        indent_number: selectedItem.indentNo || '',
+                        po_number: selectedItem.poNumber || '',
+                        material_in_date: formattedDateOnly,
+                        product_name: selectedItem.productName || '',
+                        bill_status: 'Bill Received',
+                        qty: Number(selectedItem.receivedQuantity || selectedItem.qty || 0),
+                        party_name: selectedItem.vendorName || '',
+                        bill_amt: Number(selectedItem.billAmount || 0),
+                        bill_image: selectedItem.photoOfBill || '',
+                        bill_no: selectedItem.billNo || '',
+                        planned1: formattedDateOnly, // Start Audit stage
+                        firm_name_match: selectedItem.firmNameMatch || user?.firmNameMatch || '',
+                    } as any);
+                } catch (auditError) {
+                    console.error('Failed to create audit entry during HOD Approval:', auditError);
                 }
             }
 
             toast.success(`HOD ${values.status} for ${selectedItem.liftNumber}`);
             setOpenDialog(false);
             fetchAllData();
+            updateAll(); // Refresh global sheets data to update Payment Status section
         } catch (error) {
             console.error('Error in onSubmit:', error);
             toast.error('Failed to update HOD approval');
+        } finally {
+            setIsSubmitting(false);
         }
     }
 
@@ -278,61 +323,148 @@ export default () => {
                     <DialogContent className="sm:max-w-2xl">
                         <Form {...form}>
                             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                                <DialogHeader>
-                                    <DialogTitle>HOD Approval for {selectedItem.liftNumber}</DialogTitle>
-                                    <DialogDescription>Review store receiving details before finalization.</DialogDescription>
+                                <DialogHeader className="border-b pb-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-primary/10 rounded-lg">
+                                            <UserCheck className="w-6 h-6 text-primary" />
+                                        </div>
+                                        <div>
+                                            <DialogTitle className="text-xl font-black">HOD Approval Request</DialogTitle>
+                                            <DialogDescription className="text-xs font-medium">Verify store receiving results for Lift #{selectedItem.liftNumber}</DialogDescription>
+                                        </div>
+                                    </div>
                                 </DialogHeader>
 
-                                <div className="grid grid-cols-2 gap-4 bg-muted p-4 rounded-lg text-sm">
-                                    <div><p className="font-bold">Product:</p> {selectedItem.productName}</div>
-                                    <div><p className="font-bold">Vendor:</p> {selectedItem.vendorName}</div>
-                                    <div><p className="font-bold">Order Qty:</p> {selectedItem.qty}</div>
-                                    <div><p className="font-bold">Rec. Qty:</p> {selectedItem.receivedQuantity}</div>
+                                <div className="space-y-6 py-4">
+                                    {/* Record Information Section */}
+                                    <div className="bg-slate-50/50 rounded-xl border border-slate-100 p-4 shadow-sm">
+                                        <div className="flex items-center gap-2 mb-4 border-b border-slate-200/50 pb-2">
+                                            <Package2 className="w-4 h-4 text-slate-400" />
+                                            <h4 className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500">Record Information</h4>
+                                        </div>
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                            <div className="space-y-1">
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Product Name</p>
+                                                <p className="text-xs font-bold text-slate-900 line-clamp-1" title={selectedItem.productName}>{selectedItem.productName}</p>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Vendor Name</p>
+                                                <p className="text-xs font-bold text-slate-900 line-clamp-1" title={selectedItem.vendorName}>{selectedItem.vendorName}</p>
+                                            </div>
+                                            <div className="space-y-1 text-right">
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">PO Number</p>
+                                                <p className="text-xs font-black text-primary">{selectedItem.poNumber}</p>
+                                            </div>
+                                            <div className="space-y-1 text-right">
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Bill Amount</p>
+                                                <p className="text-sm font-black text-emerald-600">₹{selectedItem.billAmount.toLocaleString()}</p>
+                                            </div>
+                                        </div>
+                                    </div>
 
-                                    <div className="col-span-2 pt-2 border-t font-semibold">Store Check Results:</div>
-                                    <div><p className="font-medium">Physical Good?</p>
-                                        <Pill variant={selectedItem.damageOrder === 'Yes' ? 'default' : 'reject'}>{selectedItem.damageOrder}</Pill>
+                                    {/* Store Verification Section */}
+                                    <div className="space-y-3">
+                                        <div className="flex items-center gap-2 px-1">
+                                            <FileCheck className="w-4 h-4 text-amber-500" />
+                                            <h4 className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500">Store Verification Results</h4>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                            <div className={`p-3 rounded-xl border flex flex-col gap-1 ${selectedItem.damageOrder === 'No' ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-100'}`}>
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase">Physical Check</span>
+                                                <div className="flex items-center justify-between">
+                                                    <span className={`text-xs font-black ${selectedItem.damageOrder === 'No' ? 'text-red-700' : 'text-slate-700'}`}>
+                                                        {selectedItem.damageOrder === 'No' ? 'Damaged' : 'Good'}
+                                                    </span>
+                                                    {selectedItem.damageOrder === 'No' ? <XCircle className="w-3 h-3 text-red-500" /> : <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
+                                                </div>
+                                            </div>
+                                            <div className={`p-3 rounded-xl border flex flex-col gap-1 ${selectedItem.quantityAsPerBill === 'No' ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-100'}`}>
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase">Qty Matching</span>
+                                                <div className="flex items-center justify-between">
+                                                    <span className={`text-xs font-black ${selectedItem.quantityAsPerBill === 'No' ? 'text-red-700' : 'text-slate-700'}`}>
+                                                        {selectedItem.quantityAsPerBill === 'No' ? 'Mismatch' : 'Matches'}
+                                                    </span>
+                                                    {selectedItem.quantityAsPerBill === 'No' ? <XCircle className="w-3 h-3 text-red-500" /> : <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
+                                                </div>
+                                            </div>
+                                            <div className={`p-3 rounded-xl border flex flex-col gap-1 ${selectedItem.priceAsPerPoCheck === 'No' ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-100'}`}>
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase">Price Matching</span>
+                                                <div className="flex items-center justify-between">
+                                                    <span className={`text-xs font-black ${selectedItem.priceAsPerPoCheck === 'No' ? 'text-red-700' : 'text-slate-700'}`}>
+                                                        {selectedItem.priceAsPerPoCheck === 'No' ? 'Mismatch' : 'Matches'}
+                                                    </span>
+                                                    {selectedItem.priceAsPerPoCheck === 'No' ? <XCircle className="w-3 h-3 text-red-500" /> : <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-amber-50/50 rounded-xl border border-amber-100/50 p-3 mt-2">
+                                            <div className="flex items-start gap-3">
+                                                <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Store Inspector Remarks</p>
+                                                    <p className="text-xs text-amber-900 font-medium italic">"{selectedItem.remark || 'No specific remarks from store.'}"</p>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div><p className="font-medium">Qty Match?</p>
-                                        <Pill variant={selectedItem.quantityAsPerBill === 'Yes' ? 'default' : 'reject'}>{selectedItem.quantityAsPerBill}</Pill>
+
+                                    {/* Action Section */}
+                                    <div className="bg-white rounded-xl border p-4 space-y-4">
+                                        <div className="flex items-center gap-2">
+                                            <Gavel className="w-4 h-4 text-primary" />
+                                            <h4 className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500">Your Decision</h4>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <FormField
+                                                control={form.control}
+                                                name="status"
+                                                render={({ field }) => (
+                                                    <FormItem className="space-y-1">
+                                                        <FormLabel className="text-[10px] font-bold uppercase text-slate-400 pl-1">Approval Decision</FormLabel>
+                                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                            <FormControl>
+                                                                <SelectTrigger className="h-10 border-slate-200">
+                                                                    <SelectValue placeholder="Select decision" />
+                                                                </SelectTrigger>
+                                                            </FormControl>
+                                                            <SelectContent>
+                                                                <SelectItem value="Approved" className="text-emerald-600 font-bold">Approve</SelectItem>
+                                                                <SelectItem value="Rejected" className="text-red-600 font-bold">Reject</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </FormItem>
+                                                )}
+                                            />
+
+                                            <FormField
+                                                control={form.control}
+                                                name="remark"
+                                                render={({ field }) => (
+                                                    <FormItem className="space-y-1">
+                                                        <FormLabel className="text-[10px] font-bold uppercase text-slate-400 pl-1">Remarks</FormLabel>
+                                                        <FormControl>
+                                                            <Input placeholder="Add your audit notes..." {...field} className="h-10 border-slate-200" />
+                                                        </FormControl>
+                                                    </FormItem>
+                                                )}
+                                            />
+                                        </div>
                                     </div>
-                                    <div><p className="font-medium">Rate Match?</p>
-                                        <Pill variant={selectedItem.priceAsPerPoCheck === 'Yes' ? 'default' : 'reject'}>{selectedItem.priceAsPerPoCheck}</Pill>
-                                    </div>
-                                    <div className="col-span-2"><p className="font-medium">Store Remark:</p> {selectedItem.remark || 'None'}</div>
                                 </div>
 
-                                <FormField
-                                    control={form.control}
-                                    name="status"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>HOD Decision</FormLabel>
-                                            <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                                <FormControl><SelectTrigger><SelectValue placeholder="Select outcome" /></SelectTrigger></FormControl>
-                                                <SelectContent>
-                                                    <SelectItem value="Approved">Approve</SelectItem>
-                                                    <SelectItem value="Rejected">Reject</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </FormItem>
-                                    )}
-                                />
-
-                                <FormField
-                                    control={form.control}
-                                    name="remark"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>HOD Remark</FormLabel>
-                                            <FormControl><Input placeholder="Optional remark" {...field} /></FormControl>
-                                        </FormItem>
-                                    )}
-                                />
-
-                                <DialogFooter>
-                                    <DialogClose asChild><Button variant="outline">Back</Button></DialogClose>
-                                    <Button type="submit">Submit Decision</Button>
+                                <DialogFooter className="border-t pt-4">
+                                    <DialogClose asChild>
+                                        <Button variant="ghost" className="h-10 text-slate-500 font-semibold" disabled={isSubmitting}>Cancel</Button>
+                                    </DialogClose>
+                                    <Button
+                                        type="submit"
+                                        disabled={isSubmitting}
+                                        className={`h-10 px-8 font-black font-semibold transition-all shadow-md ${form.watch('status') === 'Rejected' ? 'bg-red-600 hover:bg-red-700' : 'bg-primary hover:bg-primary/90'}`}
+                                    >
+                                        {isSubmitting ? <Loader size={16} color="white" className="mr-2" /> : <CheckSquare className="w-4 h-4 mr-2" />}
+                                        Finalize Approval
+                                    </Button>
                                 </DialogFooter>
                             </form>
                         </Form>

@@ -490,9 +490,6 @@ export default function GetPurchase() {
         qty: z.coerce.number().optional(),
         typeOfBill: z.string().optional(),
         billAmount: z.coerce.number().optional(),
-        discountAmount: z.coerce.number().optional(),
-        paymentType: z.string().optional(),
-        advanceAmount: z.coerce.number().optional(),
         photoOfBill: z
             .instanceof(File)
             .optional()
@@ -522,12 +519,12 @@ export default function GetPurchase() {
             indentNo: z.string(),
             product: z.string(),
             poNumber: z.string(),
-            quantity: z.number(),
-            pendingLiftQty: z.number(),
-            receivedQty: z.number(),
-            pendingPoQty: z.number(),
-            approvedRate: z.string(),
-            taxValue: z.number(),
+            quantity: z.coerce.number(),
+            pendingLiftQty: z.coerce.number(),
+            receivedQty: z.coerce.number(),
+            pendingPoQty: z.coerce.number(),
+            approvedRate: z.union([z.string(), z.number()]),
+            taxValue: z.coerce.number(),
             withTax: z.string(),
             liftQty: z.coerce.number().min(0),
         })).superRefine((items, ctx) => {
@@ -542,26 +539,7 @@ export default function GetPurchase() {
                 }
             });
         })
-    }).superRefine((data, ctx) => {
-        const billAmount = Number(data.billAmount) || 0;
-        const discountAmount = Number(data.discountAmount) || 0;
-        const advanceAmount = Number(data.advanceAmount) || 0;
-
-        if (discountAmount > billAmount) {
-            ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                message: `Discount amount (${discountAmount}) cannot exceed total bill amount (${billAmount})`,
-                path: ['discountAmount'],
-            });
-        }
-
-        if (advanceAmount > billAmount) {
-            ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                message: `Advance amount (${advanceAmount}) cannot exceed total bill amount (${billAmount})`,
-                path: ['advanceAmount'],
-            });
-        }
+        // Removed discount/advance refinements
     });
 
     const form = useForm<z.infer<typeof formSchema>>({
@@ -572,9 +550,6 @@ export default function GetPurchase() {
             qty: 0,
             typeOfBill: 'independent',
             billAmount: 0,
-            discountAmount: 0,
-            paymentType: '',
-            advanceAmount: 0,
             billRemark: '',
             vendorName: '',
             transportationInclude: 'Yes',
@@ -657,9 +632,6 @@ export default function GetPurchase() {
                 qty: selectedIndent.pendingLiftQty || 0,
                 typeOfBill: 'independent',
                 billAmount: 0,
-                discountAmount: 0,
-                paymentType: '',
-                advanceAmount: 0,
                 billRemark: '',
                 vendorName: selectedIndent.vendorName || '',
                 transportationInclude: 'No',
@@ -702,8 +674,8 @@ export default function GetPurchase() {
     const typeOfBillWatcher = useWatch({ control: form.control, name: 'typeOfBill' }) || 'independent';
     const itemsWatcher = useWatch({ control: form.control, name: 'items' }) || [];
 
-    useEffect(() => {
-        const total = (itemsWatcher || []).reduce((sum: number, item: any) => {
+    const calculateTotalAmount = (items: any[]) => {
+        return (items || []).reduce((sum: number, item: any) => {
             const qty = Number(item.liftQty) || 0;
             const rate = parseFloat(String(item.approvedRate).replace(/[^0-9.-]/g, '')) || 0;
             const tax = Number(item.taxValue) || 0;
@@ -711,13 +683,17 @@ export default function GetPurchase() {
             const effectiveRate = withTax === 'No' ? rate * (1 + tax / 100) : rate;
             return sum + (qty * effectiveRate);
         }, 0);
+    };
 
-        form.setValue('billAmount', total, {
+    const currentCalculatedTotal = calculateTotalAmount(itemsWatcher);
+
+    useEffect(() => {
+        form.setValue('billAmount', Number(currentCalculatedTotal.toFixed(2)), {
             shouldValidate: true,
             shouldDirty: true,
             shouldTouch: true
         });
-    }, [itemsWatcher, form]);
+    }, [currentCalculatedTotal, form]);
 
     async function onSubmit(values: z.infer<typeof formSchema>) {
         try {
@@ -776,11 +752,11 @@ export default function GetPurchase() {
                         vendorName: values.vendorName || selectedIndent?.vendorName || '',
                         productName: item.product || '',
                         qty: Number(item.liftQty),
-                        discountAmount: Number(values.discountAmount) || 0,
+                        discountAmount: 0,
                         typeOfBill: values.typeOfBill || '',
                         billAmount: Number(values.billAmount) || 0,
-                        paymentType: values.paymentType || '',
-                        advanceAmountIfAny: Number(values.advanceAmount) || 0,
+                        paymentType: '',
+                        advanceAmountIfAny: 0,
                         photoOfBill: photoUrl,
                         transportationInclude: values.transportationInclude || '',
                         transporterName: values.transporterName || '',
@@ -798,7 +774,7 @@ export default function GetPurchase() {
                         driverMobileNo: values.driverMobileNo || '',
                         billRemark: values.billRemark || '',
                         firmNameMatch: selectedIndent?.firmNameMatch || user?.firmNameMatch || '',
-                        rate: item.approvedRate || '',
+                        rate: String(item.approvedRate || ''),
                         department: selectedIndent?.department || '',
                         areaOfUse: selectedIndent?.areaOfUse || '',
                         approvedVendorName: selectedIndent?.approvedVendorName || '',
@@ -839,16 +815,19 @@ export default function GetPurchase() {
     }
 
     function onError(e: any) {
-        console.log(e);
-        if (e.discountAmount) {
-            toast.error(e.discountAmount.message || 'Discount amount exceeds bill amount');
-            return;
+        console.log('❌ Form validation errors:', e);
+        
+        // Extract field names from errors
+        const errorFields = Object.keys(e).map(field => {
+            // Make field names more readable
+            return field.charAt(0).toUpperCase() + field.slice(1).replace(/([A-Z])/g, ' $1');
+        });
+
+        if (errorFields.length > 0) {
+            toast.error(`Please fill required fields: ${errorFields.join(', ')}`);
+        } else {
+            toast.error('Please fill all required fields correctly');
         }
-        if (e.advanceAmount) {
-            toast.error(e.advanceAmount.message || 'Advance amount exceeds bill amount');
-            return;
-        }
-        toast.error('Please fill all required fields correctly');
     }
 
     return (
@@ -1000,13 +979,7 @@ export default function GetPurchase() {
                                                     {itemsWatcher?.reduce((sum, item) => sum + (Number(item.liftQty) || 0), 0) || 0}
                                                 </td>
                                                 <td className="px-4 py-3 text-right text-primary" colSpan={2}>
-                                                    ₹ {(itemsWatcher?.reduce((sum, item: any) => {
-                                                        const r = parseFloat(String(item.approvedRate).replace(/[^0-9.-]/g, '')) || 0;
-                                                        const t = Number(item.taxValue) || 0;
-                                                        const wt = item.withTax || 'No';
-                                                        const eff = wt === 'No' ? r * (1 + t / 100) : r;
-                                                        return sum + (eff * (Number(item.liftQty) || 0));
-                                                    }, 0) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    ₹ {currentCalculatedTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
                                             </tr>
                                         </tfoot>
@@ -1275,54 +1248,7 @@ export default function GetPurchase() {
                                                         />
                                                     )}
 
-                                                    {typeOfBill === "independent" && (
-                                                        <>
-                                                            <FormField
-                                                                control={form.control}
-                                                                name="discountAmount"
-                                                                render={({ field }) => (
-                                                                    <FormItem>
-                                                                        <FormLabel>Discount</FormLabel>
-                                                                        <FormControl>
-                                                                            <Input type="number" {...field} className="h-11" />
-                                                                        </FormControl>
-                                                                    </FormItem>
-                                                                )}
-                                                            />
-                                                            <FormField
-                                                                control={form.control}
-                                                                name="paymentType"
-                                                                render={({ field }) => (
-                                                                    <FormItem>
-                                                                        <FormLabel>Payment Type</FormLabel>
-                                                                        <Select onValueChange={field.onChange} value={field.value}>
-                                                                            <FormControl>
-                                                                                <SelectTrigger className="h-11">
-                                                                                    <SelectValue placeholder="Select" />
-                                                                                </SelectTrigger>
-                                                                            </FormControl>
-                                                                            <SelectContent>
-                                                                                <SelectItem value="Advance">Advance</SelectItem>
-                                                                                <SelectItem value="Credit">Credit</SelectItem>
-                                                                            </SelectContent>
-                                                                        </Select>
-                                                                    </FormItem>
-                                                                )}
-                                                            />
-                                                            <FormField
-                                                                control={form.control}
-                                                                name="advanceAmount"
-                                                                render={({ field }) => (
-                                                                    <FormItem>
-                                                                        <FormLabel>Advance Amount</FormLabel>
-                                                                        <FormControl>
-                                                                            <Input type="number" {...field} className="h-11" />
-                                                                        </FormControl>
-                                                                    </FormItem>
-                                                                )}
-                                                            />
-                                                        </>
-                                                    )}
+
                                                 </div>
 
                                                 <div className="grid md:grid-cols-2 gap-6 mt-4">

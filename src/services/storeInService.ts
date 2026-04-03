@@ -80,6 +80,7 @@ export interface StoreInRecord {
     actualHod: string;
     hodStatus: string;
     hodRemark: string;
+    paymentTerms: string;
 }
 
 export interface LocationOption {
@@ -158,6 +159,7 @@ export async function fetchStoreInRecords() {
             actualHod: r.hod_actual || '',
             hodStatus: r.hod_status || 'Pending',
             hodRemark: r.hod_remark || '',
+            paymentTerms: r.payment_terms || '',
             // Stage 8 fields (Return Material To Party)
             planned8: r.planned8 || '',
             actual8: r.actual8 || '',
@@ -467,11 +469,28 @@ export async function createPaymentEntry(storeInData: {
     payment_form?: string;
     prefix?: string;
     remark?: string;
+    payment_terms?: string;
 }, billPhotoUrl: string = '') {
     try {
         const nowIso = new Date().toISOString();
-        // Generate unique_no with PAY- prefix as requested
-        const uniqueNo = `PAY-${Date.now()}`;
+
+        // 1. Fetch latest unique_no to continue sequence (format: PAY-XXXX)
+        const { data: latestPayment, error: fetchError } = await supabase
+            .from('payments')
+            .select('unique_no')
+            .like('unique_no', 'PAY-%')
+            .order('unique_no', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        let uniqueNo = 'PAY-0001';
+        if (latestPayment && latestPayment.unique_no) {
+            const matches = latestPayment.unique_no.match(/PAY-(\d+)/);
+            if (matches && matches[1]) {
+                const nextNum = parseInt(matches[1], 10) + 1;
+                uniqueNo = `PAY-${nextNum.toString().padStart(4, '0')}`;
+            }
+        }
 
         const paymentEntry = {
             timestamp: nowIso,
@@ -482,7 +501,7 @@ export async function createPaymentEntry(storeInData: {
             internal_code: storeInData.indent_number,
             product: storeInData.product_name,
             delivery_date: null,
-            payment_terms: null,
+            payment_terms: storeInData.payment_terms || null,
             number_of_days: '0',
             pdf: billPhotoUrl || storeInData.photo_of_bill || '',
             pay_amount: String(storeInData.bill_amount),

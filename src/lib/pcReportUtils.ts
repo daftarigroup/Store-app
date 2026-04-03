@@ -135,23 +135,44 @@ export const calculatePcReportCounts = (
                 const paymentsByPo: Record<string, number> = {};
                 (paymentsSheet || []).forEach((p: any) => { const k = p.poNumber || p.po_number || ''; if (k) paymentsByPo[k] = (paymentsByPo[k] || 0) + Number(p.payAmount || p.pay_amount || 0); });
 
-                const poBased = (poMasterSheet || []).filter((r: any) => {
-                    const isReceived = receivedPos.has(r.poNumber || r.po_number || '');
+                const uniqueBills = new Set<string>();
+
+                // PO Based
+                (poMasterSheet || []).forEach((r: any) => {
+                    const poNum = r.poNumber || r.po_number || '';
+                    const isReceived = receivedPos.has(poNum);
+                    const paymentTerms = (r.paymentTerms || r.payment_terms || '').toString().trim().toLowerCase();
+                    const isPI = paymentTerms.includes("partly pi") || paymentTerms.includes("partly advance");
+                    
                     const totalPo = Number(r.totalPoAmount || 0);
-                    const totalPaid = paymentsByPo[r.poNumber || r.po_number || ''] || 0;
+                    const totalPaid = paymentsByPo[poNum] || 0;
                     const outstanding = totalPo - totalPaid;
                     const status = String(r.status || '').toLowerCase();
                     const isPending = status === 'pending' || status === '';
-                    return isReceived && outstanding > 0 && isPending;
-                }).length;
+                    
+                    if ((isReceived || isPI) && outstanding > 0 && isPending) {
+                        const linkedStoreIn = (storeInSheet || []).find((s: any) => (s.poNumber || s.po_number) === poNum);
+                        const billNo = linkedStoreIn?.billNo || 'NoBill';
+                        uniqueBills.add(`${r.partyName || r.party_name}-${billNo}`);
+                    }
+                });
 
-                const paymentBased = (paymentsSheet || []).filter((p: any) => {
-                    return String(p.status || '').toLowerCase() === 'pending' && (!p.planned || String(p.planned).trim() === '');
-                }).length;
+                // Payment Based
+                (paymentsSheet || []).forEach((p: any) => {
+                    const status = String(p.status || '').toLowerCase();
+                    const isPending = status === 'pending';
+                    const notScheduled = !p.planned || String(p.planned).trim() === '';
 
-                return poBased + paymentBased;
+                    if (isPending && notScheduled) {
+                        const linkedStoreIn = (storeInSheet || []).find((s: any) => (s.indentNo || s.indentNumber) === (p.internalCode || p.internal_code));
+                        const billNo = p.billNo || (p as any).bill_no || linkedStoreIn?.billNo || 'NoBill';
+                        uniqueBills.add(`${p.partyName || p.party_name}-${billNo}`);
+                    }
+                });
+
+                return uniqueBills.size;
             })(),
-            totalComplete: 0, // Simplified for brevity
+            totalComplete: 0,
             pendingPmpl: 0,
             pendingPurab: 0,
             pendingPmmpl: 0,
