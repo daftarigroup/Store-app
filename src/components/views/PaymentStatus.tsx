@@ -105,7 +105,7 @@ export default function PIApprovals() {
     const [selectedItem, setSelectedItem] = useState<PIPendingData | null>(null);
     const [openDialog, setOpenDialog] = useState(false);
     const [uploadingFile, setUploadingFile] = useState(false);
-    const [filterTerm, setFilterTerm] = useState('All');
+    const [filterTerm, setFilterTerm] = useState('Partly PI / Party Advance');
 
     // ✅ Memoized filtered data
     const filteredData = useMemo(() => {

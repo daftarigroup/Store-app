@@ -32,20 +32,7 @@ import {
     type TallyEntryRecord
 } from '@/services/tallyEntryService';
 
-// Helper function to format date to dd/mm/yy
-const formatDate = (dateString: string) => {
-    if (!dateString) return '';
-    try {
-        const dateObj = new Date(dateString);
-        if (isNaN(dateObj.getTime())) return dateString;
-        const day = String(dateObj.getDate()).padStart(2, '0');
-        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-        const year = String(dateObj.getFullYear()).slice(-2);
-        return `${day}/${month}/${year}`;
-    } catch {
-        return dateString;
-    }
-};
+import { formatDate, formatDateTime } from '@/lib/utils';
 
 export default function TallyEntry() {
     const { user } = useAuth();

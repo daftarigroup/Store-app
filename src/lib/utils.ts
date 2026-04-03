@@ -5,55 +5,78 @@ export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
 }
 
-export function formatDate(date: Date): string {
-    if (!date || isNaN(date.getTime())) return '-';
-    const d = date.getDate().toString().padStart(2, '0');
-    const m = (date.getMonth() + 1).toString().padStart(2, '0'); // months are 0-based
-    const y = date.getFullYear();
-    return `${d}/${m}/${y}`;
+export function formatDate(date: Date | string): string {
+    if (!date) return '-';
+    const dObj = typeof date === 'string' ? parseCustomDate(date) : date;
+    if (!dObj || isNaN(dObj.getTime())) return typeof date === 'string' ? date : '-';
+    
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return `${pad(dObj.getDate())}-${pad(dObj.getMonth() + 1)}-${dObj.getFullYear()}`;
 }
 
-export function formatDateTime(date: Date): string {
-    if (!date || isNaN(date.getTime())) return '-';
+export function formatDateTime(date: Date | string): string {
+    if (!date) return '-';
+    const dObj = typeof date === 'string' ? parseCustomDate(date) : date;
+    if (!dObj || isNaN(dObj.getTime())) return typeof date === 'string' ? date : '-';
+    
     const pad = (n: number) => n.toString().padStart(2, '0');
-    return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date
-        .getFullYear()
-        .toString()
-        .slice(-2)} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(
-            date.getSeconds()
-        )}`;
+    const day = pad(dObj.getDate());
+    const month = pad(dObj.getMonth() + 1);
+    const year = dObj.getFullYear();
+    const hours = dObj.getHours();
+    const minutes = pad(dObj.getMinutes());
+    const seconds = pad(dObj.getSeconds());
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const hour12 = pad(hours % 12 || 12);
+
+    return `${day}-${month}-${year} ${hour12}:${minutes}:${seconds} ${ampm}`;
+}
+
+export function formatTimestamp(date: Date | string): string {
+    return formatDateTime(date);
 }
 
 /**
  * Robustly parse dates from Supabase, handling both ISO and DD/MM/YY formats
  */
 export function parseCustomDate(dateStr: any): Date {
-    if (!dateStr) return new Date(NaN); // Consistent invalid date
+    if (!dateStr) return new Date(NaN);
     if (dateStr instanceof Date) return isNaN(dateStr.getTime()) ? new Date(NaN) : dateStr;
 
-    // Try standard parsing first (handles ISO strings)
-    const d = new Date(dateStr);
-    if (!isNaN(d.getTime())) return d;
-
-    // Handle DD/MM/YY HH:mm:ss or DD/MM/YYYY
     if (typeof dateStr === 'string') {
         const cleanStr = dateStr.trim();
-        // Regex for DD/MM/YY or DD/MM/YYYY with optional time
-        const match = cleanStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/);
+        
+        // 1. Handle ISO-like timestamps from DB (e.g. "2024-03-31 10:00:00")
+        // If it has hyphens and colons but no timezone indicator (Z or +/-), assume UTC
+        if (cleanStr.includes('-') && cleanStr.includes(':')) {
+            if (!cleanStr.match(/([+-]\d{2,4}|[A-Z]{1,4}|Z)$/)) {
+                // Ensure there's a 'T' between date and time for standard ISO parsing
+                const isoFormatted = cleanStr.includes(' ') ? cleanStr.replace(' ', 'T') : cleanStr;
+                const withZ = isoFormatted + 'Z';
+                const d = new Date(withZ);
+                if (!isNaN(d.getTime())) return d;
+            }
+        }
 
+        // 2. Try standard parsing (handles "2024-03-31T10:00:00Z" etc.)
+        const standardDate = new Date(cleanStr);
+        if (!isNaN(standardDate.getTime())) return standardDate;
+
+        // 3. Handle custom DD/MM/YY formats
+        const match = cleanStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/);
         if (match) {
             const day = parseInt(match[1], 10);
-            const month = parseInt(match[2], 10) - 1; // 0-based
+            const month = parseInt(match[2], 10) - 1;
             let year = parseInt(match[3], 10);
-
-            if (year < 100) year += 2000; // Assume 20xx for 2-digit years
+            if (year < 100) year += 2000;
 
             const hours = match[4] ? parseInt(match[4], 10) : 0;
             const minutes = match[5] ? parseInt(match[5], 10) : 0;
             const seconds = match[6] ? parseInt(match[6], 10) : 0;
 
-            const newD = new Date(year, month, day, hours, minutes, seconds);
-            if (!isNaN(newD.getTime())) return newD;
+            // Note: This constructor uses LOCAL time
+            const localD = new Date(year, month, day, hours, minutes, seconds);
+            if (!isNaN(localD.getTime())) return localD;
         }
     }
 

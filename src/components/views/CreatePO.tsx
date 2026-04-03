@@ -1185,7 +1185,7 @@ const CreatePO = () => {
                                                             <FormField control={form.control} name={`indents.${index}.quotationNumber`} render={({ field }) => (
                                                                 <FormItem className="flex justify-center">
                                                                     <FormControl>
-                                                                        <Input className="h-9 w-24 text-center bg-gray-50" value={field.value || ''} onChange={field.onChange} />
+                                                                        <Input className="h-9 w-32 text-center bg-gray-50" value={field.value || ''} onChange={field.onChange} />
                                                                     </FormControl>
                                                                 </FormItem>
                                                             )} />
@@ -1196,7 +1196,7 @@ const CreatePO = () => {
                                                             <FormField control={form.control} name={`indents.${index}.quantity`} render={({ field }) => (
                                                                 <FormItem className="flex justify-center">
                                                                     <FormControl>
-                                                                        <Input type="number" readOnly className="h-9 w-14 text-center bg-gray-50 cursor-not-allowed" value={field.value || 0} onChange={field.onChange} />
+                                                                        <Input type="number" readOnly className="h-9 w-20 text-center bg-gray-50 cursor-not-allowed" value={field.value || 0} onChange={field.onChange} />
                                                                     </FormControl>
                                                                 </FormItem>
                                                             )} />
@@ -1205,7 +1205,7 @@ const CreatePO = () => {
                                                             <FormField control={form.control} name={`indents.${index}.unit`} render={({ field }) => (
                                                                 <FormItem className="flex justify-center">
                                                                     <FormControl>
-                                                                        <Input readOnly className="h-9 w-14 text-center bg-gray-50 cursor-not-allowed" value={field.value || ''} onChange={field.onChange} />
+                                                                        <Input readOnly className="h-9 w-16 text-center bg-gray-50 cursor-not-allowed" value={field.value || ''} onChange={field.onChange} />
                                                                     </FormControl>
                                                                 </FormItem>
                                                             )} />
@@ -1214,7 +1214,7 @@ const CreatePO = () => {
                                                             <FormField control={form.control} name={`indents.${index}.rate`} render={({ field }) => (
                                                                 <FormItem className="flex justify-center">
                                                                     <FormControl>
-                                                                        <Input type="number" readOnly className="h-9 w-20 text-center bg-gray-50 cursor-not-allowed" value={field.value || 0} onChange={field.onChange} />
+                                                                        <Input type="number" readOnly className="h-9 w-24 text-center bg-gray-50 cursor-not-allowed" value={field.value || 0} onChange={field.onChange} />
                                                                     </FormControl>
                                                                 </FormItem>
                                                             )} />
@@ -1223,7 +1223,7 @@ const CreatePO = () => {
                                                             <FormField control={form.control} name={`indents.${index}.gst`} render={({ field }) => (
                                                                 <FormItem className="flex items-center justify-center gap-1">
                                                                     <FormControl>
-                                                                        <Input type="number" readOnly className="h-9 w-14 text-center bg-gray-50 cursor-not-allowed" value={field.value || 0} onChange={field.onChange} />
+                                                                        <Input type="number" readOnly className="h-9 w-16 text-center bg-gray-50 cursor-not-allowed" value={field.value || 0} onChange={field.onChange} />
                                                                     </FormControl>
                                                                     <span>%</span>
                                                                 </FormItem>
@@ -1233,7 +1233,7 @@ const CreatePO = () => {
                                                             <FormField control={form.control} name={`indents.${index}.discount`} render={({ field }) => (
                                                                 <FormItem className="flex items-center justify-center gap-1">
                                                                     <FormControl>
-                                                                        <Input type="number" readOnly className="h-9 w-14 text-center bg-gray-50 cursor-not-allowed" value={field.value || 0} onChange={field.onChange} />
+                                                                        <Input type="number" readOnly className="h-9 w-16 text-center bg-gray-50 cursor-not-allowed" value={field.value || 0} onChange={field.onChange} />
                                                                     </FormControl>
                                                                     <span>%</span>
                                                                 </FormItem>
@@ -1343,7 +1343,7 @@ const CreatePO = () => {
                                 </div>
 
                                 <div className="w-full flex justify-end p-3">
-                                    <Button className="w-50" variant="outline" type="button" onClick={(e) => {
+                                    <Button className="w-48" variant="outline" type="button" onClick={(e) => {
                                         e.preventDefault();
                                         if (termsArray.fields.length < 11) {
                                             if (readOnly === -1) {

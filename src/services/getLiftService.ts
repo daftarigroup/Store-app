@@ -358,13 +358,13 @@ export async function uploadBillPhoto(file: File, indentNumber: string): Promise
         const filePath = `bill-photos/${fileName}`;
 
         const { error: uploadError } = await supabase.storage
-            .from('attachments')
+            .from('photo_of_bill')
             .upload(filePath, file);
 
         if (uploadError) throw uploadError;
 
         const { data: { publicUrl } } = supabase.storage
-            .from('attachments')
+            .from('photo_of_bill')
             .getPublicUrl(filePath);
 
         return publicUrl;

@@ -70,7 +70,7 @@ export default () => {
                     uom: '',
                     productName: '',
                     specifications: '',
-                    quantity: 1,
+                    quantity: '' as any,
                     minStockQty: 0,
                     areaOfUse: '',
                     expectedRequirementDate: '',
@@ -119,13 +119,13 @@ export default () => {
             const filePath = `indent-attachments/${fileName}`;
 
             const { error: uploadError } = await supabase.storage
-                .from('attachments')
+                .from('indent_attachment')
                 .upload(filePath, file);
 
             if (uploadError) throw uploadError;
 
             const { data: { publicUrl } } = supabase.storage
-                .from('attachments')
+                .from('indent_attachment')
                 .getPublicUrl(filePath);
 
             return publicUrl;
@@ -195,7 +195,7 @@ export default () => {
             toast.success(`Indent ${nextIndentNumber} created successfully!`);
 
             // Reset form
-             form.reset({
+            form.reset({
                 indenterName: '',
                 firmName: '',
                 indentStatus: '' as any,
@@ -205,7 +205,7 @@ export default () => {
                         uom: '',
                         productName: '',
                         specifications: '',
-                        quantity: 1,
+                        quantity: '' as any,
                         minStockQty: 0,
                         areaOfUse: '',
                         expectedRequirementDate: '',
@@ -369,7 +369,7 @@ export default () => {
                                 </FormItem>
                             )}
                         />
-                         <FormField
+                        <FormField
                             control={form.control}
                             name="indentStatus"
                             render={({ field }) => (
@@ -407,7 +407,7 @@ export default () => {
                                         department: '',
                                         groupHead: '',
                                         productName: '',
-                                        quantity: 1,
+                                        quantity: '' as any,
                                         minStockQty: 0,
                                         uom: '',
                                         areaOfUse: '',

@@ -27,7 +27,7 @@ import { UserCheck, PenSquare, X, Search, UserCog } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
 import { Pill } from '../ui/pill';
-import { formatDate } from '@/lib/utils';
+import { formatDate, formatDateTime } from '@/lib/utils';
 import { supabase, supabaseEnabled } from '@/lib/supabase';
 
 interface VendorUpdateData {
@@ -330,13 +330,13 @@ export default () => {
             const filePath = `comparison-sheets/${fileName}`;
 
             const { error: uploadError } = await supabase.storage
-                .from('attachments')
+                .from('comparison_sheet')
                 .upload(filePath, file);
 
             if (uploadError) throw uploadError;
 
             const { data: { publicUrl } } = supabase.storage
-                .from('attachments')
+                .from('comparison_sheet')
                 .getPublicUrl(filePath);
 
             return publicUrl;
@@ -872,18 +872,6 @@ export default () => {
             toast.error('Failed to update vendors');
         }
     }
-
-    const formatDateTime = (isoString?: string) => {
-        if (!isoString) return '-';
-        const date = new Date(isoString);
-        const day = date.getDate().toString().padStart(2, "0");
-        const month = (date.getMonth() + 1).toString().padStart(2, "0");
-        const year = date.getFullYear();
-        const hours = date.getHours().toString().padStart(2, "0");
-        const minutes = date.getMinutes().toString().padStart(2, "0");
-        const seconds = date.getSeconds().toString().padStart(2, "0");
-        return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
-    };
 
     // History Update form
     const historyUpdateSchema = z.object({

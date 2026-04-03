@@ -138,13 +138,13 @@ export async function uploadBiltyImage(file: File, indentNumber: string): Promis
         const filePath = `bilty-images/${fileName}`;
 
         const { error: uploadError } = await supabase.storage
-            .from('attachments')
+            .from('fullkitting-photos')
             .upload(filePath, file);
 
         if (uploadError) throw uploadError;
 
         const { data: { publicUrl } } = supabase.storage
-            .from('attachments')
+            .from('fullkitting-photos')
             .getPublicUrl(filePath);
 
         return publicUrl;

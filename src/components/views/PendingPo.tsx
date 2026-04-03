@@ -90,7 +90,7 @@ export default function ApprovedPOs() {
 
                     try {
                         if (sheet.timestamp) {
-                            formattedDate = formatDateTime(new Date(sheet.timestamp)).replace(/\//g, '-');
+                            formattedDate = formatDateTime(sheet.timestamp);
                         }
                     } catch (error) {
                         console.warn('Invalid timestamp format:', sheet.timestamp);
@@ -98,7 +98,7 @@ export default function ApprovedPOs() {
 
                     try {
                         if (sheet.planned5) {
-                            formattedPlannedDate = formatDate(new Date(sheet.planned5));
+                            formattedPlannedDate = formatDate(sheet.planned5);
                         }
                     } catch (error) {
                         console.warn('Invalid planned date format:', sheet.planned5);

@@ -5,7 +5,7 @@ import type { ColumnDef, Row } from '@tanstack/react-table';
 import DataTable from '../element/DataTable';
 import { useAuth } from '@/context/AuthContext';
 import { useSheets } from '@/context/SheetsContext';
-import { formatDateTime, parseCustomDate } from '@/lib/utils';
+import { formatDateTime, parseCustomDate, formatDate } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Button } from '../ui/button';
 import {
@@ -38,20 +38,7 @@ import {
   type TallyEntryRecord,
 } from '@/services/tallyEntryService';
 
-// Helper function to format date to dd/mm/yy
-const formatDate = (dateString: string): string => {
-  if (!dateString) return '';
-  try {
-    const dateObj = new Date(dateString);
-    if (isNaN(dateObj.getTime())) return dateString;
-    const day = String(dateObj.getDate()).padStart(2, '0');
-    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const year = String(dateObj.getFullYear()).slice(-2);
-    return `${day}/${month}/${year}`;
-  } catch {
-    return dateString;
-  }
-};
+// Define Stage interface
 
 // Define Stage interface
 interface StageConfig {

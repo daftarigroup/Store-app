@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { uploadFile } from '@/lib/fetchers';
 import { toast } from 'sonner';
 import { Checkbox } from '../ui/checkbox';
+import { formatDate, formatDateTime as formatTimestamp } from '@/lib/utils';
 
 interface PaymentsRecord {
     rowIndex?: number;
@@ -176,30 +177,6 @@ export default function MakePayment() {
             return new Date(0);
         } catch {
             return new Date(0);
-        }
-    };
-
-    const formatDate = (dateString: string) => {
-        const date = parseDateHelper(dateString);
-        if (date.getTime() === 0) return dateString;
-        return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear().toString().slice(-2)}`;
-    };
-
-    // Formats an ISO timestamp (with or without timezone) to DD/MM/YY HH:MM:SS
-    const formatTimestamp = (raw: string): string => {
-        if (!raw) return '-';
-        try {
-            const date = new Date(raw);
-            if (isNaN(date.getTime())) return raw;
-            const dd = date.getDate().toString().padStart(2, '0');
-            const mm = (date.getMonth() + 1).toString().padStart(2, '0');
-            const yy = date.getFullYear().toString().slice(-2);
-            const hh = date.getHours().toString().padStart(2, '0');
-            const min = date.getMinutes().toString().padStart(2, '0');
-            const ss = date.getSeconds().toString().padStart(2, '0');
-            return `${dd}/${mm}/${yy} ${hh}:${min}:${ss}`;
-        } catch {
-            return raw;
         }
     };
 
