@@ -152,8 +152,10 @@ export default function GetPurchase() {
                         0
                     );
 
-                // Use pendingPoQty from sheet if available, otherwise calculate
-                const pendingPoQty = (Number(sheet.approvedQuantity) || 0) - receivedQty;
+                // Priority: Use approved_quantity if set (>0), otherwise original quantity.
+                // Subtract receivedQty to determine what's left to lift.
+                const approvedQtySafe = Number(sheet.approvedQuantity) || Number(sheet.quantity) || 0;
+                const pendingPoQty = (approvedQtySafe - receivedQty);
 
                 return { ...sheet, pendingPoQty, receivedQty, receivedQuantity: sheet.receivedQuantity };
             })
@@ -688,15 +690,18 @@ export default function GetPurchase() {
 
     const currentCalculatedTotal = calculateTotalAmount(itemsWatcher);
 
-    useEffect(() => {
-        form.setValue('billAmount', Number(currentCalculatedTotal.toFixed(2)), {
-            shouldValidate: true,
-            shouldDirty: true,
-            shouldTouch: true
-        });
-    }, [currentCalculatedTotal, form]);
+    const handleOpenChange = (open: boolean) => {
+        setOpenDialog(open);
+        if (!open) {
+            setSelectedIndent(null);
+            setShowCancelQty(false);
+            setCancelQtyValue('');
+            form.reset();
+        }
+    };
 
-    async function onSubmit(values: z.infer<typeof formSchema>) {
+    async function onSubmit() {
+        const values = form.getValues();
         try {
             console.log('📝 Selected indent:', selectedIndent);
             console.log('📋 Form values:', values);
@@ -833,7 +838,7 @@ export default function GetPurchase() {
 
     return (
         <div>
-            <Dialog open={openDialog} onOpenChange={setOpenDialog}>
+            <Dialog open={openDialog} onOpenChange={handleOpenChange}>
                 <Tabs defaultValue="pending">
                     <Heading
                         heading="Get Purchase"
@@ -1086,7 +1091,7 @@ export default function GetPurchase() {
                                                     >
                                                         <FormControl>
                                                             <SelectTrigger className="h-11">
-                                                                <SelectValue placeholder="Select status" />
+                                                                 <SelectValue placeholder="Select status" />
                                                             </SelectTrigger>
                                                         </FormControl>
                                                         <SelectContent>
@@ -1293,9 +1298,7 @@ export default function GetPurchase() {
                                 </div>
 
                                 <DialogFooter className="pt-2">
-                                    <DialogClose asChild>
-                                        <Button variant="outline">Close</Button>
-                                    </DialogClose>
+                                    <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>Close</Button>
 
                                     <Button
                                         type="submit"

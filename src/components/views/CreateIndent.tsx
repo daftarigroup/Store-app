@@ -675,7 +675,7 @@ export default () => {
                                                 render={({ field }) => (
                                                     <FormItem>
                                                         <FormLabel>
-                                                            Min Stock Qty
+                                                            Current Stock Qty
                                                         </FormLabel>
                                                         <FormControl>
                                                             <Input

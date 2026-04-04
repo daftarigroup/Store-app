@@ -13,26 +13,37 @@ export async function fetchIndents() {
 
         if (error) throw error;
 
-        return (data || []).map((r: any) => ({
-            id: r.id,
-            planned4: r.planned4 || '',
-            actual4: r.actual4 || '',
-            approvedVendorName: r.approved_vendor_name || '',
-            firmName: r.firm_name || '',
-            firmNameMatch: r.firm_name_match || '',
-            indentNumber: r.indent_number || '',
-            productName: r.product_name || '',
-            specifications: r.specifications || '',
-            taxValue1: r.tax_value1 || 0,
-            taxValue4: r.tax_value4 || 0,
-            approvedQuantity: r.approved_quantity || r.quantity || 0,
-            uom: r.uom || '',
-            approvedRate: r.approved_rate || 0,
-            quotationNumber: r.approved_quotation_no || '',
-            quotationDate: r.approved_quotation_date || '',
-            approvedPaymentTerm: r.approved_payment_term || '',
-            approvedAdvancePercent: r.approved_advance_percent || '',
-        }));
+        return (data || []).map((r: any) => {
+            // Priority: pending_po_qty > approved_quantity > quantity
+            // Need to handle "0" string which is truthy in JS
+            const rawPending = Number(r.pending_po_qty) || 0;
+            const rawApproved = Number(r.approved_quantity) || 0;
+            const rawQuantity = Number(r.quantity) || 0;
+
+            const finalApprovedQty = rawPending > 0 ? rawPending : (rawApproved > 0 ? rawApproved : rawQuantity);
+
+            return {
+                id: r.id,
+                planned4: r.planned4 || '',
+                actual4: r.actual4 || '',
+                approvedVendorName: r.approved_vendor_name || '',
+                firmName: r.firm_name || '',
+                firmNameMatch: r.firm_name_match || '',
+                indentNumber: r.indent_number || '',
+                productName: r.product_name || '',
+                specifications: r.specifications || '',
+                taxValue1: r.tax_value1 || 0,
+                taxValue4: r.tax_value4 || 0,
+                approvedQuantity: finalApprovedQty,
+                pendingPoQty: rawPending,
+                uom: r.uom || '',
+                approvedRate: r.approved_rate || 0,
+                quotationNumber: r.approved_quotation_no || '',
+                quotationDate: r.approved_quotation_date || '',
+                approvedPaymentTerm: r.approved_payment_term || '',
+                approvedAdvancePercent: r.approved_advance_percent || '',
+            };
+        });
     } catch (error) {
         console.error('Error fetching indents:', error);
         throw error;
@@ -263,7 +274,11 @@ export async function insertPoRecords(poRecords: any[]) {
  */
 export async function updateIndentsAfterPoCreation(ids: number[], deliveryDate?: string, poNumber?: string) {
     try {
-        const updateData: any = { actual4: new Date().toISOString() };
+        const now = new Date().toISOString();
+        const updateData: any = { 
+            actual4: now,
+            planned5: now 
+        };
         if (deliveryDate) {
             updateData.delivery_date = deliveryDate;
         }

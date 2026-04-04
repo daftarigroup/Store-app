@@ -32,6 +32,10 @@ interface DataTableProps<TData, TValue> {
     children?: ReactNode;
     className?: string;
     extraActions?: ReactNode;
+    rowSelection?: Record<string, boolean>;
+    onRowSelectionChange?: (updater: any) => void;
+    getRowId?: (row: TData) => string;
+    meta?: any;
 }
 
 function globalFilterFn<TData>(row: TData, columnIds: string[], filterValue: string) {
@@ -51,6 +55,10 @@ export default function DataTable<TData, TValue>({
     children: _children, // <-- underscore avoids TS unused variable error
     className,
     extraActions,
+    rowSelection = {},
+    onRowSelectionChange,
+    getRowId,
+    meta,
 }: DataTableProps<TData, TValue>) {
     const [globalFilter, setGlobalFilter] = useState('');
     const table = useReactTable({
@@ -59,12 +67,15 @@ export default function DataTable<TData, TValue>({
         getCoreRowModel: getCoreRowModel(),
         getFilteredRowModel: getFilteredRowModel(),
         globalFilterFn: (row, _, filterValue) =>
-            globalFilterFn(row.original, searchFields, filterValue),
-
+            row?.original ? globalFilterFn(row.original, searchFields || [], filterValue) : false,
+        getRowId,
+        meta,
         state: {
             globalFilter,
+            rowSelection: rowSelection || {},
         },
         onGlobalFilterChange: setGlobalFilter,
+        onRowSelectionChange: onRowSelectionChange,
     });
 
     return (
@@ -109,7 +120,7 @@ export default function DataTable<TData, TValue>({
                             {dataLoading ? (
                                 <TableRow className="hover:bg-transparent">
                                     <TableCell
-                                        colSpan={columns.length}
+                                        colSpan={columns?.length || 0}
                                         className="h-50 text-center"
                                     >
                                         <div className="flex justify-center items-center w-full py-20">
@@ -119,25 +130,29 @@ export default function DataTable<TData, TValue>({
                                 </TableRow>
                             ) : table.getRowModel().rows?.length ? (
                                 table.getRowModel().rows.map((row) => (
-                                    <TableRow
-                                        key={row.id}
-                                        data-state={row.getIsSelected() && 'selected'}
-                                        className="p-1"
-                                    >
-                                        {row.getVisibleCells().map((cell) => (
-                                            <TableCell key={cell.id}>
-                                                {flexRender(
-                                                    cell.column.columnDef.cell,
-                                                    cell.getContext()
-                                                )}
-                                            </TableCell>
-                                        ))}
-                                    </TableRow>
+                                    row && (
+                                        <TableRow
+                                            key={row.id}
+                                            data-state={row.getIsSelected?.() && 'selected'}
+                                            className="p-1"
+                                        >
+                                            {row.getVisibleCells?.().map((cell) => (
+                                                cell && (
+                                                    <TableCell key={cell.id}>
+                                                        {flexRender(
+                                                            cell.column.columnDef.cell,
+                                                            cell.getContext()
+                                                        )}
+                                                    </TableCell>
+                                                )
+                                            ))}
+                                        </TableRow>
+                                    )
                                 ))
                             ) : (
                                 <TableRow className="hover:bg-transparent">
                                     <TableCell
-                                        colSpan={columns.length}
+                                        colSpan={columns?.length || 0}
                                         className="h-50 text-center text-xl"
                                     >
                                         <div className="flex flex-col justify-center items-center w-full gap-1">

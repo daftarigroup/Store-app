@@ -28,6 +28,7 @@ import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
 import { Pill } from '../ui/pill';
 import { Input } from '../ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     fetchIndentRecords,
     updateIndentApproval,
@@ -45,6 +46,10 @@ export default function ApproveIndent() {
     const [editingRow, setEditingRow] = useState<number | null>(null);
     const [editValues, setEditValues] = useState<Partial<IndentRecord>>({});
     const [downloading, setDownloading] = useState(false);
+    const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
+    const [editedStatuses, setEditedStatuses] = useState<Record<number, string>>({});
+    const [editedQuantities, setEditedQuantities] = useState<Record<number, number>>({});
+    const [bulkSubmitting, setBulkSubmitting] = useState(false);
 
     const fetchData = async () => {
         setDataLoading(true);
@@ -146,35 +151,56 @@ export default function ApproveIndent() {
         }
     };
 
-    const columns: ColumnDef<IndentRecord>[] = [
-        ...(user.indentApprovalAction
+    const columns = useMemo<ColumnDef<IndentRecord>[]>(() => [
+        ...(user?.indentApprovalAction
             ? [
+                {
+                    id: 'select',
+                    header: ({ table }: { table: any }) => (
+                        <Checkbox
+                            checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && "indeterminate")}
+                            onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+                            aria-label="Select all"
+                        />
+                    ),
+                    cell: ({ row }: { row: any }) => (
+                        <Checkbox
+                            checked={row.getIsSelected()}
+                            onCheckedChange={(value) => row.toggleSelected(!!value)}
+                            aria-label="Select row"
+                        />
+                    ),
+                    enableSorting: false,
+                    enableHiding: false,
+                },
                 {
                     header: 'Action',
                     id: 'action',
-                    cell: ({ row }: { row: Row<IndentRecord> }) => {
-                        const indent = row.original;
+                    cell: ({ row, table }: { row: Row<IndentRecord>, table: any }) => {
+                        const id = row.original.id;
+                        const status = table.options.meta?.editedStatuses[id] ?? 'Regular';
+                        
                         return (
-                            <DialogTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    onClick={() => {
-                                        setSelectedIndent(indent);
-                                        setOpenDialog(true);
-                                    }}
+                            <div className="flex items-center gap-2">
+                                <Select
+                                    value={status}
+                                    onValueChange={(val) => table.options.meta?.updateStatus(id, val)}
                                 >
-                                    Approve
-                                </Button>
-                            </DialogTrigger>
+                                    <SelectTrigger className="w-[110px] h-8 text-xs">
+                                        <SelectValue placeholder="Action" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Regular">Accept</SelectItem>
+                                        <SelectItem value="Reject">Reject</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         );
                     },
                 },
             ]
             : []),
         { accessorKey: 'indent_number', header: 'Indent No.' },
-        { accessorKey: 'firm_name_match', header: 'Firm Name' },
-        { accessorKey: 'indenter_name', header: 'Indenter' },
-        { accessorKey: 'department', header: 'Department' },
         {
             accessorKey: 'product_name',
             header: 'Product',
@@ -184,8 +210,41 @@ export default function ApproveIndent() {
                 </div>
             ),
         },
-        { accessorKey: 'quantity', header: 'Quantity' },
-        { accessorKey: 'uom', header: 'UOM' },
+        {
+            accessorKey: 'quantity',
+            header: 'Req Qty',
+        },
+        ...(user?.indentApprovalAction
+            ? [
+                {
+                    header: 'Approve Qty',
+                    id: 'approve_qty',
+                    cell: ({ row, table }: { row: Row<IndentRecord>, table: any }) => {
+                        const id = row.original.id;
+                        const qty = table.options.meta?.editedQuantities[id] ?? row.original.quantity;
+                        return (
+                            <div className="flex items-center gap-1">
+                                <Input
+                                    type="number"
+                                    className="w-20 h-8"
+                                    value={qty}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        table.options.meta?.updateQuantity(id, val === '' ? 0 : Number(val));
+                                    }}
+                                />
+                                <span className="text-[10px] text-muted-foreground">{row.original.uom}</span>
+                            </div>
+                        );
+                    },
+                }
+            ]
+            : [
+                { accessorKey: 'uom', header: 'UOM' }
+            ]),
+        { accessorKey: 'firm_name_match', header: 'Firm Name' },
+        { accessorKey: 'indenter_name', header: 'Indenter' },
+        { accessorKey: 'department', header: 'Department' },
         {
             accessorKey: 'specifications',
             header: 'Specifications',
@@ -287,9 +346,9 @@ export default function ApproveIndent() {
             header: 'Planned Date',
             cell: ({ row }) => row.original.planned1 ? formatDate(new Date(row.original.planned1)) : '-',
         }
-    ];
+    ], [user?.indentApprovalAction]);
 
-    const historyColumns: ColumnDef<IndentRecord>[] = [
+    const historyColumns = useMemo<ColumnDef<IndentRecord>[]>(() => [
         { accessorKey: 'indent_number', header: 'Indent No.' },
         { accessorKey: 'firm_name_match', header: 'Firm Name' },
         { accessorKey: 'indenter_name', header: 'Indenter' },
@@ -306,13 +365,15 @@ export default function ApproveIndent() {
         {
             accessorKey: 'approved_quantity',
             header: 'Quantity',
-            cell: ({ row }) => {
-                const isEditing = editingRow === row.original.id;
+            cell: ({ row, table }: { row: any, table: any }) => {
+                const id = row.original.id;
+                const isEditing = table.options.meta?.editingRow === id;
+                const val = table.options.meta?.editValues?.approved_quantity ?? row.original.approved_quantity;
                 return isEditing ? (
                     <Input
                         type="number"
-                        value={editValues.approved_quantity ?? row.original.approved_quantity}
-                        onChange={(e) => handleInputChange('approved_quantity', Number(e.target.value))}
+                        value={val}
+                        onChange={(e) => table.options.meta?.onInputChange('approved_quantity', Number(e.target.value))}
                         className="w-20"
                     />
                 ) : (
@@ -335,18 +396,20 @@ export default function ApproveIndent() {
         {
             accessorKey: 'uom',
             header: 'UOM',
-            cell: ({ row }) => {
-                const isEditing = editingRow === row.original.id;
+            cell: ({ row, table }: { row: any, table: any }) => {
+                const id = row.original.id;
+                const isEditing = table.options.meta?.editingRow === id;
+                const val = table.options.meta?.editValues?.uom ?? row.original.uom;
                 return isEditing ? (
                     <Input
-                        value={editValues.uom ?? row.original.uom}
-                        onChange={(e) => handleInputChange('uom', e.target.value)}
+                        value={val}
+                        onChange={(e) => table.options.meta?.onInputChange('uom', e.target.value)}
                         className="w-20"
                     />
                 ) : (
                     <div className="flex items-center gap-2">
                         {row.original.uom}
-                        {user.indentApprovalAction && editingRow !== row.original.id && (
+                        {user.indentApprovalAction && !isEditing && (
                             <Button
                                 variant="ghost"
                                 size="icon"
@@ -369,52 +432,6 @@ export default function ApproveIndent() {
                 </div>
             ),
         },
-        // {
-        //     accessorKey: 'vendor_type',
-        //     header: 'Vendor Type',
-        //     cell: ({ row }) => {
-        //         const isEditing = editingRow === row.original.id;
-        //         return isEditing ? (
-        //             <Select
-        //                 value={editValues.vendor_type ?? row.original.vendor_type}
-        //                 onValueChange={(value) => handleInputChange('vendor_type', value)}
-        //             >
-        //                 <SelectTrigger className="w-[150px]">
-        //                     <SelectValue placeholder="Select type" />
-        //                 </SelectTrigger>
-        //                 <SelectContent>
-        //                     <SelectItem value="Regular">Regular</SelectItem>
-        //                     <SelectItem value="Three Party">Three Party</SelectItem>
-        //                     <SelectItem value="Reject">Reject</SelectItem>
-        //                 </SelectContent>
-        //             </Select>
-        //         ) : (
-        //             <div className="flex items-center gap-2">
-        //                 <Pill
-        //                     variant={
-        //                         row.original.vendor_type === 'Reject'
-        //                             ? 'reject'
-        //                             : row.original.vendor_type === 'Regular'
-        //                                 ? 'primary'
-        //                                 : 'secondary'
-        //                     }
-        //                 >
-        //                     {row.original.vendor_type}
-        //                 </Pill>
-        //                 {user.indentApprovalAction && editingRow !== row.original.id && (
-        //                     <Button
-        //                         variant="ghost"
-        //                         size="icon"
-        //                         className="h-4 w-4"
-        //                         onClick={() => handleEditClick(row.original)}
-        //                     >
-        //                         <PenSquare className="h-3 w-3" />
-        //                     </Button>
-        //                 )}
-        //             </div>
-        //         );
-        //     },
-        // },
         {
             accessorKey: 'indent_status',
             header: 'Priority',
@@ -455,13 +472,14 @@ export default function ApproveIndent() {
             ? [
                 {
                     id: 'editActions',
-                    cell: ({ row }: { row: Row<IndentRecord> }) => {
-                        const isEditing = editingRow === row.original.id;
+                    cell: ({ row, table }: { row: Row<IndentRecord>, table: any }) => {
+                        const id = row.original.id;
+                        const isEditing = table.options.meta?.editingRow === id;
                         return isEditing ? (
                             <div className="flex gap-2">
                                 <Button
                                     size="sm"
-                                    onClick={() => handleSaveEdit(row.original.id)}
+                                    onClick={() => handleSaveEdit(id)}
                                 >
                                     Save
                                 </Button>
@@ -478,7 +496,7 @@ export default function ApproveIndent() {
                 },
             ]
             : []),
-    ];
+    ], [user?.indentApprovalAction, handleEditClick, handleSaveEdit, handleCancelEdit]);
 
     const schema = z.object({
         approval: z.enum(['Reject', 'Three Party', 'Regular'], {
@@ -553,6 +571,42 @@ export default function ApproveIndent() {
         }
     }
 
+    const handleBulkSubmit = async () => {
+        const selectedIds = Object.keys(rowSelection).filter(id => rowSelection[id]);
+        if (selectedIds.length === 0) {
+            toast.error("Please select items first");
+            return;
+        }
+
+        setBulkSubmitting(true);
+        try {
+            const currentDateTime = new Date().toISOString();
+            const selectedIndents = pendingData.filter(i => selectedIds.includes(String(i.id)));
+
+            for (const indent of selectedIndents) {
+                const qtyToApprove = editedQuantities[indent.id] ?? indent.quantity;
+                const status = editedStatuses[indent.id] ?? 'Regular';
+                await updateIndentApproval(indent.id, {
+                    actual1: currentDateTime,
+                    vendor_type: status,
+                    approved_quantity: status === 'Reject' ? 0 : qtyToApprove,
+                    ...(status !== 'Reject' && { planned2: currentDateTime }),
+                });
+            }
+
+            toast.success(`Succesfully processed ${selectedIds.length} items`);
+            setRowSelection({});
+            setEditedStatuses({});
+            setEditedQuantities({});
+            fetchData();
+        } catch (err) {
+            console.error('Error in bulk approval:', err);
+            toast.error('Failed to process some items');
+        } finally {
+            setBulkSubmitting(false);
+        }
+    };
+
     function onError(e: FieldErrors<z.infer<typeof schema>>) {
         console.log(e);
         toast.error('Please fill all required fields');
@@ -578,25 +632,49 @@ export default function ApproveIndent() {
                             columns={columns}
                             searchFields={['product_name', 'department', 'indenter_name', 'vendor_type', 'firm_name_match']}
                             dataLoading={dataLoading}
+                            rowSelection={rowSelection}
+                            onRowSelectionChange={setRowSelection}
+                            getRowId={(row) => String(row.id)}
+                            meta={{
+                                editedStatuses,
+                                editedQuantities,
+                                updateStatus: (id: number, val: string) => setEditedStatuses(prev => ({ ...prev, [id]: val })),
+                                updateQuantity: (id: number, val: number) => setEditedQuantities(prev => ({ ...prev, [id]: val })),
+                            }}
                             extraActions={
-                                <Button
-                                    variant="default"
-                                    onClick={() => handleDownload(pendingData)}
-                                    style={{
-                                        background: "linear-gradient(90deg, #4CAF50, #2E7D32)",
-                                        border: "none",
-                                        borderRadius: "8px",
-                                        padding: "0 16px",
-                                        fontWeight: "bold",
-                                        boxShadow: "0 4px 8px rgba(0,0,0,0.15)",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: "8px",
-                                    }}
-                                >
-                                    <DownloadOutlined />
-                                    {downloading ? "Downloading..." : "Download"}
-                                </Button>
+                                <div className="flex items-center gap-3">
+                                    {user?.indentApprovalAction && Object.keys(rowSelection).length > 0 && (
+                                        <div className="flex items-center gap-2 border-r pr-4 mr-2 bg-muted p-1 rounded-md">
+                                            <span className="text-sm font-medium whitespace-nowrap">Selected: {Object.keys(rowSelection).length}</span>
+                                            <Button
+                                                onClick={handleBulkSubmit}
+                                                disabled={bulkSubmitting}
+                                                size="sm"
+                                                className="h-9"
+                                            >
+                                                {bulkSubmitting ? "Processing..." : "Submit All Selected"}
+                                            </Button>
+                                        </div>
+                                    )}
+                                    <Button
+                                        variant="default"
+                                        onClick={() => handleDownload(pendingData)}
+                                        style={{
+                                            background: "linear-gradient(90deg, #4CAF50, #2E7D32)",
+                                            border: "none",
+                                            borderRadius: "8px",
+                                            padding: "0 16px",
+                                            fontWeight: "bold",
+                                            boxShadow: "0 4px 8px rgba(0,0,0,0.15)",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "8px",
+                                        }}
+                                    >
+                                        <DownloadOutlined />
+                                        {downloading ? "Downloading..." : "Download"}
+                                    </Button>
+                                </div>
                             }
                         />
                     </TabsContent>
@@ -606,6 +684,11 @@ export default function ApproveIndent() {
                             columns={historyColumns}
                             searchFields={['product_name', 'department', 'indenter_name', 'vendor_type', 'firm_name_match']}
                             dataLoading={dataLoading}
+                            meta={{
+                                editingRow,
+                                editValues,
+                                onInputChange: handleInputChange,
+                            }}
                         />
                     </TabsContent>
                 </Tabs>
