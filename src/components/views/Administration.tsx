@@ -100,11 +100,11 @@ export default () => {
             accessorKey: 'name',
             header: 'User Profile',
             cell: ({ row }) => (
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 justify-start pl-4">
                     <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
                         <UserIcon size={16} />
                     </div>
-                    <div className="flex flex-col min-w-0">
+                    <div className="flex flex-col min-w-0 text-left">
                         <span className="font-bold text-sm truncate">{row.original.name}</span>
                         <span className="text-xs text-muted-foreground truncate italic">@{row.original.username}</span>
                     </div>
@@ -115,7 +115,7 @@ export default () => {
             accessorKey: 'firmNameMatch',
             header: 'Firm / Scope',
             cell: ({ row }) => (
-                <div className="flex items-center gap-2 text-sm">
+                <div className="flex items-center gap-2 text-sm justify-start pl-4">
                     <Building size={14} className="text-muted-foreground shrink-0" />
                     <span className={row.original.firmNameMatch.toLowerCase() === 'all' ? "font-semibold text-primary" : ""}>
                         {row.original.firmNameMatch || "Not Assigned"}

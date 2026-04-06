@@ -187,7 +187,7 @@ const routes: RouteAttributes[] = [
         icon: <UserCog size={20} />,
         element: <VendorUpdate />,
         notifications: (sheets: any[], user: any) =>
-            sheets.filter((sheet: any) => 
+            sheets.filter((sheet: any) =>
                 (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch) &&
                 sheet.planned2 !== '' && sheet.actual2 === ''
             ).length,
@@ -198,14 +198,17 @@ const routes: RouteAttributes[] = [
         name: 'Department Approval',
         icon: <Users size={20} />,
         element: <DepartmentApproval />,
-        notifications: (sheets: any[], user: any) =>
-            sheets.filter(
+        notifications: (sheetsData: any[], user: any) => {
+            const sheets = Array.isArray(sheetsData[0]) ? sheetsData[0] : sheetsData;
+            return sheets.filter(
                 (sheet: any) =>
                     (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch) &&
-                    sheet.planned3 !== '' &&
-                    sheet.actual3 === '' &&
-                    sheet.vendorType === 'Three Party'
-            ).length,
+                    (sheet.vendorType || sheet.vendor_type) !== 'Direct' &&
+                    sheet.planned3 && sheet.planned3 !== '' &&
+                    (!sheet.actual3 || sheet.actual3 === '') &&
+                    !(sheet.vendor1_rank || sheet.vendor2_rank || sheet.vendor3_rank)
+            ).length;
+        },
     },
     {
         path: 'management-approval',
@@ -213,15 +216,17 @@ const routes: RouteAttributes[] = [
         name: 'Management Approval',
         icon: <ShieldCheck size={20} />,
         element: <RateApproval />,
-        notifications: (sheets: any[], user: any) =>
-            sheets.filter(
+        notifications: (sheetsData: any[], user: any) => {
+            const sheets = Array.isArray(sheetsData[0]) ? sheetsData[0] : sheetsData;
+            return sheets.filter(
                 (sheet: any) =>
                     (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch) &&
-                    sheet.planned4 &&
-                    sheet.planned4 !== '' &&
-                    sheet.actual4 === '' &&
-                    sheet.vendorType === 'Three Party'
-            ).length,
+                    (sheet.vendorType || sheet.vendor_type) !== 'Direct' &&
+                    sheet.planned4 && sheet.planned4 !== '' &&
+                    (!sheet.approvedVendorName && !sheet.approved_vendor_name) &&
+                    (sheet.vendor1_rank || sheet.vendor2_rank || sheet.vendor3_rank)
+            ).length;
+        },
     },
     // {
     //     path: 'pending-pos',
@@ -313,22 +318,34 @@ const routes: RouteAttributes[] = [
         },
     },
 
-
     {
         path: 'get-lift',
         gateKey: 'ordersView',
         name: 'Lifting',
         icon: <ArrowUpCircle size={20} />,
         element: <GetLift />,
-        notifications: (sheets: any[], user: any) =>
-            sheets.filter(
-                (sheet: any) =>
-                    (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch) &&
-                    sheet.liftingStatus === 'Pending' &&
-                    sheet.planned5 &&
-                    sheet.planned5.toString().trim() !== '' &&
-                    (!sheet.actual5 || sheet.actual5.toString().trim() === '')
-            ).length,
+        notifications: (sheetsData: any[], user: any) => {
+            const sheets = Array.isArray(sheetsData[0]) ? sheetsData[0] : sheetsData;
+
+            // Unique PO numbers that satisfy the criteria
+            const uniquePOs = new Set<string>();
+
+            sheets.forEach((sheet: any) => {
+                const isFirmMatch = !user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch;
+                const hasPlanned5 = sheet.planned5 && sheet.planned5.toString().trim() !== '';
+                const hasNoActual5 = !sheet.actual5 || sheet.actual5.toString().trim() === '';
+                const isPending = sheet.liftingStatus === 'Pending' || !sheet.liftingStatus;
+
+                // pendingLiftQty is calculated in SheetsContext as (approved_quantity - received_quantity)
+                const hasPendingQty = (sheet.pendingLiftQty || (Number(sheet.approvedQuantity) - Number(sheet.receivedQuantity))) > 0;
+
+                if (isFirmMatch && hasPlanned5 && hasNoActual5 && isPending && hasPendingQty) {
+                    uniquePOs.add(sheet.poNumber || `NO_PO_${sheet.indentNumber}`);
+                }
+            });
+
+            return uniquePOs.size;
+        },
     },
 
 
@@ -338,14 +355,39 @@ const routes: RouteAttributes[] = [
         name: 'Store Check',
         icon: <CheckCircle2 size={20} />,
         element: <StoreIn />,
-        notifications: (sheets: any[], user: any) =>
-            sheets.filter((sheet: any) =>
-                (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch) &&
-                sheet.planned6 &&
-                sheet.planned6.toString().trim() !== '' &&
-                (!sheet.actual6 || sheet.actual6.toString().trim() === '') &&
-                sheet.billStatus === 'Bill Received'
-            ).length,
+        notifications: (sheetsData: any[], user: any) => {
+            const sheets = Array.isArray(sheetsData[0]) ? sheetsData[0] : sheetsData;
+            const filteredByFirm = sheets.filter((item: any) =>
+                (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (item.firmNameMatch || item.firm_name_match) === user.firmNameMatch)
+            );
+
+            // Filter to keep only latest per indent+product (matching StoreIn.tsx line 228)
+            const latestRecords: any[] = [];
+            const seen = new Set<string>();
+            for (const item of filteredByFirm) {
+                const key = `${item.indentNo || item.indent_no}-${item.productName || item.product_name}`;
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    latestRecords.push(item);
+                }
+            }
+
+            // Group by Vendor + Bill No (matching StoreIn.tsx line 241)
+            const uniqueGroupedKeys = new Set<string>();
+            const pendingItems = latestRecords.filter((i) =>
+                (i.planned6 || i.planned_6) && (i.planned6 || i.planned_6) !== '' &&
+                (!i.actual6 && !i.actual_6) &&
+                ((i.billStatus || i.bill_status) === 'Bill Received' || (i.billStatus || i.bill_status) === 'Not Received')
+            );
+
+            pendingItems.forEach((i) => {
+                const billNo = String(i.billNo || i.bill_no || '');
+                const key = `${i.vendorName || i.vendor_name}-${billNo}`;
+                uniqueGroupedKeys.add(key);
+            });
+
+            return uniqueGroupedKeys.size;
+        },
     },
     {
         path: 'hod-store-check',
@@ -356,15 +398,15 @@ const routes: RouteAttributes[] = [
         notifications: (storeInSheet: any[], user: any) => {
             const data = Array.isArray(storeInSheet[0]) ? storeInSheet[0] : storeInSheet;
             const firmFilter = user.firmNameMatch?.toLowerCase() === 'all' ? null : user.firmNameMatch;
-            
+
             return data.filter((sheet: any) => {
                 const isFirmMatch = !firmFilter || (sheet.firmNameMatch || sheet.firm_name_match) === firmFilter;
                 const isPlanned = (sheet.plannedHod || sheet.hod_planned || sheet.hodPlanned);
                 const isActual = (sheet.actualHod || sheet.hod_actual || sheet.hodActual);
-                
-                return isFirmMatch && 
-                       isPlanned && isPlanned.toString().trim() !== '' && 
-                       (!isActual || isActual.toString().trim() === '');
+
+                return isFirmMatch &&
+                    isPlanned && isPlanned.toString().trim() !== '' &&
+                    (!isActual || isActual.toString().trim() === '');
             }).length;
         },
     },
@@ -504,7 +546,7 @@ const routes: RouteAttributes[] = [
 
             if (paymentsData.length === 0) return 0;
 
-             const pendingItems = paymentsData.filter((payment: any) => {
+            const pendingItems = paymentsData.filter((payment: any) => {
                 const firmMatch = !user || user.firmNameMatch.toLowerCase() === "all" ||
                     (payment.firmNameMatch || payment.firm_name) === user.firmNameMatch;
                 if (!firmMatch) return false;
@@ -583,13 +625,15 @@ const routes: RouteAttributes[] = [
         name: 'Reject For GRN',
         icon: <FileX size={20} />,
         element: <QuantityCheckInReceiveItem />,
-        notifications: (sheets: any[], user: any) =>
-            sheets.filter((sheet: any) =>
+        notifications: (sheetsData: any[], user: any) => {
+            const sheets = Array.isArray(sheetsData[0]) ? sheetsData[0] : sheetsData;
+            return sheets.filter((sheet: any) =>
                 (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch) &&
-                sheet.planned7 &&
-                sheet.planned7.toString().trim() !== '' &&
-                (!sheet.actual7 || sheet.actual7.toString().trim() === '')
-            ).length,
+                (sheet.planned7 || sheet.planned_7) &&
+                (sheet.planned7 || sheet.planned_7).toString().trim() !== '' &&
+                (!sheet.actual7 && !sheet.actual_7)
+            ).length;
+        },
     },
     {
         path: 'Send-Debit-Note',
@@ -597,13 +641,15 @@ const routes: RouteAttributes[] = [
         name: 'Send Debit Note',
         icon: <Send size={20} />,
         element: <SendDebitNote />,
-        notifications: (sheets: any[], user: any) =>
-            sheets.filter((sheet: any) =>
+        notifications: (sheetsData: any[], user: any) => {
+            const sheets = Array.isArray(sheetsData[0]) ? sheetsData[0] : sheetsData;
+            return sheets.filter((sheet: any) =>
                 (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch) &&
-                sheet.planned9 &&
-                sheet.planned9.toString().trim() !== '' &&
-                (!sheet.actual9 || sheet.actual9.toString().trim() === '')
-            ).length,
+                (sheet.planned9 || sheet.planned_9) &&
+                (sheet.planned9 || sheet.planned_9).toString().trim() !== '' &&
+                (!sheet.actual9 && !sheet.actual_9)
+            ).length;
+        },
     },
 
     {
