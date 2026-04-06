@@ -690,6 +690,10 @@ export default function GetPurchase() {
 
     const currentCalculatedTotal = calculateTotalAmount(itemsWatcher);
 
+    useEffect(() => {
+        form.setValue('billAmount', currentCalculatedTotal);
+    }, [currentCalculatedTotal, form]);
+
     const handleOpenChange = (open: boolean) => {
         setOpenDialog(open);
         if (!open) {

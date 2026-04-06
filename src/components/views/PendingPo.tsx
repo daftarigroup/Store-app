@@ -77,8 +77,6 @@ export default function ApprovedPOs() {
                 const indentNumber = sheet.indent_number?.toString().trim();
                 const existsInPoMaster = indentNumber && poMasterInternalCodes.has(indentNumber);
 
-                console.log(`Indent: ${indentNumber}, Exists in PO Master: ${existsInPoMaster}`);
-
                 return !existsInPoMaster;
             });
 
