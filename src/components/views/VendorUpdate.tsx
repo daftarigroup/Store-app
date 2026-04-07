@@ -196,7 +196,7 @@ export default () => {
         }
     };
 
-    // Fetch data on mount and when firm name changes
+    // Fetch data on mount and when Project Name changes
     useEffect(() => {
         fetchPendingVendorUpdates();
         fetchCompletedVendorUpdates();
@@ -381,7 +381,7 @@ export default () => {
         },
         {
             accessorKey: 'firmNameMatch',
-            header: 'Firm Name',
+            header: 'Project Name',
         },
         {
             accessorKey: 'indenter',
@@ -470,7 +470,7 @@ export default () => {
         },
         {
             accessorKey: 'firmNameMatch',
-            header: 'Firm Name',
+            header: 'Project Name',
         },
         {
             accessorKey: 'indenter',

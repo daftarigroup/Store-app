@@ -55,7 +55,7 @@ export default function ApproveIndent() {
         setDataLoading(true);
         try {
             const records = await fetchIndentRecords();
-            // Filter by firm name
+            // Filter by Project Name
             const filteredByFirm = records.filter(item => {
                 return user.firmNameMatch.toLowerCase() === "all" || item.firm_name_match === user.firmNameMatch;
             });
@@ -242,7 +242,7 @@ export default function ApproveIndent() {
             : [
                 { accessorKey: 'uom', header: 'UOM' }
             ]),
-        { accessorKey: 'firm_name_match', header: 'Firm Name' },
+        { accessorKey: 'firm_name_match', header: 'Project Name' },
         { accessorKey: 'indenter_name', header: 'Indenter' },
         { accessorKey: 'department', header: 'Department' },
         {
@@ -350,7 +350,7 @@ export default function ApproveIndent() {
 
     const historyColumns = useMemo<ColumnDef<IndentRecord>[]>(() => [
         { accessorKey: 'indent_number', header: 'Indent No.' },
-        { accessorKey: 'firm_name_match', header: 'Firm Name' },
+        { accessorKey: 'firm_name_match', header: 'Project Name' },
         { accessorKey: 'indenter_name', header: 'Indenter' },
         { accessorKey: 'department', header: 'Department' },
         {

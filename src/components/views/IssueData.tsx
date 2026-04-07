@@ -45,7 +45,7 @@ export default function IssueData() {
         setDataLoading(true);
         try {
             const records = await fetchIssueRecords();
-            // Filter by firm name
+            // Filter by Project Name
             const filteredByFirm = records.filter(item => {
                 return user.firmNameMatch.toLowerCase() === "all" || item.firm_name_match === user.firmNameMatch;
             });

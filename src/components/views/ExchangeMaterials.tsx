@@ -106,7 +106,7 @@ const ExchangeMaterials = () => {
             const data = await fetchStoreInRecords();
             console.log("Fetched store-in records:", data.length);
 
-            // Filter by firm name
+            // Filter by Project Name
             const filteredByFirm = data.filter(item =>
                 user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch
             );
@@ -228,7 +228,7 @@ const ExchangeMaterials = () => {
         { accessorKey: 'indentNo', header: 'Indent No.' },
         { accessorKey: 'poNumber', header: 'PO Number' },
         { accessorKey: 'vendorName', header: 'Vendor Name' },
-        { accessorKey: 'firmNameMatch', header: 'Firm Name' },
+        { accessorKey: 'firmNameMatch', header: 'Project Name' },
         { accessorKey: 'productName', header: 'Product Name' },
         { accessorKey: 'billStatus', header: 'Bill Status' },
         { accessorKey: 'billNo', header: 'Bill No.' },
@@ -286,7 +286,7 @@ const ExchangeMaterials = () => {
         { accessorKey: 'indentNo', header: 'Indent No.' },
         { accessorKey: 'poNumber', header: 'PO Number' },
         { accessorKey: 'vendorName', header: 'Vendor Name' },
-        { accessorKey: 'firmNameMatch', header: 'Firm Name' },
+        { accessorKey: 'firmNameMatch', header: 'Project Name' },
         { accessorKey: 'productName', header: 'Product Name' },
         { accessorKey: 'billStatus', header: 'Bill Status' },
         { accessorKey: 'billNo', header: 'Bill No.' },

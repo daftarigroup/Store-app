@@ -44,7 +44,7 @@ export default function RectifyTheMistake() {
         setDataLoading(true);
         try {
             const records = await fetchTallyEntryRecords();
-            // Filter by firm name
+            // Filter by Project Name
             const filteredByFirm = records.filter(item => {
                 return user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch;
             });
@@ -93,7 +93,7 @@ export default function RectifyTheMistake() {
             ]
             : []),
         { accessorKey: 'indentNumber', header: 'Indent No.' },
-        { accessorKey: 'firmNameMatch', header: 'Firm Name' },
+        { accessorKey: 'firmNameMatch', header: 'Project Name' },
         {
             accessorKey: 'materialInDate',
             header: 'Material In Date',
@@ -148,7 +148,7 @@ export default function RectifyTheMistake() {
 
     const historyColumns: ColumnDef<TallyEntryRecord>[] = [
         { accessorKey: 'indentNumber', header: 'Indent No.' },
-        { accessorKey: 'firmNameMatch', header: 'Firm Name' },
+        { accessorKey: 'firmNameMatch', header: 'Project Name' },
         {
             accessorKey: 'materialInDate',
             header: 'Material In Date',
@@ -323,7 +323,7 @@ export default function RectifyTheMistake() {
                                             </p>
                                         </div>
                                         <div className="space-y-1">
-                                            <p className="font-medium text-nowrap">Firm Name</p>
+                                            <p className="font-medium text-nowrap">Project Name</p>
                                             <p className="text-sm font-light">
                                                 {selectedItem.firmNameMatch}
                                             </p>

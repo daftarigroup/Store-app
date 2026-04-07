@@ -51,7 +51,7 @@ export default function FullKiting() {
             setDataLoading(true);
             const data = await fetchFullkittingRecords();
 
-            // Filter by firm name match
+            // Filter by Project Name match
             const filteredData = data.filter(item =>
                 user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch
             );
@@ -99,7 +99,7 @@ export default function FullKiting() {
             cell: ({ getValue }) => <div>{getValue() ? formatDateTime(parseCustomDate(getValue())) : '-'}</div>,
         },
         { accessorKey: 'indentNumber', header: 'Indent Number' },
-        { accessorKey: 'firmNameMatch', header: 'Firm Name' },
+        { accessorKey: 'firmNameMatch', header: 'Project Name' },
         { accessorKey: 'vendorName', header: 'Vendor Name' },
         { accessorKey: 'productName', header: 'Product Name' },
         { accessorKey: 'qty', header: 'Qty' },
@@ -128,7 +128,7 @@ export default function FullKiting() {
             cell: ({ getValue }) => <div>{getValue() ? formatDateTime(parseCustomDate(getValue())) : '-'}</div>,
         },
         { accessorKey: 'indentNumber', header: 'Indent Number' },
-        { accessorKey: 'firmNameMatch', header: 'Firm Name' },
+        { accessorKey: 'firmNameMatch', header: 'Project Name' },
         { accessorKey: 'vendorName', header: 'Vendor Name' },
         { accessorKey: 'productName', header: 'Product Name' },
         { accessorKey: 'qty', header: 'Qty' },

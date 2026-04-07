@@ -18,10 +18,10 @@ export default function PcReportTable() {
         { accessorKey: 'stage', header: 'Stage' },
         { accessorKey: 'totalPending', header: 'Total Pending' },
         { accessorKey: 'totalComplete', header: 'Total Complete' },
-        { accessorKey: 'pendingPmpl', header: 'Pending PMPL' },
-        { accessorKey: 'pendingPurab', header: 'Pending PURAB' },
-        { accessorKey: 'pendingPmmpl', header: 'Pending PMMPL' },
-        { accessorKey: 'pendingRefrasynth', header: 'Pending REFRASYNTH' },
+        // { accessorKey: 'pendingPmpl', header: 'Pending PMPL' },
+        // { accessorKey: 'pendingPurab', header: 'Pending PURAB' },
+        // { accessorKey: 'pendingPmmpl', header: 'Pending PMMPL' },
+        // { accessorKey: 'pendingRefrasynth', header: 'Pending REFRASYNTH' },
     ];
 
     return (

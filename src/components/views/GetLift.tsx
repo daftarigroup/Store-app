@@ -426,7 +426,7 @@ export default function GetPurchase() {
         },
         {
             accessorKey: 'firmNameMatch',
-            header: 'Firm Name',
+            header: 'Project Name',
             cell: ({ getValue }) => <div>{(getValue() as string) || '-'}</div>,
         },
         {

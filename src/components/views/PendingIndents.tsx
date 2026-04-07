@@ -253,7 +253,7 @@ export default () => {
         },
         {
             accessorKey: 'firmNameMatch',
-            header: 'Firm Name',
+            header: 'Project Name',
             cell: ({ getValue }) => <div className="px-2">{getValue() as string}</div>
         },
         {
@@ -349,7 +349,7 @@ export default () => {
         },
         {
             accessorKey: 'firmNameMatch',
-            header: 'Firm Name',
+            header: 'Project Name',
             cell: ({ getValue }) => <div className="px-2">{getValue() as string}</div>
         },
         {
@@ -492,7 +492,7 @@ export default () => {
                                 <p className="text-sm font-light">{selectedIndent.indentNo}</p>
                             </div>
                             <div className="space-y-1">
-                                <p className="font-medium text-sm">Firm Name</p>
+                                <p className="font-medium text-sm">Project Name</p>
                                 <p className="text-sm font-light">{selectedIndent.firmNameMatch}</p>
                             </div>
                             <div className="space-y-1">

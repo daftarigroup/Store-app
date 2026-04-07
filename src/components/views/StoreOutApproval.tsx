@@ -70,7 +70,7 @@ export default () => {
             setDataLoading(true);
             const data = await fetchIndentRecords();
 
-            // Filter by firm name match
+            // Filter by Project Name match
             const filteredByFirm = data.filter(item =>
                 user.firmNameMatch.toLowerCase() === "all" || item.firm_name_match === user.firmNameMatch
             );

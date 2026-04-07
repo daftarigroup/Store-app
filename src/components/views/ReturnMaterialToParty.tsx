@@ -81,7 +81,7 @@ export default () => {
             setDataLoading(true);
             const data = await fetchStoreInRecords();
 
-            // Filter by firm name
+            // Filter by Project Name
             const filteredByFirm = data.filter(item =>
                 user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch
             );
@@ -176,7 +176,7 @@ export default () => {
             cell: ({ getValue }) => <div>{getValue() ? formatDateTime(parseCustomDate(getValue())) : '-'}</div>,
         },
         { accessorKey: 'liftNumber', header: 'Lift Number' },
-        { accessorKey: 'firmNameMatch', header: 'Firm Name' },
+        { accessorKey: 'firmNameMatch', header: 'Project Name' },
         { accessorKey: 'indentNumber', header: 'Indent No.' },
         { accessorKey: 'billNo', header: 'Bill No.' },
         { accessorKey: 'vendorName', header: 'Vendor Name' },
@@ -212,7 +212,7 @@ export default () => {
             cell: ({ getValue }) => <div>{getValue() ? formatDateTime(parseCustomDate(getValue())) : '-'}</div>,
         },
         { accessorKey: 'liftNumber', header: 'Lift Number' },
-        { accessorKey: 'firmNameMatch', header: 'Firm Name' },
+        { accessorKey: 'firmNameMatch', header: 'Project Name' },
         { accessorKey: 'indentNumber', header: 'Indent No.' },
         { accessorKey: 'billNo', header: 'Bill No.' },
         { accessorKey: 'vendorName', header: 'Vendor Name' },

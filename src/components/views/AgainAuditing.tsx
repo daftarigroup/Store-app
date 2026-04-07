@@ -48,7 +48,7 @@ export default function AgainAuditingTable() {
     try {
       const records = await fetchTallyEntryRecords();
 
-      // Filter by firm name and status (planned5 exists, actual5 is empty)
+      // Filter by Project Name and status (planned5 exists, actual5 is empty)
       const filtered = records.filter(item => {
         const firmMatch = user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch;
         const stageMatch = item.planned5 && !item.actual5;
@@ -154,7 +154,7 @@ export default function AgainAuditingTable() {
       cell: ({ row }) => formatDate(row.original.planned5)
     },
     { accessorKey: 'productName', header: 'Product Name' },
-    { accessorKey: 'firmNameMatch', header: 'Firm Name' },
+    { accessorKey: 'firmNameMatch', header: 'Project Name' },
     { accessorKey: 'billNo', header: 'Bill No' },
     { accessorKey: 'qty', header: 'Quantity' },
     { accessorKey: 'partyName', header: 'Party Name' },
@@ -240,7 +240,7 @@ export default function AgainAuditingTable() {
                       <p className="text-sm font-light">{selectedRow.indentNumber}</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="font-medium text-nowrap">Firm Name</p>
+                      <p className="font-medium text-nowrap">Project Name</p>
                       <p className="text-sm font-light">{selectedRow.firmNameMatch}</p>
                     </div>
                     <div className="space-y-1">

@@ -36,7 +36,7 @@ export default () => {
 
     const schema = z.object({
         indenterName: z.string().nonempty(),
-        firmName: z.string().nonempty({ message: 'Select Firm Name' }),
+        firmName: z.string().nonempty({ message: 'Select Project Name' }),
         indentStatus: z.enum(['Critical', 'Non-Critical'], {
             required_error: 'Select indent status',
         }),
@@ -240,7 +240,7 @@ export default () => {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>
-                                        Firm Name
+                                        Project Name
                                         <span className="text-destructive">*</span>
                                     </FormLabel>
                                     <Select
@@ -279,14 +279,14 @@ export default () => {
                                     >
                                         <FormControl>
                                             <SelectTrigger className="w-full">
-                                                <SelectValue placeholder="Select Firm Name" />
+                                                <SelectValue placeholder="Select Project Name" />
                                             </SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
                                             <div className="flex items-center border-b px-3 pb-3">
                                                 <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
                                                 <input
-                                                    placeholder="Search Firm Name..."
+                                                    placeholder="Search Project Name..."
                                                     value={searchTermFirmName}
                                                     onChange={(e) => setSearchTermFirmName(e.target.value)}
                                                     onKeyDown={(e) => e.stopPropagation()}
@@ -360,7 +360,7 @@ export default () => {
                                         // Single or no indenter → auto-filled read-only input
                                         <FormControl>
                                             <Input
-                                                placeholder={indenterOptions.length === 0 ? 'Select a Firm Name first' : 'Indenter name (auto-filled)'}
+                                                placeholder={indenterOptions.length === 0 ? 'Select a Project Name first' : 'Indenter name (auto-filled)'}
                                                 readOnly={indenterOptions.length === 1}
                                                 {...field}
                                             />

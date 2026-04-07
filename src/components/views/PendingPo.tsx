@@ -63,7 +63,7 @@ export default function ApprovedPOs() {
                 .select('*')
                 .eq('po_requred', 'Yes'); // Note: column name has typo in DB
 
-            // Filter by firm name if not "all"
+            // Filter by Project Name if not "all"
             if (user?.firmNameMatch?.toLowerCase() !== 'all') {
                 query = query.eq('firm_name', user.firmNameMatch);
             }
@@ -178,7 +178,7 @@ export default function ApprovedPOs() {
         },
         {
             accessorKey: 'firmNameMatch',
-            header: 'Firm Name',
+            header: 'Project Name',
             cell: ({ getValue }) => <div className="px-2">{getValue() as string || '-'}</div>
         },
         {

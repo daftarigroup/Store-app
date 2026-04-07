@@ -396,10 +396,10 @@ export default () => {
                                     name="firmNameMatch"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>Firm Name Match</FormLabel>
+                                            <FormLabel>Project Name Match</FormLabel>
                                             <FormControl>
                                                 <Input
-                                                    placeholder="Enter Firm Name or 'all'"
+                                                    placeholder="Enter Project Name or 'all'"
                                                     {...field}
                                                 />
                                             </FormControl>

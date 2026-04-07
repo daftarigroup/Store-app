@@ -208,7 +208,7 @@ export default () => {
         { accessorKey: 'indentNo', header: 'Indent No.' },
         { accessorKey: 'poNumber', header: 'PO Number' },
         { accessorKey: 'vendorName', header: 'Vendor Name' },
-        { accessorKey: 'firmNameMatch', header: 'Firm Name' },
+        { accessorKey: 'firmNameMatch', header: 'Project Name' },
         { accessorKey: 'productName', header: 'Product Name' },
         { accessorKey: 'billStatus', header: 'Bill Status' },
         {

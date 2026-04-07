@@ -800,7 +800,7 @@ export default function PcReportTable() {
     },
     {
       accessorKey: 'firmNameMatch',
-      header: 'Firm Name'
+      header: 'Project Name'
     },
     {
       accessorKey: 'status1',
@@ -1344,7 +1344,7 @@ export default function PcReportTable() {
                       <p className="text-lg font-black tracking-tight">₹{selectedRow.billAmtSummarized || selectedRow.billAmt}</p>
                     </div>
                     <div className="space-y-0.5">
-                      <p className="text-[10px] font-bold uppercase opacity-70">Firm Name</p>
+                      <p className="text-[10px] font-bold uppercase opacity-70">Project Name</p>
                       <p className="text-sm font-bold truncate" title={selectedRow.firmNameMatch}>{selectedRow.firmNameMatch}</p>
                     </div>
                   </div>

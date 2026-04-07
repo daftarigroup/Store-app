@@ -203,8 +203,8 @@ const CreatePO = () => {
     const [readOnly, setReadOnly] = useState(-1);
     const [mode, setMode] = useState<'create' | 'revise'>('create');
     const [isEditingDestination, setIsEditingDestination] = useState(false);
-    const [destinationAddress, setDestinationAddress] = useState('M/S Passary Mineral Madhya Pvt.Ltd, Khasra No 297/2 & 297/6 Village AKoli, Near Tarpongi Toll Plaza, PO- Devri, Raipur - 493221 (CG)');
-    const [firmCompanyName, setFirmCompanyName] = useState('M/S Passary Mineral Madhya Pvt.Ltd');
+    const [destinationAddress, setDestinationAddress] = useState('Project Name, Khasra No 297/2 & 297/6 Village AKoli, Near Tarpongi Toll Plaza, PO- Devri, Raipur - 493221 (CG)');
+    const [firmCompanyName, setFirmCompanyName] = useState('Project Name');
     const [firmCompanyAddress, setFirmCompanyAddress] = useState('Shri Ram Business Park , Block - C, 2nd floor , Room No. 212');
     const [showPreview, setShowPreview] = useState(false);
     const [previewData, setPreviewData] = useState<POPdfProps | null>(null);
@@ -339,7 +339,7 @@ const CreatePO = () => {
                     companyDetails.destinationAddress || (details as MasterDetails).destinationAddress || ''
                 );
             } else {
-                setFirmCompanyName((details as MasterDetails).companyName || 'Passary Mineral Madhya Pvt.Ltd');
+                setFirmCompanyName((details as MasterDetails).companyName || 'Project Name');
                 setFirmCompanyAddress((details as MasterDetails).companyAddress || 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212');
                 setDestinationAddress((details as MasterDetails).destinationAddress || '');
             }
@@ -527,18 +527,7 @@ const CreatePO = () => {
     };
 
     const getLogoBase64 = async (): Promise<string> => {
-        try {
-            const logoResponse = await fetch('/Passary.jpeg');
-            const logoBlob = await logoResponse.blob();
-            return await new Promise<string>((resolve) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result as string);
-                reader.readAsDataURL(logoBlob);
-            });
-        } catch (error) {
-            console.error('Error fetching logo:', error);
-            return '';
-        }
+        return '';
     };
 
     async function generatePreviewData(): Promise<POPdfProps> {
@@ -554,13 +543,13 @@ const CreatePO = () => {
         );
 
         return {
-            companyName: 'M/S Passary Mineral Madhya Pvt.Ltd',
-            companyPhone: '+91 7223844007',
-            companyGstin: '22AAHCP9274B1ZI',
-            companyPan: 'AACCJ1154B',
-            companyAddress: 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212',
-            billingAddress: 'M/S Passary Mineral Madhya Pvt.Ltd, Shri Ram Business Park , Block - C, 2nd floor , Room No. 212',
-            destinationAddress: destinationAddress || 'M/S Passary Mineral Madhya Pvt.Ltd, Khasra No 297/2 & 297/6 Village AKoli, Near Tarpongi Toll Plaza, PO- Devri, Raipur - 493221 (CG)',
+            companyName: 'Pooja Constructions',
+            companyPhone: '',
+            companyGstin: '',
+            companyPan: '',
+            companyAddress: 'Shri Ram Business Park , Block - I, 2nd floor , Room No. 213',
+            billingAddress: 'Pooja Constructions, Shri Ram Business Park , Block - C, 2nd floor , Room No. 212',
+            destinationAddress: destinationAddress || 'Pooja Constructions, Khasra No 297/2 & 297/6 Village AKoli, Near Tarpongi Toll Plaza, PO- Devri, Raipur - 493221 (CG)',
             supplierName: values.supplierName,
             supplierAddress: values.supplierAddress,
             supplierGstin: values.gstin,
@@ -639,13 +628,13 @@ const CreatePO = () => {
             const logoBase64 = await getLogoBase64();
 
             const pdfProps: POPdfProps = {
-                companyName: 'M/S Passary Mineral Madhya Pvt.Ltd',
+                companyName: 'Pooja Constructions',
                 companyPhone: '+91 7223844007',
-                companyGstin: '22AAHCP9274B1ZI',
-                companyPan: 'AACCJ1154B',
+                companyGstin: '',
+                companyPan: '',
                 companyAddress: 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212',
-                billingAddress: 'M/S Passary Mineral Madhya Pvt.Ltd, Shri Ram Business Park , Block - C, 2nd floor , Room No. 212',
-                destinationAddress: destinationAddress || 'M/S Passary Mineral Madhya Pvt.Ltd, Khasra No 297/2 & 297/6 Village AKoli, Near Tarpongi Toll Plaza, PO- Devri, Raipur - 493221 (CG)',
+                billingAddress: 'Pooja Constructions, Shri Ram Business Park , Block - C, 2nd floor , Room No. 212',
+                destinationAddress: destinationAddress || 'Pooja Constructions, Khasra No 297/2 & 297/6 Village AKoli, Near Tarpongi Toll Plaza, PO- Devri, Raipur - 493221 (CG)',
                 supplierName: values.supplierName,
                 supplierAddress: values.supplierAddress,
                 supplierGstin: values.gstin,
@@ -837,16 +826,15 @@ const CreatePO = () => {
                         <div className="space-y-4 p-4 w-full bg-white shadow-md rounded-sm">
                             {/* Header Section */}
                             <div className="flex items-center justify-center gap-4 bg-blue-50 p-2 h-25 rounded">
-                                <img src="/Passary.jpeg" alt="Company Logo" className="w-40  object-contain" />
                                 <div className="text-center">
                                     <h1 className="text-2xl font-bold">
-                                        Passary Mineral Madhya Pvt.Ltd
+                                        Pooja Constructions
                                     </h1>
                                     <div>
                                         <p className="text-sm">
-                                            Shri Ram Business Park , Block - C, 2nd floor , Room No. 212
+                                            Address:
                                         </p>
-                                        <p className="text-sm">Phone No: +91 7223844007</p>
+                                        <p className="text-sm">Phone No: +91 </p>
                                     </div>
                                 </div>
                             </div>
@@ -1027,7 +1015,7 @@ const CreatePO = () => {
                                     )} />
                                 </div>
 
-                                 {form.watch('paymentTerms') && (form.watch('paymentTerms').toLowerCase().includes('delivery') || (form.watch('paymentTerms').toLowerCase().includes('partly') && (form.watch('paymentTerms').toLowerCase().includes('advance') || form.watch('paymentTerms').toLowerCase().includes('pi')))) && (
+                                {form.watch('paymentTerms') && (form.watch('paymentTerms').toLowerCase().includes('delivery') || (form.watch('paymentTerms').toLowerCase().includes('partly') && (form.watch('paymentTerms').toLowerCase().includes('advance') || form.watch('paymentTerms').toLowerCase().includes('pi')))) && (
                                     <div className="flex gap-4">
                                         <FormField control={form.control} name="numberOfDays" render={({ field }) => (
                                             <FormItem className="flex-1">
@@ -1067,8 +1055,8 @@ const CreatePO = () => {
                                         <CardTitle className="text-center">Our Commercial Details</CardTitle>
                                     </CardHeader>
                                     <CardContent className="p-5 text-sm">
-                                        <p><span className="font-semibold">GSTIN:</span> 22AAHCP9274B1ZI</p>
-                                        <p><span className="font-semibold">Pan No.</span> AACCJ1154B</p>
+                                        <p><span className="font-semibold">GSTIN:</span> </p>
+                                        <p><span className="font-semibold">Pan No.</span> </p>
                                     </CardContent>
                                 </Card>
 
@@ -1079,7 +1067,7 @@ const CreatePO = () => {
                                     <CardContent className="p-5 text-sm">
                                         {vendor ? (
                                             <>
-                                                <p className="font-semibold text-xs">M/S Passary Mineral Madhya Pvt.Ltd</p>
+                                                <p className="font-semibold text-xs">Project Name</p>
                                                 <p className="text-xs">Shri Ram Business Park , Block - C, 2nd floor , Room No. 212</p>
                                             </>
                                         ) : (
@@ -1108,7 +1096,7 @@ const CreatePO = () => {
                                     <CardContent className="p-5 text-sm">
                                         {vendor ? (
                                             <>
-                                                <p className="font-semibold text-xs">M/S Passary Mineral Madhya Pvt.Ltd</p>
+                                                <p className="font-semibold text-xs">Project Name</p>
                                                 {isEditingDestination ? (
                                                     <div className="flex items-center gap-2 mt-1">
                                                         <Input value={destinationAddress} onChange={(e) => setDestinationAddress(e.target.value)}
