@@ -158,3 +158,22 @@ export async function fetchMasterOptions(): Promise<MasterData> {
         };
     }
 }
+
+/**
+ * Insert a new record into the master table
+ */
+export async function insertMasterData(columnName: string, value: string): Promise<{ success: boolean; error?: any }> {
+    try {
+        const { error } = await supabase
+            .from('master')
+            .insert({
+                [columnName]: value
+            });
+
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        console.error('Error inserting master data:', error);
+        return { success: false, error };
+    }
+}

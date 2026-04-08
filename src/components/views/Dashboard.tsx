@@ -20,11 +20,15 @@ import { ComboBox } from '../ui/combobox';
 import { fetchIndentRecords, type IndentRecord } from '@/services/indentService';
 import { fetchStoreInRecords, type StoreInRecord } from '@/services/storeInService';
 import { fetchIssueRecords, type IssueRecord } from '@/services/issueService';
-import { fetchMasterOptions } from '@/services/masterService';
+import { insertMasterData, fetchMasterOptions } from '@/services/masterService';
 import { fetchPoMaster } from '@/services/poService';
 import { fetchInventoryRecords } from '@/services/inventoryService';
 import { Line, LineChart, Pie, PieChart, Cell, ResponsiveContainer, Tooltip, Area, AreaChart } from 'recharts';
 import { useSheets } from '@/context/SheetsContext';
+import { Database, Plus, Save } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { toast } from 'sonner';
 
 interface ChartDataItem {
     name: string;
@@ -64,6 +68,9 @@ export default function Dashboard() {
     const [allVendors, setAllVendors] = useState<string[]>([]);
     const [allProducts, setAllProducts] = useState<string[]>([]);
     const [allDepartments, setAllDepartments] = useState<string[]>([]);
+    const [masterColumn, setMasterColumn] = useState('');
+    const [masterValue, setMasterValue] = useState('');
+    const [isInserting, setIsInserting] = useState(false);
 
     useEffect(() => {
         const loadData = async () => {
@@ -594,6 +601,89 @@ export default function Dashboard() {
                                         </div>
                                     </div>
                                 ))}
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                {/* Master Insertion Section */}
+                <div className="grid grid-cols-1 gap-3">
+                    <Card className="border-slate-200 bg-slate-50/50">
+                        <CardHeader className="flex flex-row items-center gap-2">
+                            <Database className="h-5 w-5 text-slate-600" />
+                            <CardTitle className="text-xl">Master Data Management</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="flex flex-col md:flex-row gap-4 items-end">
+                                <div className="flex-1 space-y-2">
+                                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Select Field</label>
+                                    <Select value={masterColumn} onValueChange={setMasterColumn}>
+                                        <SelectTrigger className="bg-white">
+                                            <SelectValue placeholder="Select master field to add to" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="vendor_name">Vendor Name</SelectItem>
+                                            <SelectItem value="vendor_gstin">Vendor GSTIN</SelectItem>
+                                            <SelectItem value="vendor_address">Vendor Address</SelectItem>
+                                            <SelectItem value="vendor_email">Vendor Email</SelectItem>
+                                            <SelectItem value="payment_term">Payment Term</SelectItem>
+                                            <SelectItem value="department">Department</SelectItem>
+                                            <SelectItem value="group_head">Group Head</SelectItem>
+                                            <SelectItem value="item_name">Item Name</SelectItem>
+                                            <SelectItem value="company_name">Company Name</SelectItem>
+                                            <SelectItem value="company_address">Company Address</SelectItem>
+                                            <SelectItem value="company_email">Company Email</SelectItem>
+                                            <SelectItem value="company_gstin">Company GSTIN</SelectItem>
+                                            <SelectItem value="company_phone">Company Phone</SelectItem>
+                                            <SelectItem value="billing_address">Billing Address</SelectItem>
+                                            <SelectItem value="company_pan">Company PAN</SelectItem>
+                                            <SelectItem value="destination_address">Destination Address</SelectItem>
+                                            <SelectItem value="default_terms">Default Terms</SelectItem>
+                                            <SelectItem value="person_name">Person Name</SelectItem>
+                                            <SelectItem value="firm_name">Firm Name (Project)</SelectItem>
+                                            <SelectItem value="uom">UOM</SelectItem>
+                                            <SelectItem value="where">Location (Where)</SelectItem>
+                                            <SelectItem value="fms_name">FMS Name</SelectItem>
+                                            <SelectItem value="indenter_name">Indenter Name</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="flex-[2] space-y-2">
+                                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Enter Value</label>
+                                    <Input 
+                                        placeholder="Type the value to insert..." 
+                                        value={masterValue}
+                                        onChange={(e) => setMasterValue(e.target.value)}
+                                        className="bg-white"
+                                    />
+                                </div>
+                                <Button 
+                                    className="bg-slate-800 hover:bg-slate-900 text-white gap-2 px-6"
+                                    onClick={async () => {
+                                        if (!masterColumn || !masterValue) {
+                                            toast.error('Please select a field and enter a value');
+                                            return;
+                                        }
+                                        setIsInserting(true);
+                                        const result = await insertMasterData(masterColumn, masterValue);
+                                        setIsInserting(false);
+                                        if (result.success) {
+                                            toast.success('Data added to master table successfully');
+                                            setMasterValue('');
+                                            // Optional: Refresh master data in context if needed
+                                        } else {
+                                            toast.error('Failed to add data to master table');
+                                        }
+                                    }}
+                                    disabled={isInserting}
+                                >
+                                    {isInserting ? (
+                                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                                    ) : (
+                                        <Plus className="h-4 w-4" />
+                                    )}
+                                    Insert Data
+                                </Button>
                             </div>
                         </CardContent>
                     </Card>
