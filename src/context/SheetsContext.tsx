@@ -185,7 +185,6 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                     location: r.location,
                     status: r.status,
                     givenQty: r.given_qty,
-                    firmNameMatch: r.firm_name_match,
                 }));
                 setIssueSheet(mapped as unknown as IssueSheet[]);
                 setIssueLoading(false);
