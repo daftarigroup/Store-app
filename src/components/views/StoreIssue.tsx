@@ -177,7 +177,7 @@ export default () => {
                         {fields.map((field, index) => {
                             const department = products[index]?.department;
                             const groupHead = products[index]?.groupHead;
-                            const groupHeadOptions = options?.groupHeads[department] || [];
+                            const groupHeadOptions = options?.allGroupHeads || [];
                             const productOptions = options?.products[groupHead] || [];
 
                             return (
