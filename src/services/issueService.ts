@@ -21,7 +21,6 @@ export interface IssueRecord {
     given_qty: number;
     timestamp?: string;
     location?: string;
-    firm_name_match?: string;
 }
 
 // ==================== FETCH FUNCTIONS ====================
@@ -52,7 +51,6 @@ export async function fetchIssueRecords(): Promise<IssueRecord[]> {
             given_qty: Number(r.given_qty) || 0,
             timestamp: r.timestamp || '',
             location: r.location || '',
-            firm_name_match: r.firm_name_match || '',
         }));
     } catch (error) {
         console.error('Error fetching issue records:', error);
@@ -112,7 +110,6 @@ export async function createIssueRecords(rows: Partial<IssueRecord>[]) {
             actual1: r.actual1,
             status: r.status || 'Pending',
             given_qty: r.given_qty || 0,
-            firm_name_match: r.firm_name_match || ''
         }));
 
         const { data, error } = await supabase

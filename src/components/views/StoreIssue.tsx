@@ -132,7 +132,6 @@ export default () => {
                     quantity: product.quantity,
                     department: product.department,
                     status: 'Pending',
-                    firm_name_match: user?.firmNameMatch || ''
                 };
 
                 rows.push(row);
