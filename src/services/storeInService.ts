@@ -254,7 +254,7 @@ export async function updateStoreInReceiving(
             .eq('lift_number', liftNumber);
 
         if (error) throw error;
-        
+
         // ✅ TRIGGER HOD CHECK (hod_planned) ALWAYS AFTER STORE CHECK (Stage 6)
         console.log('📝 Triggering HOD Check stage...');
         const { error: plannedHodError } = await supabase

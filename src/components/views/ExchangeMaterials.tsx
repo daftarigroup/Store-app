@@ -108,7 +108,7 @@ const ExchangeMaterials = () => {
 
             // Filter by Project Name
             const filteredByFirm = data.filter(item =>
-                user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch
+                (user.firmNameMatch || '').trim().toLowerCase() === "all" || (item.firmNameMatch || '').trim() === (user.firmNameMatch || '').trim()
             );
 
             const pending = filteredByFirm

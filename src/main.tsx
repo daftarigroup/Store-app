@@ -137,12 +137,16 @@ const routes: RouteAttributes[] = [
         icon: <ClipboardCheck size={20} />,
         element: <IssueData />,
         notifications: (issueSheet: any[], user: any) =>
-            issueSheet.filter((sheet: any) =>
-                (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch) &&
+            issueSheet.filter((sheet: any) => {
+                const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
+                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || '').trim().toLowerCase();
+                const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
+                
+                return isFirmMatch &&
                 sheet.planned1 &&
                 sheet.planned1.toString().trim() !== '' &&
-                (!sheet.actual1 || sheet.actual1.toString().trim() === '')
-            ).length,
+                (!sheet.actual1 || sheet.actual1.toString().trim() === '');
+            }).length,
     },
 
 
@@ -172,11 +176,17 @@ const routes: RouteAttributes[] = [
         element: <ApproveIndent />,
         notifications: (sheets: any[], user: any) => {
             const data = Array.isArray(sheets[0]) ? sheets[0] : sheets;
+            const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
+
             return data.filter(
-                (sheet: any) =>
-                    (!user || user.firmNameMatch.toLowerCase() === "all" || sheet.firmNameMatch === user.firmNameMatch) &&
+                (sheet: any) => {
+                    const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || '').trim().toLowerCase();
+                    const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
+
+                    return isFirmMatch &&
                     sheet.planned1 && sheet.planned1 !== '' &&
-                    (!sheet.actual1 || sheet.actual1 === '')
+                    (!sheet.actual1 || sheet.actual1 === '');
+                }
             ).length;
         },
     },
@@ -186,11 +196,15 @@ const routes: RouteAttributes[] = [
         name: 'Vendor Rate Update',
         icon: <UserCog size={20} />,
         element: <VendorUpdate />,
-        notifications: (sheets: any[], user: any) =>
-            sheets.filter((sheet: any) =>
-                (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch) &&
-                sheet.planned2 !== '' && sheet.actual2 === ''
-            ).length,
+        notifications: (sheets: any[], user: any) => {
+            const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
+            return sheets.filter((sheet: any) => {
+                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || '').trim().toLowerCase();
+                const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
+
+                return isFirmMatch && sheet.planned2 !== '' && sheet.actual2 === '';
+            }).length;
+        },
     },
     {
         path: 'technical-approval',
@@ -200,13 +214,19 @@ const routes: RouteAttributes[] = [
         element: <DepartmentApproval />,
         notifications: (sheetsData: any[], user: any) => {
             const sheets = Array.isArray(sheetsData[0]) ? sheetsData[0] : sheetsData;
+            const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
+
             return sheets.filter(
-                (sheet: any) =>
-                    (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch) &&
+                (sheet: any) => {
+                    const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || '').trim().toLowerCase();
+                    const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
+
+                    return isFirmMatch &&
                     (sheet.vendorType || sheet.vendor_type) !== 'Direct' &&
                     sheet.planned3 && sheet.planned3 !== '' &&
                     (!sheet.actual3 || sheet.actual3 === '') &&
-                    !(sheet.vendor1_rank || sheet.vendor2_rank || sheet.vendor3_rank)
+                    !(sheet.vendor1_rank || sheet.vendor2_rank || sheet.vendor3_rank);
+                }
             ).length;
         },
     },
@@ -218,13 +238,19 @@ const routes: RouteAttributes[] = [
         element: <RateApproval />,
         notifications: (sheetsData: any[], user: any) => {
             const sheets = Array.isArray(sheetsData[0]) ? sheetsData[0] : sheetsData;
+            const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
+
             return sheets.filter(
-                (sheet: any) =>
-                    (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch) &&
+                (sheet: any) => {
+                    const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || '').trim().toLowerCase();
+                    const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
+
+                    return isFirmMatch &&
                     (sheet.vendorType || sheet.vendor_type) !== 'Direct' &&
                     sheet.planned4 && sheet.planned4 !== '' &&
                     (!sheet.approvedVendorName && !sheet.approved_vendor_name) &&
-                    (sheet.vendor1_rank || sheet.vendor2_rank || sheet.vendor3_rank)
+                    (sheet.vendor1_rank || sheet.vendor2_rank || sheet.vendor3_rank);
+                }
             ).length;
         },
     },
@@ -253,16 +279,19 @@ const routes: RouteAttributes[] = [
         icon: <Clock size={20} />,
         element: <PendingPo />,
         notifications: (sheets: any[], user: any) => {
-            // Count only items that are likely NOT in PO Master yet
-            return sheets.filter((sheet: any) =>
-                (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch) &&
+            const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
+            return sheets.filter((sheet: any) => {
+                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || '').trim().toLowerCase();
+                const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
+
+                return isFirmMatch &&
                 sheet.poRequred &&
                 sheet.poRequred.toString().trim() === 'Yes' &&
                 sheet.pendingPoQty &&
                 sheet.pendingPoQty > 0 &&
                 sheet.approvedVendorName &&
-                sheet.approvedVendorName.toString().trim() !== ''
-            ).length;
+                sheet.approvedVendorName.toString().trim() !== '';
+            }).length;
         },
     },
 
@@ -288,11 +317,15 @@ const routes: RouteAttributes[] = [
 
             try {
                 // Filter by firm and valid PO numbers
-                const sheetsWithPoNumbers = sheets.filter((sheet: any) =>
-                    (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch) &&
+                const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
+                const sheetsWithPoNumbers = sheets.filter((sheet: any) => {
+                    const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || '').trim().toLowerCase();
+                    const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
+
+                    return isFirmMatch &&
                     sheet?.poNumber &&
-                    sheet?.poNumber.toString().trim() !== ''
-                );
+                    sheet?.poNumber.toString().trim() !== '';
+                });
 
                 if (sheetsWithPoNumbers.length === 0) {
                     return 0;
@@ -331,7 +364,9 @@ const routes: RouteAttributes[] = [
             const uniquePOs = new Set<string>();
 
             sheets.forEach((sheet: any) => {
-                const isFirmMatch = !user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch;
+                const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
+                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || '').trim().toLowerCase();
+                const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
                 const hasPlanned5 = sheet.planned5 && sheet.planned5.toString().trim() !== '';
                 const hasNoActual5 = !sheet.actual5 || sheet.actual5.toString().trim() === '';
                 const isPending = sheet.liftingStatus === 'Pending' || !sheet.liftingStatus;
@@ -357,9 +392,11 @@ const routes: RouteAttributes[] = [
         element: <StoreIn />,
         notifications: (sheetsData: any[], user: any) => {
             const sheets = Array.isArray(sheetsData[0]) ? sheetsData[0] : sheetsData;
-            const filteredByFirm = sheets.filter((item: any) =>
-                (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (item.firmNameMatch || item.firm_name_match) === user.firmNameMatch)
-            );
+            const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
+            const filteredByFirm = sheets.filter((item: any) => {
+                const sheetFirm = (item.firmNameMatch || item.firm_name_match || '').trim().toLowerCase();
+                return userFirm === "all" || sheetFirm === userFirm;
+            });
 
             // Filter to keep only latest per indent+product (matching StoreIn.tsx line 228)
             const latestRecords: any[] = [];
@@ -397,10 +434,11 @@ const routes: RouteAttributes[] = [
         element: <HodStoreApproval />,
         notifications: (storeInSheet: any[], user: any) => {
             const data = Array.isArray(storeInSheet[0]) ? storeInSheet[0] : storeInSheet;
-            const firmFilter = user.firmNameMatch?.toLowerCase() === 'all' ? null : user.firmNameMatch;
+            const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
 
             return data.filter((sheet: any) => {
-                const isFirmMatch = !firmFilter || (sheet.firmNameMatch || sheet.firm_name_match) === firmFilter;
+                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || '').trim().toLowerCase();
+                const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
                 const isPlanned = (sheet.plannedHod || sheet.hod_planned || sheet.hodPlanned);
                 const isActual = (sheet.actualHod || sheet.hod_actual || sheet.hodActual);
 
@@ -416,13 +454,18 @@ const routes: RouteAttributes[] = [
         name: 'Freight Payment',
         icon: <Truck size={20} />,
         element: <FullKiting />,
-        notifications: (sheets: any[], user: any) =>
-            sheets.filter((sheet: any) =>
-                (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch) &&
+        notifications: (sheets: any[], user: any) => {
+            const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
+                return sheets.filter((sheet: any) => {
+                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || '').trim().toLowerCase();
+                const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
+
+                return isFirmMatch &&
                 sheet.planned &&
                 sheet.planned.toString().trim() !== '' &&
-                (!sheet.actual || sheet.actual.toString().trim() === '')
-            ).length,
+                (!sheet.actual || sheet.actual.toString().trim() === '');
+            }).length;
+        },
     },
     {
         path: 'Payment-Status',
@@ -458,8 +501,9 @@ const routes: RouteAttributes[] = [
 
                 // Process PO-based items
                 poMasterSheet.forEach((record: any) => {
-                    const firmMatch = !user || user.firmNameMatch?.toLowerCase() === "all" ||
-                        record.firmNameMatch === user.firmNameMatch;
+                    const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
+                    const recordFirm = (record.firmNameMatch || record.firm_name_match || '').trim().toLowerCase();
+                    const firmMatch = userFirm === "all" || recordFirm === userFirm;
                     if (!firmMatch) return;
 
                     const poNum = record.poNumber || '';
@@ -498,8 +542,9 @@ const routes: RouteAttributes[] = [
 
                 // Process Payment-based items
                 (paymentsSheet || []).forEach((payment: any) => {
-                    const firmMatch = !user || user.firmNameMatch?.toLowerCase() === "all" ||
-                        (payment.firmNameMatch || payment.firm_name) === user.firmNameMatch;
+                    const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
+                    const paymentFirm = (payment.firmNameMatch || payment.firm_name || payment.firm_name_match || '').trim().toLowerCase();
+                    const firmMatch = userFirm === "all" || paymentFirm === userFirm;
                     if (!firmMatch) return;
 
                     const status = String(payment.status || '').toLowerCase();
@@ -547,8 +592,9 @@ const routes: RouteAttributes[] = [
             if (paymentsData.length === 0) return 0;
 
             const pendingItems = paymentsData.filter((payment: any) => {
-                const firmMatch = !user || user.firmNameMatch.toLowerCase() === "all" ||
-                    (payment.firmNameMatch || payment.firm_name) === user.firmNameMatch;
+                const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
+                const paymentFirm = (payment.firmNameMatch || payment.firm_name || payment.firm_name_match || '').trim().toLowerCase();
+                const firmMatch = userFirm === "all" || paymentFirm === userFirm;
                 if (!firmMatch) return false;
 
                 // Check payment terms: Only count if Partly Advance or Partly PI
@@ -627,12 +673,17 @@ const routes: RouteAttributes[] = [
         element: <QuantityCheckInReceiveItem />,
         notifications: (sheetsData: any[], user: any) => {
             const sheets = Array.isArray(sheetsData[0]) ? sheetsData[0] : sheetsData;
-            return sheets.filter((sheet: any) =>
-                (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch) &&
+            const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
+
+            return sheets.filter((sheet: any) => {
+                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || '').trim().toLowerCase();
+                const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
+
+                return isFirmMatch &&
                 (sheet.planned7 || sheet.planned_7) &&
                 (sheet.planned7 || sheet.planned_7).toString().trim() !== '' &&
                 (!sheet.actual7 && !sheet.actual_7)
-            ).length;
+            }).length;
         },
     },
     {
@@ -643,12 +694,17 @@ const routes: RouteAttributes[] = [
         element: <SendDebitNote />,
         notifications: (sheetsData: any[], user: any) => {
             const sheets = Array.isArray(sheetsData[0]) ? sheetsData[0] : sheetsData;
-            return sheets.filter((sheet: any) =>
-                (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch) &&
+            const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
+
+            return sheets.filter((sheet: any) => {
+                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || '').trim().toLowerCase();
+                const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
+
+                return isFirmMatch &&
                 (sheet.planned9 || sheet.planned_9) &&
                 (sheet.planned9 || sheet.planned_9).toString().trim() !== '' &&
                 (!sheet.actual9 && !sheet.actual_9)
-            ).length;
+            }).length;
         },
     },
 
@@ -658,13 +714,19 @@ const routes: RouteAttributes[] = [
         name: 'Audit Data',
         icon: <BarChart size={20} />,
         element: <AuditData />,
-        notifications: (sheets: any[], user: any) =>
-            sheets.filter((sheet: any) =>
-                (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch) &&
+        notifications: (sheets: any[], user: any) => {
+            const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
+
+            return sheets.filter((sheet: any) => {
+                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || '').trim().toLowerCase();
+                const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
+
+                return isFirmMatch &&
                 sheet.planned1 &&
                 sheet.planned1.toString().trim() !== '' &&
-                (!sheet.actual1 || sheet.actual1.toString().trim() === '')
-            ).length,
+                (!sheet.actual1 || sheet.actual1.toString().trim() === '');
+            }).length;
+        },
     },
 
     // {
@@ -807,8 +869,10 @@ const routes: RouteAttributes[] = [
         notifications: (sheets: any[], user: any) => {
             // Count items where planned11 is set but actual11 is not
             return sheets.filter((sheet: any) => {
-                const firmMatch = !user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch;
-                if (!firmMatch) return false;
+                const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
+                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || '').trim().toLowerCase();
+                const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
+                if (!isFirmMatch) return false;
 
                 const hasPlanned11 = sheet.planned11 && sheet.planned11.toString().trim() !== '';
                 const noActual11 = !sheet.actual11 || sheet.actual11.toString().trim() === '';

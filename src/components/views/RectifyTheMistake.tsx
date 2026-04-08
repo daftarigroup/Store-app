@@ -46,7 +46,7 @@ export default function RectifyTheMistake() {
             const records = await fetchTallyEntryRecords();
             // Filter by Project Name
             const filteredByFirm = records.filter(item => {
-                return user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch;
+                return (user.firmNameMatch || '').trim().toLowerCase() === "all" || (item.firmNameMatch || '').trim() === (user.firmNameMatch || '').trim();
             });
             setAllData(filteredByFirm);
         } catch (error) {

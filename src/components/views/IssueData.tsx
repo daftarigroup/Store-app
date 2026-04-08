@@ -47,7 +47,7 @@ export default function IssueData() {
             const records = await fetchIssueRecords();
             // Filter by Project Name
             const filteredByFirm = records.filter(item => {
-                return user.firmNameMatch.toLowerCase() === "all" || item.firm_name_match === user.firmNameMatch;
+                return (user.firmNameMatch || '').trim().toLowerCase() === "all" || (item.firm_name_match || '').trim() === (user.firmNameMatch || '').trim();
             });
             setAllData(filteredByFirm);
         } catch (error) {

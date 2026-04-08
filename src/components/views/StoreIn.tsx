@@ -407,7 +407,7 @@ export default () => {
                 );
             }
         },
-        { accessorKey: 'firmNameMatch', header: 'Project Name', cell: textWrapCell },
+        { accessorKey: 'firmNameMatch', header: 'Firm Name', cell: textWrapCell },
         {
             accessorKey: 'billStatus',
             header: 'Bill Status',
@@ -449,7 +449,7 @@ export default () => {
         { accessorKey: 'liftNumber', header: 'Lift Number', cell: textWrapCell },
         { accessorKey: 'indentNo', header: 'Indent No.', cell: textWrapCell },
         { accessorKey: 'poNumber', header: 'PO Number', cell: textWrapCell },
-        { accessorKey: 'firmNameMatch', header: 'Project Name', cell: textWrapCell },
+        { accessorKey: 'firmNameMatch', header: 'Firm Name', cell: textWrapCell },
         { accessorKey: 'vendorName', header: 'Vendor Name', cell: textWrapCell },
         { accessorKey: 'productName', header: 'Product Name', cell: textWrapCell },
         {

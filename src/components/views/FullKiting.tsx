@@ -53,7 +53,7 @@ export default function FullKiting() {
 
             // Filter by Project Name match
             const filteredData = data.filter(item =>
-                user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch
+                (user.firmNameMatch || '').trim().toLowerCase() === "all" || (item.firmNameMatch || '').trim() === (user.firmNameMatch || '').trim()
             );
 
             // Pending: has planned but no actual

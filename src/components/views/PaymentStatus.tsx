@@ -160,8 +160,8 @@ export default function PIApprovals() {
             const poBasedPendingItems = safePoMasterSheet
                 .filter((record: any) => {
                     // Firm filtering
-                    const firmMatch = !user || user.firmNameMatch?.toLowerCase() === "all" ||
-                        record.firmNameMatch === user.firmNameMatch;
+                    const firmMatch = !user || (user.firmNameMatch || '').trim().toLowerCase() === "all" ||
+                        (record.firmNameMatch || '').trim() === (user.firmNameMatch || '').trim();
                     if (!firmMatch) return false;
 
                     // Status filtering
@@ -259,8 +259,8 @@ export default function PIApprovals() {
             const paymentBasedItems = safePaymentsSheet
                 .filter((payment: any) => {
                     const status = String(payment?.status || '').toLowerCase();
-                    const firmMatch = !user || user.firmNameMatch?.toLowerCase() === "all" ||
-                        (payment?.firmNameMatch || payment?.firm_name) === user?.firmNameMatch;
+                    const firmMatch = !user || (user.firmNameMatch || '').trim().toLowerCase() === "all" ||
+                        ((payment?.firmNameMatch || payment?.firm_name) || '').trim() === (user.firmNameMatch || '').trim();
 
                     // Show payments that are pending and not yet scheduled
                     const isPending = status === 'pending';

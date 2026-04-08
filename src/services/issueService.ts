@@ -105,13 +105,14 @@ export async function createIssueRecords(rows: Partial<IssueRecord>[]) {
             issue_to: r.issue_to,
             uom: r.uom,
             product_name: r.product_name,
-            quantity: String(r.quantity),
+            quantity: r.quantity,
             department: r.department,
             group_head: r.group_head,
             planned1: r.planned1,
             actual1: r.actual1,
             status: r.status || 'Pending',
-            given_qty: r.given_qty ? String(r.given_qty) : '0'
+            given_qty: r.given_qty || 0,
+            firm_name_match: r.firm_name_match || ''
         }));
 
         const { data, error } = await supabase

@@ -58,8 +58,8 @@ export default function POHistory() {
                     .select('*')
                     .order('timestamp', { ascending: false });
 
-                if (user?.firmNameMatch?.toLowerCase() !== 'all') {
-                    poQuery = poQuery.eq('firm_name_match', user.firmNameMatch);
+                if ((user?.firmNameMatch || '').trim().toLowerCase() !== 'all') {
+                    poQuery = poQuery.eq('firm_name_match', (user?.firmNameMatch || '').trim());
                 }
 
                 const { data: poMasterData, error: poError } = await poQuery;

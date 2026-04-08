@@ -1249,8 +1249,7 @@ export default function GetPurchase() {
                                                                             type="number"
                                                                             {...field}
                                                                             value={field.value || 0}
-                                                                            className="h-11 bg-muted cursor-not-allowed font-semibold"
-                                                                            readOnly
+                                                                            className="h-11 font-semibold"
                                                                         />
                                                                     </FormControl>
                                                                 </FormItem>

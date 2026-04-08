@@ -30,7 +30,7 @@ export async function fetchUsers(): Promise<UserRecord[]> {
                 username: r.user_name || '',
                 password: r.password || '',
                 name: r.name || '',
-                firmNameMatch: r.firm_name_match || '',
+                firmNameMatch: (r.firm_name_match || '').trim(),
                 rowIndex: r.id, // Using ID as a fallback for rowIndex since it's used in and out of tables
             };
 
@@ -61,7 +61,7 @@ export async function createUser(userData: Partial<UserPermissions>) {
             user_name: userData.username,
             name: userData.name,
             password: userData.password,
-            firm_name_match: userData.firmNameMatch || '',
+            firm_name_match: (userData.firmNameMatch || '').trim(),
             timestamp: new Date().toISOString(),
         };
 
@@ -95,7 +95,7 @@ export async function updateUser(id: number, userData: Partial<UserPermissions>)
             user_name: userData.username,
             name: userData.name,
             password: userData.password,
-            firm_name_match: userData.firmNameMatch || '',
+            firm_name_match: (userData.firmNameMatch || '').trim(),
         };
 
         // Map camelCase permissions to snake_case for DB
@@ -165,7 +165,7 @@ export async function authenticateUser(username: string, password: string): Prom
             username: r.user_name || '',
             password: r.password || '',
             name: r.name || '',
-            firmNameMatch: r.firm_name_match || '',
+            firmNameMatch: (r.firm_name_match || '').trim(),
             rowIndex: r.id,
         };
 
@@ -208,7 +208,7 @@ export async function getUserByUsername(username: string): Promise<UserRecord | 
             username: r.user_name || '',
             password: r.password || '',
             name: r.name || '',
-            firmNameMatch: r.firm_name_match || '',
+            firmNameMatch: (r.firm_name_match || '').trim(),
             rowIndex: r.id,
         };
 

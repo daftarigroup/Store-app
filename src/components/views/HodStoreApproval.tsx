@@ -117,7 +117,7 @@ export default () => {
 
     useEffect(() => {
         const filteredByFirm = storeInRecords.filter((item) =>
-            user.firmNameMatch?.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch
+            (user.firmNameMatch || '').trim().toLowerCase() === "all" || (item.firmNameMatch || '').trim() === (user.firmNameMatch || '').trim()
         );
 
         setPendingData(

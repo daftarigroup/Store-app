@@ -50,7 +50,7 @@ export default function AgainAuditingTable() {
 
       // Filter by Project Name and status (planned5 exists, actual5 is empty)
       const filtered = records.filter(item => {
-        const firmMatch = user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch;
+        const firmMatch = (user.firmNameMatch || '').trim().toLowerCase() === "all" || (item.firmNameMatch || '').trim() === (user.firmNameMatch || '').trim();
         const stageMatch = item.planned5 && !item.actual5;
         return firmMatch && stageMatch;
       });

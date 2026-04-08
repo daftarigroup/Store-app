@@ -72,7 +72,7 @@ export default () => {
 
             // Filter by Project Name match
             const filteredByFirm = data.filter(item =>
-                user.firmNameMatch.toLowerCase() === "all" || item.firm_name_match === user.firmNameMatch
+                (user.firmNameMatch || '').trim().toLowerCase() === "all" || (item.firm_name_match || '').trim() === (user.firmNameMatch || '').trim()
             );
 
             // Filter where indentType is 'Store Out'
