@@ -46,9 +46,7 @@ export default function IssueData() {
         try {
             const records = await fetchIssueRecords();
             // Filter by Project Name
-            const filteredByFirm = records.filter(item => {
-                return (user.firmNameMatch || '').trim().toLowerCase() === "all" || (item.firm_name_match || '').trim() === (user.firmNameMatch || '').trim();
-            });
+            const filteredByFirm = records;
             setAllData(filteredByFirm);
         } catch (error) {
             console.error('Failed to fetch issue records:', error);
@@ -210,9 +208,9 @@ export default function IssueData() {
         <div>
             <Dialog open={openDialog} onOpenChange={setOpenDialog}>
                 <Tabs defaultValue="pending">
-                    <Heading 
-                        heading="Issue Data" 
-                        subtext="Update Issue Data" 
+                    <Heading
+                        heading="Issue Data"
+                        subtext="Update Issue Data"
                         tabs
                         pendingCount={pendingData.length}
                         historyCount={historyData.length}
@@ -224,7 +222,7 @@ export default function IssueData() {
                         <DataTable
                             data={pendingData}
                             columns={columns}
-                            searchFields={['product_name', 'department', 'issue_no', 'issue_to', 'firm_name_match']}
+                            searchFields={['product_name', 'department', 'issue_no', 'issue_to']}
                             dataLoading={dataLoading}
                             extraActions={
                                 <Button
@@ -252,7 +250,7 @@ export default function IssueData() {
                         <DataTable
                             data={historyData}
                             columns={historyColumns}
-                            searchFields={['product_name', 'department', 'issue_no', 'issue_to', 'firm_name_match']}
+                            searchFields={['product_name', 'department', 'issue_no', 'issue_to']}
                             dataLoading={dataLoading}
                         />
                     </TabsContent>
