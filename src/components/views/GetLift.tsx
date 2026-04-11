@@ -73,6 +73,7 @@ interface HistoryData {
     product?: string;
     photoOfBill?: string;
     quantity?: number;
+    liftedQty?: number;
     pendingLiftQty?: number;
     receivedQty?: number;
     pendingPoQty?: number;
@@ -225,91 +226,69 @@ export default function GetPurchase() {
         setTableData(sortedData);
     }, [indentRecords, storeInRecords, user?.firmNameMatch]);
 
-    // Process history data
+    // Process history data independently
     useEffect(() => {
-        const filteredByFirm = indentRecords.filter(
+        const firmIndents = indentRecords.filter(
             (sheet) =>
                 user?.firmNameMatch?.toLowerCase() === 'all' ||
                 sheet.firmNameMatch === user?.firmNameMatch
         );
 
-        const completedIndents = filteredByFirm.filter((sheet) => {
-            return (
-                sheet.liftingStatus === 'Complete' &&
-                sheet.planned5 &&
-                sheet.planned5.toString().trim() !== ''
-            );
-        });
-
-        const indentDataMap = new Map(
-            completedIndents.map((sheet) => [
+        const indentMap = new Map(
+            firmIndents.map((sheet) => [
                 `${sheet.indentNumber?.toString() || ''}_${sheet.firmNameMatch || ''}`,
-                {
-                    poNumber: sheet.poNumber || '',
-                    poDate: sheet.actual4 ? formatDate(parseCustomDate(sheet.actual4)) : '',
-                    deliveryDate: sheet.deliveryDate
-                        ? formatDate(parseCustomDate(sheet.deliveryDate))
-                        : '',
-                    approvedVendorName: sheet.approvedVendorName || '',
-                    productName: sheet.productName || '',
-                    approvedQuantity: sheet.quantity || 0,
-                    pendingLiftQty: sheet.pendingQty || 0,
-                    firmNameMatch: sheet.firmNameMatch || '',
-                },
+                sheet
             ])
         );
 
-        const filteredStoreIn = storeInRecords.filter(
-            (sheet) =>
-                user?.firmNameMatch?.toLowerCase() === 'all' ||
-                sheet.firmNameMatch === user?.firmNameMatch
-        );
+        const firmStoreIn = storeInRecords
+            .filter(
+                (sheet) =>
+                    user?.firmNameMatch?.toLowerCase() === 'all' ||
+                    sheet.firmNameMatch === user?.firmNameMatch
+            )
+            .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
-        setHistoryData(
-            filteredStoreIn
-                .filter((sheet) => indentDataMap.has(`${sheet.indentNo || ''}_${sheet.firmNameMatch || ''}`))
-                .map((sheet) => {
-                    const indentData = indentDataMap.get(`${sheet.indentNo || ''}_${sheet.firmNameMatch || ''}`)!;
+        // Tracking cumulative totals per indent to show point-in-time history
+        const cumulativeTotals = new Map<string, number>();
 
-                    const indentRecord = completedIndents.find(
-                        (indent) => indent.indentNumber?.toString() === sheet.indentNo && indent.firmNameMatch === sheet.firmNameMatch
-                    );
+        const processedHistory = firmStoreIn.map((store) => {
+            const key = `${store.indentNo || ''}_${store.firmNameMatch || ''}`;
+            const indentMatch = indentMap.get(key);
+            
+            const approvedQty = Number(indentMatch?.approvedQuantity) || Number(indentMatch?.quantity) || 0;
+            const currentTotal = (cumulativeTotals.get(key) || 0) + (Number(store.qty) || 0);
+            cumulativeTotals.set(key, currentTotal);
+            
+            // Initial received quantity as a starting point if available
+            const initialReceived = Number(indentMatch?.receivedQuantity) || 0; 
+            const runningReceived = initialReceived + currentTotal;
+            const pendingAfterThisLift = Math.max(0, approvedQty - runningReceived);
 
-                    const approvedQty =
-                        Number(indentRecord?.approvedQuantity) || 0;
+            return {
+                indentNo: store.indentNo || '',
+                firmNameMatch: store.firmNameMatch || '',
+                vendorName: store.vendorName || indentMatch?.approvedVendorName || '-',
+                poNumber: store.poNumber || indentMatch?.poNumber || '-',
+                poDate: indentMatch?.actual4 ? formatDate(parseCustomDate(indentMatch.actual4)) : '-',
+                deliveryDate: indentMatch?.deliveryDate ? formatDate(parseCustomDate(indentMatch.deliveryDate)) : '-',
+                product: store.productName || indentMatch?.productName || '-',
+                quantity: approvedQty,
+                liftedQty: Number(store.qty) || 0, // NEW: Specific lift quantity
+                pendingLiftQty: pendingAfterThisLift, // NEW: Remaining at that time
+                receivedQty: runningReceived,
+                pendingPoQty: pendingAfterThisLift,
+                photoOfBill: store.photoOfBill || '',
+                timestamp: store.timestamp || '',
+                department: indentMatch?.department || '-',
+                areaOfUse: indentMatch?.areaOfUse || '-',
+                approvedVendorName: indentMatch?.approvedVendorName || '-',
+                liftingStatus: indentMatch?.liftingStatus || 'Pending',
+            };
+        });
 
-                    const receivedQty = (Number(indentRecord?.receivedQuantity) || 0) + filteredStoreIn
-                        .filter((store) => store.indentNo === sheet.indentNo && store.firmNameMatch === sheet.firmNameMatch)
-                        .reduce(
-                            (sum, store) =>
-                                sum + (Number(store.qty) || 0),
-                            0
-                        );
-
-                    const pendingLift = approvedQty - receivedQty;
-
-                    return {
-                        indentNo: sheet.indentNo || '',
-                        firmNameMatch: indentData.firmNameMatch || sheet.firmNameMatch || '',
-                        vendorName: indentData.approvedVendorName || sheet.vendorName || '',
-                        poNumber: indentData.poNumber,
-                        poDate: indentData.poDate,
-                        deliveryDate: indentData.deliveryDate,
-                        product: indentData.productName,
-                        quantity: approvedQty,
-                        pendingLiftQty: pendingLift,
-                        receivedQty: receivedQty,
-                        pendingPoQty: Math.max(0, pendingLift),
-                        photoOfBill: sheet.photoOfBill || '',
-                        timestamp: sheet.timestamp || '',
-                        department: indentRecord?.department || '',
-                        areaOfUse: indentRecord?.areaOfUse || '',
-                        approvedVendorName: indentRecord?.approvedVendorName || '',
-                        liftingStatus: indentRecord?.liftingStatus || '',
-                    };
-                })
-                .sort((a, b) => b.indentNo.localeCompare(a.indentNo))
-        );
+        // Sort by timestamp descending for the UI
+        setHistoryData(processedHistory.reverse());
     }, [storeInRecords, indentRecords, user?.firmNameMatch]);
 
     // Creating table columns
@@ -470,19 +449,14 @@ export default function GetPurchase() {
             cell: ({ getValue }) => <div>{(getValue() as string) || '-'}</div>,
         },
         {
+            accessorKey: 'liftedQty',
+            header: 'Lifted Qty',
+            cell: ({ getValue }) => <div className="font-semibold text-primary">{(getValue() as number) || 0}</div>,
+        },
+        {
             accessorKey: 'pendingLiftQty',
-            header: 'Pending Lift Qty',
-            cell: ({ getValue }) => <div>{(getValue() as number) || 0}</div>,
-        },
-        {
-            accessorKey: 'receivedQty',
-            header: 'Received Qty',
-            cell: ({ getValue }) => <div>{(getValue() as number) || 0}</div>,
-        },
-        {
-            accessorKey: 'pendingPoQty',
-            header: 'Pending PO Qty',
-            cell: ({ getValue }) => <div>{(getValue() as number) || 0}</div>,
+            header: 'Remaining Qty',
+            cell: ({ getValue }) => <div className="font-medium">{(getValue() as number) || 0}</div>,
         },
     ];
 

@@ -35,9 +35,12 @@ export interface GetLiftIndentRecord {
 }
 
 export interface GetLiftStoreInRecord {
+    liftNumber: string;
     indentNo: string;
     firmNameMatch: string;
     vendorName: string;
+    productName: string;
+    poNumber: string;
     receivedQuantity: number;
     qty: number;
     photoOfBill: string;
@@ -151,6 +154,8 @@ export async function fetchStoreInRecords() {
             indentNo: r.indent_no || '',
             firmNameMatch: r.firm_name_match || '',
             vendorName: r.vendor_name || '',
+            productName: r.product_name || '',
+            poNumber: r.po_number || '',
             qty: Number(r.qty) || 0,
             receivedQuantity: Number(r.received_quantity) || 0,
             photoOfBill: r.photo_of_bill || '',
