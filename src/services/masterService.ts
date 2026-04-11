@@ -193,3 +193,39 @@ export async function insertMasterData(data: Record<string, any>): Promise<{ suc
         return { success: false, error };
     }
 }
+
+/**
+ * Update an existing record in the master table
+ */
+export async function updateMasterData(createdAt: string, data: Record<string, any>): Promise<{ success: boolean; error?: any }> {
+    try {
+        const { error } = await supabase
+            .from('master')
+            .update(data)
+            .eq('created_at', createdAt);
+
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        console.error('Error updating master data:', error);
+        return { success: false, error };
+    }
+}
+
+/**
+ * Delete a record from the master table
+ */
+export async function deleteMasterData(createdAt: string): Promise<{ success: boolean; error?: any }> {
+    try {
+        const { error } = await supabase
+            .from('master')
+            .delete()
+            .eq('created_at', createdAt);
+
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        console.error('Error deleting master data:', error);
+        return { success: false, error };
+    }
+}
