@@ -172,7 +172,7 @@ export default ({ items }: SidebarProps) => {
                                         >
                                             <div className="flex gap-4 items-center min-w-0">
                                                 <div className="shrink-0 flex items-center justify-center w-6">{item.icon}</div>
-                                                <span className="group-data-[collapsible=icon]:hidden truncate">{item.name}</span>
+                                                <span className="group-data-[collapsible=icon]:hidden">{item.name}</span>
                                             </div>
                                             {/* ✅ SHOW BADGE WITH CORRECT COUNT */}
                                             {notificationCount !== 0 && (

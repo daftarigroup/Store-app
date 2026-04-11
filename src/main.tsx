@@ -53,7 +53,7 @@ import {
     FileWarning,
 } from 'lucide-react';
 import type { UserPermissions } from './types/sheets';
-import Administration from './components/views/Administration';
+import ManageUsers from './components/views/ManageUsers';
 import Loading from './components/views/Loading';
 import CreatePO from './components/views/CreatePO';
 import PendingIndents from './components/views/PendingIndents';
@@ -894,11 +894,11 @@ const routes: RouteAttributes[] = [
         },
     },
     {
-        path: 'administration',
+        path: 'manage-users',
         gateKey: 'administrate',
-        name: 'Adminstration',
-        icon: <ShieldUser size={20} />,
-        element: <Administration />,
+        name: 'Manage Users',
+        icon: <Users size={20} />,
+        element: <ManageUsers />,
         notifications: () => 0,
     },
     {
