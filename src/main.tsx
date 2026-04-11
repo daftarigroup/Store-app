@@ -51,6 +51,7 @@ import {
     Send,
     BarChart,
     FileWarning,
+    FileSpreadsheet,
 } from 'lucide-react';
 import type { UserPermissions } from './types/sheets';
 import ManageUsers from './components/views/ManageUsers';
@@ -79,6 +80,7 @@ import FullKiting from './components/views/FullKiting';
 import PendingPo from './components/views/PendingPo';
 import PaymentStatus from './components/views/PaymentStatus';
 import HodStoreApproval from './components/views/HodStoreApproval';
+import MasterManagement from './components/views/MasterManagement';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
     const { loggedIn, loading } = useAuth();
@@ -899,6 +901,14 @@ const routes: RouteAttributes[] = [
         name: 'Manage Users',
         icon: <Users size={20} />,
         element: <ManageUsers />,
+        notifications: () => 0,
+    },
+    {
+        path: 'master-registry',
+        gateKey: 'administrate',
+        name: 'Master Registry',
+        icon: <FileSpreadsheet size={20} />,
+        element: <MasterManagement />,
         notifications: () => 0,
     },
     {

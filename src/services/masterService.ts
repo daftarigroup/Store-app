@@ -160,15 +160,31 @@ export async function fetchMasterOptions(): Promise<MasterData> {
 }
 
 /**
+ * Fetch all raw records from the master table
+ */
+export async function fetchMasterRecords() {
+    try {
+        const { data, error } = await supabase
+            .from('master')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return data || [];
+    } catch (error) {
+        console.error('Error fetching master records:', error);
+        throw error;
+    }
+}
+
+/**
  * Insert a new record into the master table
  */
-export async function insertMasterData(columnName: string, value: string): Promise<{ success: boolean; error?: any }> {
+export async function insertMasterData(data: Record<string, any>): Promise<{ success: boolean; error?: any }> {
     try {
         const { error } = await supabase
             .from('master')
-            .insert({
-                [columnName]: value
-            });
+            .insert(data);
 
         if (error) throw error;
         return { success: true };
