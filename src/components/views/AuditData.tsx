@@ -1209,7 +1209,7 @@ export default function PcReportTable() {
                                 <div className="flex gap-4 text-xs text-muted-foreground">
                                   <span>Qty: <strong className="text-gray-700">{item.qty}</strong></span>
                                   {Number(item.billAmt) !== Number(item.totalRate) && (
-                                    <span>Bill Amt: <strong className="text-gray-700">₹{item.billAmt}</strong></span>
+                                    <span>Bill Amt: <strong className="text-gray-700">₹{Number(item.billAmt).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
                                   )}
                                   <span>Indent: <strong className="text-gray-700">{item.indentNumber}</strong></span>
                                 </div>
@@ -1243,7 +1243,7 @@ export default function PcReportTable() {
                                   </div>
                                   <div>
                                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Bill Amount</p>
-                                    <p className="text-sm font-bold text-green-700">₹{Number(item.billAmt).toLocaleString()}</p>
+                                    <p className="text-sm font-bold text-green-700">₹{Number(item.billAmt).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                   </div>
 
                                   {/* Quality Checks */}
@@ -1341,7 +1341,7 @@ export default function PcReportTable() {
                     </div>
                     <div className="space-y-0.5">
                       <p className="text-[10px] font-bold uppercase opacity-70">Total Amount</p>
-                      <p className="text-lg font-black tracking-tight">₹{selectedRow.billAmtSummarized || selectedRow.billAmt}</p>
+                      <p className="text-lg font-black tracking-tight">₹{(selectedRow.billAmtSummarized || selectedRow.billAmt || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                     </div>
                     <div className="space-y-0.5">
                       <p className="text-[10px] font-bold uppercase opacity-70">Project Name</p>

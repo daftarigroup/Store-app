@@ -225,72 +225,24 @@ export default () => {
             user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch
         );
 
-        // Filter to keep only the latest record per Indent and Product
-        const latestRecords: any[] = [];
-        const seen = new Set<string>();
+        // Filter for pending items (planned6 set, actual6 empty)
+        const pendingItems = filteredByFirm.filter(
+            (i) => i.planned6 !== '' && i.actual6 === '' && 
+            (i.billStatus === 'Bill Received' || i.billStatus === 'Not Received')
+        );
 
-        for (const item of filteredByFirm) {
-            const key = `${item.indentNo}-${item.productName}`;
-            if (!seen.has(key)) {
-                seen.add(key);
-                latestRecords.push(item);
-            }
-        }
-
-        // Group by Vendor + Bill No
-        const groupedMap = new Map<string, any>();
-
-        const pendingItems = latestRecords.filter((i) => i.planned6 !== '' && i.actual6 === '' && (i.billStatus === 'Bill Received' || i.billStatus === 'Not Received'));
-
-        pendingItems.forEach((i) => {
-            const billNo = String(i.billNo || '');
-            const key = `${i.vendorName}-${billNo}`;
-
-            if (!groupedMap.has(key)) {
-                groupedMap.set(key, {
-                    liftNumber: i.liftNumber || '',
-                    indentNo: i.indentNo || '',
-                    billNo: billNo,
-                    vendorName: i.vendorName || '',
-                    productName: i.productName || '',
-                    qty: 0,
-                    typeOfBill: i.typeOfBill || '',
-                    billAmount: i.billAmount || 0,
-                    amount: i.amount || 0,
-                    paymentType: i.paymentType || '',
-                    advanceAmountIfAny: Number(i.advanceAmountIfAny) || 0,
-                    photoOfBill: i.photoOfBill || '',
-                    transportationInclude: i.transportationInclude || '',
-                    transporterName: i.transporterName || '',
-                    poDate: i.poDate || '',
-                    poNumber: i.poNumber || '',
-                    vendor: i.vendor || '',
-                    indentNumber: i.indentNumber || '',
-                    product: i.product || '',
-                    uom: i.uom || '',
-                    poCopy: i.poCopy || '',
-                    billStatus: i.billStatus || '',
-                    leadTimeToLiftMaterial: i.leadTimeToLiftMaterial || 0,
-                    discountAmount: i.discountAmount || 0,
-                    firmNameMatch: i.firmNameMatch || '',
-                    planned6Date: i.planned6 || '',
-                    timestamp: i.timestamp || '',
-                    priceAsPerPo: i.priceAsPerPo || 0,
-                    remark: i.remark || '',
-                    products: [],
-                    indentNumbers: [],
-                    originalItems: []
-                });
-            }
-
-            const group = groupedMap.get(key);
-            group.qty += Number(i.qty) || 0;
-            group.products.push(i.productName);
-            group.indentNumbers.push(i.indentNo);
-            group.originalItems.push(i);
-        });
-
-        setTableData(Array.from(groupedMap.values()));
+        // Map each pending record individually (previously grouped by bill)
+        setTableData(pendingItems.map(i => ({
+            ...i,
+            billNo: String(i.billNo || ''),
+            qty: Number(i.qty) || 0,
+            advanceAmountIfAny: Number(i.advanceAmountIfAny) || 0,
+            planned6Date: i.planned6 || '',
+            // Populate arrays with single item data to maintain compatibility with the Store-In dialog
+            products: [i.productName || ''],
+            indentNumbers: [i.indentNo || ''],
+            originalItems: [i]
+        })));
     }, [storeInRecords, user.firmNameMatch]);
 
     // Process history data
@@ -299,63 +251,52 @@ export default () => {
             user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch
         );
 
-        // Filter to keep only the latest record per Indent and Product
-        const latestRecords: any[] = [];
-        const seen = new Set<string>();
-
-        for (const item of filteredByFirm) {
-            const key = `${item.indentNo}-${item.productName}`;
-            if (!seen.has(key)) {
-                seen.add(key);
-                latestRecords.push(item);
-            }
-        }
+        // Display every record where store check is complete (actual6 set)
+        const historyItems = filteredByFirm.filter((i) => i.actual6 !== '');
 
         setHistoryData(
-            latestRecords
-                .filter((i) => i.actual6 !== '')
-                .map((i) => ({
-                    liftNumber: i.liftNumber || '',
-                    indentNo: i.indentNo || '',
-                    billNo: String(i.billNo) || '',
-                    vendorName: i.vendorName || '',
-                    productName: i.productName || '',
-                    qty: i.qty || 0,
-                    typeOfBill: i.typeOfBill || '',
-                    billAmount: i.billAmount || 0,
-                    paymentType: i.paymentType || '',
-                    advanceAmountIfAny: Number(i.advanceAmountIfAny) || 0,
-                    photoOfBill: i.photoOfBill || '',
-                    transportationInclude: i.transportationInclude || '',
-                    transporterName: i.transporterName || '',
-                    amount: i.amount || 0,
-                    billStatus: i.billStatus || '',
-                    receivedQuantity: i.receivedQuantity || 0,
-                    photoOfProduct: i.photoOfProduct || '',
-                    unitOfMeasurement: i.unitOfMeasurement || '',
-                    damageOrder: i.damageOrder || '',
-                    quantityAsPerBill: i.quantityAsPerBill || '',
-                    priceAsPerPoCheck: i.priceAsPerPoCheck || '',
-                    priceAsPerPo: i.priceAsPerPo || 0,
-                    remark: i.remark || '',
-                    poDate: i.poDate || '',
-                    poNumber: i.poNumber || '',
-                    receiveStatus: i.receivingStatus || '',
-                    vendor: i.vendorName || '',
-                    product: i.productName || '',
-                    orderQuantity: i.qty || 0,
-                    receivedDate: i.timestamp ? formatDateTime(parseCustomDate(i.timestamp)) : '',
-                    billNumber: i.billNumber || String(i.billNo) || '',
-                    anyTransport: i.transportationInclude || '',
-                    transportingAmount: i.amount || 0,
-                    timestamp: i.timestamp ? formatDateTime(parseCustomDate(i.timestamp)) : '',
-                    leadTimeToLiftMaterial: i.leadTimeToLiftMaterial || 0,
-                    discountAmount: i.discountAmount || 0,
-                    billReceived: i.billStatus || '',
-                    billImage: i.photoOfBill || '',
-                    firmNameMatch: i.firmNameMatch || '',
-                    planned6Date: i.planned6 || '',
-                }))
+            historyItems.map((i) => ({
+                liftNumber: i.liftNumber || '',
+                indentNo: i.indentNo || '',
+                billNo: String(i.billNo) || '',
+                vendorName: i.vendorName || '',
+                productName: i.productName || '',
+                qty: i.qty || 0,
+                typeOfBill: i.typeOfBill || '',
+                billAmount: i.billAmount || 0,
+                paymentType: i.paymentType || '',
+                advanceAmountIfAny: Number(i.advanceAmountIfAny) || 0,
+                photoOfBill: i.photoOfBill || '',
+                transportationInclude: i.transportationInclude || '',
+                transporterName: i.transporterName || '',
+                amount: i.amount || 0,
+                billStatus: i.billStatus || '',
+                receivedQuantity: i.receivedQuantity || 0,
+                photoOfProduct: i.photoOfProduct || '',
+                unitOfMeasurement: i.unitOfMeasurement || '',
+                damageOrder: i.damageOrder || '',
+                quantityAsPerBill: i.quantityAsPerBill || '',
+                priceAsPerPoCheck: i.priceAsPerPoCheck || '',
+                priceAsPerPo: i.priceAsPerPo || 0,
+                remark: i.remark || '',
+                poDate: i.poDate || '',
+                poNumber: i.poNumber || '',
+                receiveStatus: i.receivingStatus || '',
+                vendor: i.vendorName || '',
+                product: i.productName || '',
+                orderQuantity: i.qty || 0,
+                receivedDate: i.timestamp ? formatDateTime(parseCustomDate(i.timestamp)) : '',
+                billNumber: i.billNumber || String(i.billNo) || '',
+                anyTransport: i.transportationInclude || '',
+                transportingAmount: i.amount || 0,
+                timestamp: i.timestamp ? formatDateTime(parseCustomDate(i.timestamp)) : '',
+                leadTimeToLiftMaterial: i.leadTimeToLiftMaterial || 0,
+                discountAmount: i.discountAmount || 0,
+                billReceived: i.billStatus || '',
+                billImage: i.photoOfBill || '',
+                firmNameMatch: i.firmNameMatch || '',
+                planned6Date: i.planned6 || '',
+            }))
         );
     }, [storeInRecords, user.firmNameMatch]);
 
@@ -420,7 +361,11 @@ export default () => {
                 );
             }
         },
-        { accessorKey: 'billAmount', header: 'Bill Amount' },
+        { 
+            accessorKey: 'billAmount', 
+            header: 'Bill Amount',
+            cell: ({ getValue }) => <div className="font-medium">₹ {(getValue() as number || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+        },
         { accessorKey: 'discountAmount', header: 'Discount Amount' },
         { accessorKey: 'qty', header: 'Qty' },
         { accessorKey: 'leadTimeToLiftMaterial', header: 'Lead Time To Lift' },
@@ -468,7 +413,11 @@ export default () => {
         { accessorKey: 'qty', header: 'Qty' },
         { accessorKey: 'leadTimeToLiftMaterial', header: 'Lead Time To Lift', cell: textWrapCell },
         { accessorKey: 'typeOfBill', header: 'Type Of Bill', cell: textWrapCell },
-        { accessorKey: 'billAmount', header: 'Bill Amount' },
+        { 
+            accessorKey: 'billAmount', 
+            header: 'Bill Amount',
+            cell: ({ getValue }) => <div className="font-medium">₹ {(getValue() as number || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+        },
         { accessorKey: 'discountAmount', header: 'Discount' },
         { accessorKey: 'paymentType', header: 'Payment Type', cell: textWrapCell },
         { accessorKey: 'advanceAmountIfAny', header: 'Advance' },
@@ -745,7 +694,7 @@ export default () => {
                                             </div>
                                             <div className="flex flex-col">
                                                 <span className="text-[10px] uppercase font-bold text-primary/70 tracking-wider">Bill Amount</span>
-                                                <span className="text-sm font-bold text-primary">₹{selectedIndent.billAmount?.toLocaleString('en-IN') || '0'}</span>
+                                                <span className="text-sm font-bold text-primary">₹{selectedIndent.billAmount?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}</span>
                                             </div>
                                         </div>
                                     </div>
