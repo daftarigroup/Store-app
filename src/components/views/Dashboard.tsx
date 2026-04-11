@@ -665,7 +665,7 @@ export default function Dashboard() {
                                             return;
                                         }
                                         setIsInserting(true);
-                                        const result = await insertMasterData(masterColumn, masterValue);
+                                        const result = await insertMasterData({ [masterColumn]: masterValue });
                                         setIsInserting(false);
                                         if (result.success) {
                                             toast.success('Data added to master table successfully');
