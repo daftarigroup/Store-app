@@ -183,7 +183,7 @@ const schema = z.object({
             rate: z.coerce.number().optional(),
         })
     ),
-    terms: z.array(z.string().nonempty()).max(10),
+    terms: z.array(z.string().nonempty()),
     deliveryDate: z.coerce.date(),
     deliveryDays: z.coerce.number().optional(),
     deliveryType: z.enum(['for', 'exfactory']).optional(),
@@ -548,25 +548,11 @@ const CreatePO = () => {
         const matchingIndents = indentSheet.filter(i => i.approvedVendorName === values.supplierName);
         const projectName = matchingIndents[0]?.firmNameMatch || matchingIndents[0]?.firmName || 'Project Name';
 
-        // Parse terms from details.defaultTerms
-        const rawTermsString = (details?.defaultTerms || []).join('\n');
-        const parsedTerms = rawTermsString
-            .split('||')
-            .map(term => {
-                let cleaned = term.trim();
-                // Remove leading/trailing junk: single quotes, literal \n, pipes, and whitespace
-                cleaned = cleaned.replace(/^['\s\\n|]+|['\s\\n|]+$/g, '');
-                // Replace remaining literal \n with actual newlines if intended, 
-                // but usually for these terms they are just artifacts. 
-                // For now, let's keep it simple and just clean them.
-                cleaned = cleaned.replace(/\\n/g, '\n').trim();
-                return cleaned;
-            })
-            .filter(text => text.length > 2) // Filter out items that are effectively empty or just junk
-            .map((text, index) => ({
-                num: (index + 1).toString(),
-                text: text
-            }));
+        // Parse terms from form values
+        const parsedTerms = values.terms.map((text, index) => ({
+            num: (index + 1).toString(),
+            text: text
+        }));
 
         return {
             companyName: details?.companyName || 'Pooja Constructions',
@@ -637,22 +623,11 @@ const CreatePO = () => {
             const matchingIndentsFromSheet = indentSheet.filter(i => i.approvedVendorName === values.supplierName);
             const projectName = matchingIndentsFromSheet[0]?.firmNameMatch || matchingIndentsFromSheet[0]?.firmName || 'Project Name';
 
-            // Parse terms from details.defaultTerms
-            const rawTermsString = (details?.defaultTerms || []).join('\n');
-            const parsedTerms = rawTermsString
-                .split('||')
-                .map(term => {
-                    let cleaned = term.trim();
-                    // Remove leading/trailing junk: single quotes, literal \n, pipes, and whitespace
-                    cleaned = cleaned.replace(/^['\s\\n|]+|['\s\\n|]+$/g, '');
-                    cleaned = cleaned.replace(/\\n/g, '\n').trim();
-                    return cleaned;
-                })
-                .filter(text => text.length > 2) // Filter out items that are effectively empty or just junk
-                .map((text, index) => ({
-                    num: (index + 1).toString(),
-                    text: text
-                }));
+            // Parse terms from form values
+            const parsedTerms = values.terms.map((text, index) => ({
+                num: (index + 1).toString(),
+                text: text
+            }));
 
             const pdfProps: POPdfProps = {
                 companyName: details?.companyName || 'Pooja Constructions',
@@ -801,7 +776,8 @@ const CreatePO = () => {
         }
     }
 
-    function onError() {
+    function onError(errors: any) {
+        console.error('Form validation errors:', errors);
         toast.error('Please fill all required fields');
     }
 
