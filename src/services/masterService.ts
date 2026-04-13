@@ -12,6 +12,7 @@ export interface MasterData {
         address: string;
         email: string;
         paymentTerm: string;
+        personName: string;
     }[];
     vendorNames: string[];
     paymentTerms: string[];
@@ -20,6 +21,7 @@ export interface MasterData {
     products: Record<string, string[]>;
     companyName: string;
     companyAddress: string;
+    companyEmail: string;
     companyGstin: string;
     companyPhone: string;
     billingAddress: string;
@@ -65,6 +67,7 @@ export async function fetchMasterOptions(): Promise<MasterData> {
                 address: r.vendor_address || '',
                 email: r.vendor_email || '',
                 paymentTerm: r.payment_term || '',
+                personName: r.person_name || '',
             }));
 
         // Deduplicate vendors by name
@@ -108,6 +111,15 @@ export async function fetchMasterOptions(): Promise<MasterData> {
             }
         });
 
+        // Fetch all default terms from all rows
+        const rawTerms = records
+            .map(r => r.default_terms)
+            .filter(Boolean)
+            .flatMap(termString => termString.split(/(?:\s*\|\|\s*|\\n+|\n+)/))
+            .map(term => term.trim())
+            .filter(term => term.length > 0);
+
+        const allTerms = Array.from(new Set(rawTerms));
         return {
             departments,
             groupHeads,
@@ -123,12 +135,13 @@ export async function fetchMasterOptions(): Promise<MasterData> {
             vendorNames,
             companyName: firstWithCompany.company_name || '',
             companyAddress: firstWithCompany.company_address || '',
+            companyEmail: firstWithCompany.company_email || '',
             companyGstin: firstWithCompany.company_gstin || '',
             companyPhone: firstWithCompany.company_phone || '',
             billingAddress: firstWithCompany.billing_address || '',
             companyPan: firstWithCompany.company_pan || '',
             destinationAddress: firstWithCompany.destination_address || '',
-            defaultTerms: firstWithCompany.default_terms ? firstWithCompany.default_terms.split('\n') : [],
+            defaultTerms: allTerms,
             firmCompanyMap,
         };
     } catch (error) {
@@ -148,6 +161,7 @@ export async function fetchMasterOptions(): Promise<MasterData> {
             vendorNames: [],
             companyName: '',
             companyAddress: '',
+            companyEmail: '',
             companyGstin: '',
             companyPhone: '',
             billingAddress: '',

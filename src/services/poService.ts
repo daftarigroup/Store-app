@@ -139,6 +139,7 @@ export async function fetchMasterData() {
                 companyPan: '',
                 companyAddress: '',
                 billingAddress: '',
+                paymentTerms: [],
             };
         }
 
@@ -173,9 +174,17 @@ export async function fetchMasterData() {
         // Company info (usually the first record or common values)
         const firstWithCompany = records.find(r => r.company_name) || {};
 
+        // Collect ALL default terms from ALL records (not just the first one)
+        const allDefaultTerms = new Set<string>();
+        records.forEach(r => {
+            if (r.default_terms) {
+                allDefaultTerms.add(r.default_terms);
+            }
+        });
+
         return {
             destinationAddress: firstWithCompany.destination_address || '',
-            defaultTerms: firstWithCompany.default_terms ? firstWithCompany.default_terms.split('\n') : [],
+            defaultTerms: Array.from(allDefaultTerms),
             vendors: uniqueVendors,
             firmCompanyMap,
             companyName: firstWithCompany.company_name || '',
@@ -275,9 +284,9 @@ export async function insertPoRecords(poRecords: any[]) {
 export async function updateIndentsAfterPoCreation(ids: number[], deliveryDate?: string, poNumber?: string) {
     try {
         const now = new Date().toISOString();
-        const updateData: any = { 
+        const updateData: any = {
             actual4: now,
-            planned5: now 
+            planned5: now
         };
         if (deliveryDate) {
             updateData.delivery_date = deliveryDate;

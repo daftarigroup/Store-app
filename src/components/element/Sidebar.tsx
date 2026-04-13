@@ -140,6 +140,9 @@ export default ({ items }: SidebarProps) => {
                                         case 'DBforPc':
                                             sheetData = pcReportSheet || [];
                                             break;
+                                        case 'get-lift':
+                                            sheetData = [indentSheet || [], storeInSheet || []];
+                                            break;
                                         default:
                                             sheetData = indentSheet || [];
                                     }

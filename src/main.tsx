@@ -360,23 +360,38 @@ const routes: RouteAttributes[] = [
         icon: <ArrowUpCircle size={20} />,
         element: <GetLift />,
         notifications: (sheetsData: any[], user: any) => {
-            const sheets = Array.isArray(sheetsData[0]) ? sheetsData[0] : sheetsData;
+            const indentSheet = Array.isArray(sheetsData[0]) ? sheetsData[0] : [];
+            const storeInSheet = Array.isArray(sheetsData[1]) ? sheetsData[1] : [];
 
             // Unique PO numbers that satisfy the criteria
             const uniquePOs = new Set<string>();
 
-            sheets.forEach((sheet: any) => {
+            indentSheet.forEach((sheet: any) => {
                 const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
                 const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || '').trim().toLowerCase();
                 const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
+
+                // Calculate received quantity dynamically as done in GetLift.tsx
+                const receivedQty = (Number(sheet.receivedQuantity) || 0) + storeInSheet
+                    .filter(
+                        (store: any) =>
+                            (store.indentNo === sheet.indentNumber?.toString() || store.indent_no === sheet.indentNumber?.toString()) &&
+                            (store.firmNameMatch === sheet.firmNameMatch || store.firm_name_match === sheet.firmNameMatch)
+                    )
+                    .reduce(
+                        (sum: number, store: any) =>
+                            sum + (Number(store.qty) || 0),
+                        0
+                    );
+
+                const approvedQtySafe = Number(sheet.approvedQuantity) || Number(sheet.quantity) || 0;
+                const pendingPoQty = (approvedQtySafe - receivedQty);
+
                 const hasPlanned5 = sheet.planned5 && sheet.planned5.toString().trim() !== '';
                 const hasNoActual5 = !sheet.actual5 || sheet.actual5.toString().trim() === '';
-                const isPending = sheet.liftingStatus === 'Pending' || !sheet.liftingStatus;
+                const isPending = sheet.liftingStatus === 'Pending' || sheet.liftingStatus === '' || !sheet.liftingStatus;
 
-                // pendingLiftQty is calculated in SheetsContext as (approved_quantity - received_quantity)
-                const hasPendingQty = (sheet.pendingLiftQty || (Number(sheet.approvedQuantity) - Number(sheet.receivedQuantity))) > 0;
-
-                if (isFirmMatch && hasPlanned5 && hasNoActual5 && isPending && hasPendingQty) {
+                if (isFirmMatch && hasPlanned5 && hasNoActual5 && isPending && pendingPoQty > 0) {
                     uniquePOs.add(sheet.poNumber || `NO_PO_${sheet.indentNumber}`);
                 }
             });
@@ -400,32 +415,15 @@ const routes: RouteAttributes[] = [
                 return userFirm === "all" || sheetFirm === userFirm;
             });
 
-            // Filter to keep only latest per indent+product (matching StoreIn.tsx line 228)
-            const latestRecords: any[] = [];
-            const seen = new Set<string>();
-            for (const item of filteredByFirm) {
-                const key = `${item.indentNo || item.indent_no}-${item.productName || item.product_name}`;
-                if (!seen.has(key)) {
-                    seen.add(key);
-                    latestRecords.push(item);
-                }
-            }
-
-            // Group by Vendor + Bill No (matching StoreIn.tsx line 241)
-            const uniqueGroupedKeys = new Set<string>();
-            const pendingItems = latestRecords.filter((i) =>
-                (i.planned6 || i.planned_6) && (i.planned6 || i.planned_6) !== '' &&
-                (!i.actual6 && !i.actual_6) &&
+            // Filter for pending items (planned6 set, actual6 empty)
+            // Matching StoreIn.tsx line 228
+            const pendingItems = filteredByFirm.filter(
+                (i) => (i.planned6 || i.planned_6) && (i.planned6 || i.planned_6) !== '' && 
+                (!i.actual6 && !i.actual_6) && 
                 ((i.billStatus || i.bill_status) === 'Bill Received' || (i.billStatus || i.bill_status) === 'Not Received')
             );
 
-            pendingItems.forEach((i) => {
-                const billNo = String(i.billNo || i.bill_no || '');
-                const key = `${i.vendorName || i.vendor_name}-${billNo}`;
-                uniqueGroupedKeys.add(key);
-            });
-
-            return uniqueGroupedKeys.size;
+            return pendingItems.length;
         },
     },
     {

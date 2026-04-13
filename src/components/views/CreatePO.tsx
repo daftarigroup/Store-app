@@ -140,6 +140,7 @@ interface MasterDetails {
         gstin?: string;
         vendorEmail?: string;
         email?: string;
+        personName?: string;
     }>;
     firmCompanyMap?: Record<string, {
         companyName?: string;
@@ -151,6 +152,7 @@ interface MasterDetails {
     companyPhone?: string;
     companyGstin?: string;
     companyPan?: string;
+    companyEmail?: string;
     companyAddress?: string;
     billingAddress?: string;
 }
@@ -527,7 +529,7 @@ const CreatePO = () => {
     };
 
     const getLogoBase64 = async (): Promise<string> => {
-        return '';
+        return '/logo.jpeg';
     };
 
     async function generatePreviewData(): Promise<POPdfProps> {
@@ -542,36 +544,58 @@ const CreatePO = () => {
             }))
         );
 
+        const selectedVendor = details?.vendors?.find(v => v.vendorName === values.supplierName);
+        const matchingIndents = indentSheet.filter(i => i.approvedVendorName === values.supplierName);
+        const projectName = matchingIndents[0]?.firmNameMatch || matchingIndents[0]?.firmName || 'Project Name';
+
+        // Parse terms from details.defaultTerms
+        const rawTermsString = (details?.defaultTerms || []).join('\n');
+        const parsedTerms = rawTermsString
+            .split('||')
+            .map(term => {
+                let cleaned = term.trim();
+                // Remove leading/trailing junk: single quotes, literal \n, pipes, and whitespace
+                cleaned = cleaned.replace(/^['\s\\n|]+|['\s\\n|]+$/g, '');
+                // Replace remaining literal \n with actual newlines if intended, 
+                // but usually for these terms they are just artifacts. 
+                // For now, let's keep it simple and just clean them.
+                cleaned = cleaned.replace(/\\n/g, '\n').trim();
+                return cleaned;
+            })
+            .filter(text => text.length > 2) // Filter out items that are effectively empty or just junk
+            .map((text, index) => ({
+                num: (index + 1).toString(),
+                text: text
+            }));
+
         return {
-            companyName: 'Pooja Constructions',
-            companyPhone: '',
-            companyGstin: '',
-            companyPan: '',
-            companyAddress: 'Shri Ram Business Park , Block - I, 2nd floor , Room No. 213',
-            billingAddress: 'Pooja Constructions, Shri Ram Business Park , Block - C, 2nd floor , Room No. 212',
-            destinationAddress: destinationAddress || 'Pooja Constructions, Khasra No 297/2 & 297/6 Village AKoli, Near Tarpongi Toll Plaza, PO- Devri, Raipur - 493221 (CG)',
+            companyName: details?.companyName || 'Pooja Constructions',
+            companyAddress: details?.companyAddress || '',
+            companyPhone: details?.companyPhone || '',
+            companyEmail: details?.companyEmail || '',
+            companyGstin: details?.companyGstin || '',
             supplierName: values.supplierName,
             supplierAddress: values.supplierAddress,
             supplierGstin: values.gstin,
-            orderNumber: mode === 'create' ? values.poNumber : incrementPoRevision(values.poNumber, poMasterSheet),
-            orderDate: formatDate(values.poDate),
-            deliveryDate: formatDate(values.deliveryDate),
-            paymentTerms: values.paymentTerms,
-            numberOfDays: values.numberOfDays || 0,
-            description: values.description,
+            supplierContactPerson: selectedVendor?.personName || '',
+            supplierPhone: '', // Not in master table yet
+            supplierEmail: values.companyEmail || '',
+            poNumber: mode === 'create' ? values.poNumber : incrementPoRevision(values.poNumber, poMasterSheet),
+            poDate: formatDate(values.poDate),
+            projectName: projectName,
+            deliveryAddress: destinationAddress,
+            deliveryContactPerson: '', // Could be dynamic if we knew where to get it
+            deliveryPhone: '',
+            deliveryEmail: '',
             items: values.indents.map((item) => {
-                const indent = indentSheet.find((i: IndentSheetItem) => i.indentNumber === item.indentNumber);
+                const indent = indentSheet.find((i: IndentSheetItem) => i.id === item.id);
                 return {
-                    internalCode: indent?.indentNumber || item.indentNumber,
-                    quotationNumber: item.quotationNumber || '',
-                    product: item.productName || indent?.productName || '',
-                    description: item.specifications || indent?.specifications || '',
-                    quantity: item.quantity || 0,
+                    materialName: item.productName || indent?.productName || '',
+                    hsnCode: '', // Not in product list yet
                     unit: item.unit || '',
-                    rate: item.rate || 0,
-                    gst: item.gst || 0,
-                    discount: item.discount || 0,
-                    amount: calculateTotal(
+                    quantity: item.quantity || 0,
+                    unitRate: item.rate || 0,
+                    totalAmount: calculateTotal(
                         item.rate || 0,
                         item.gst || 0,
                         item.discount || 0,
@@ -579,25 +603,8 @@ const CreatePO = () => {
                     ),
                 };
             }),
-            total: calculateSubtotal(
-                values.indents.map((indent) => ({
-                    quantity: indent.quantity || 0,
-                    rate: indent.rate || 0,
-                    discountPercent: indent.discount || 0,
-                }))
-            ),
-            gstAmount: calculateTotalGst(
-                values.indents.map((indent) => ({
-                    quantity: indent.quantity || 0,
-                    rate: indent.rate || 0,
-                    discountPercent: indent.discount || 0,
-                    gstPercent: indent.gst,
-                }))
-            ),
-            grandTotal: grandTotal,
-            terms: values.terms,
-            preparedBy: user.username || 'Unknown',
-            approvedBy: 'Sayan Das',
+            totalAmount: grandTotal,
+            terms: parsedTerms,
             logo: await getLogoBase64(),
         };
     }
@@ -626,38 +633,55 @@ const CreatePO = () => {
             );
 
             const logoBase64 = await getLogoBase64();
+            const selectedVendor = details?.vendors?.find(v => v.vendorName === values.supplierName);
+            const matchingIndentsFromSheet = indentSheet.filter(i => i.approvedVendorName === values.supplierName);
+            const projectName = matchingIndentsFromSheet[0]?.firmNameMatch || matchingIndentsFromSheet[0]?.firmName || 'Project Name';
+
+            // Parse terms from details.defaultTerms
+            const rawTermsString = (details?.defaultTerms || []).join('\n');
+            const parsedTerms = rawTermsString
+                .split('||')
+                .map(term => {
+                    let cleaned = term.trim();
+                    // Remove leading/trailing junk: single quotes, literal \n, pipes, and whitespace
+                    cleaned = cleaned.replace(/^['\s\\n|]+|['\s\\n|]+$/g, '');
+                    cleaned = cleaned.replace(/\\n/g, '\n').trim();
+                    return cleaned;
+                })
+                .filter(text => text.length > 2) // Filter out items that are effectively empty or just junk
+                .map((text, index) => ({
+                    num: (index + 1).toString(),
+                    text: text
+                }));
 
             const pdfProps: POPdfProps = {
-                companyName: 'Pooja Constructions',
-                companyPhone: '+91 7223844007',
-                companyGstin: '',
-                companyPan: '',
-                companyAddress: 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212',
-                billingAddress: 'Pooja Constructions, Shri Ram Business Park , Block - C, 2nd floor , Room No. 212',
-                destinationAddress: destinationAddress || 'Pooja Constructions, Khasra No 297/2 & 297/6 Village AKoli, Near Tarpongi Toll Plaza, PO- Devri, Raipur - 493221 (CG)',
+                companyName: details?.companyName || 'Pooja Constructions',
+                companyAddress: details?.companyAddress || '',
+                companyPhone: details?.companyPhone || '',
+                companyEmail: details?.companyEmail || '',
+                companyGstin: details?.companyGstin || '',
                 supplierName: values.supplierName,
                 supplierAddress: values.supplierAddress,
                 supplierGstin: values.gstin,
-                orderNumber: poNumber,
-                orderDate: formatDate(values.poDate),
-                deliveryDate: formatDate(values.deliveryDate),
-                paymentTerms: values.paymentTerms,
-                numberOfDays: values.numberOfDays || 0,
-                description: values.description,
-
+                supplierContactPerson: selectedVendor?.personName || '',
+                supplierPhone: '',
+                supplierEmail: values.companyEmail || '',
+                poNumber: poNumber,
+                poDate: formatDate(values.poDate),
+                projectName: projectName,
+                deliveryAddress: destinationAddress,
+                deliveryContactPerson: '',
+                deliveryPhone: '',
+                deliveryEmail: '',
                 items: values.indents.map((item) => {
-                    const indent = indentSheet.find((i: IndentSheetItem) => i.indentNumber === item.indentNumber);
+                    const indent = indentSheet.find((i: IndentSheetItem) => i.id === item.id);
                     return {
-                        internalCode: indent?.indentNumber || item.indentNumber,
-                        quotationNumber: item.quotationNumber || '',
-                        product: item.productName || indent?.productName || '',
-                        description: item.specifications || indent?.specifications || '',
-                        quantity: item.quantity || 0,
+                        materialName: item.productName || indent?.productName || '',
+                        hsnCode: '',
                         unit: item.unit || '',
-                        rate: item.rate || 0,
-                        gst: item.gst || 0,
-                        discount: item.discount || 0,
-                        amount: calculateTotal(
+                        quantity: item.quantity || 0,
+                        unitRate: item.rate || 0,
+                        totalAmount: calculateTotal(
                             item.rate || 0,
                             item.gst || 0,
                             item.discount || 0,
@@ -665,26 +689,9 @@ const CreatePO = () => {
                         ),
                     };
                 }),
-                total: calculateSubtotal(
-                    values.indents.map((indent) => ({
-                        quantity: indent.quantity || 0,
-                        rate: indent.rate || 0,
-                        discountPercent: indent.discount || 0,
-                    }))
-                ),
-                gstAmount: calculateTotalGst(
-                    values.indents.map((indent) => ({
-                        quantity: indent.quantity || 0,
-                        rate: indent.rate || 0,
-                        discountPercent: indent.discount || 0,
-                        gstPercent: indent.gst,
-                    }))
-                ),
-                grandTotal: grandTotal,
-                terms: values.terms,
-                preparedBy: user.username || 'Unknown',
-                approvedBy: 'Sayan Das',
-                logo: logoBase64,
+                totalAmount: grandTotal,
+                terms: parsedTerms,
+                logo: logoBase64 || '/logo.jpeg',
             };
 
             const blob = await pdf(<POPdf {...pdfProps} />).toBlob();
@@ -827,14 +834,14 @@ const CreatePO = () => {
                             {/* Header Section */}
                             <div className="flex items-center justify-center gap-4 bg-blue-50 p-2 h-25 rounded">
                                 <div className="text-center">
-                                    <h1 className="text-2xl font-bold">
-                                        Pooja Constructions
+                                    <h1 className="text-2xl font-bold uppercase">
+                                        {details?.companyName || 'Pooja Constructions'}
                                     </h1>
                                     <div>
                                         <p className="text-sm">
-                                            Address:
+                                            Address: {details?.companyAddress || ''}
                                         </p>
-                                        <p className="text-sm">Phone No: +91 </p>
+                                        <p className="text-sm">Phone No: {details?.companyPhone || ''} </p>
                                     </div>
                                 </div>
                             </div>

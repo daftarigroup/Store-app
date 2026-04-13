@@ -381,7 +381,7 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
             const intervalId = setInterval(() => {
                 console.log('🔄 Auto-refreshing data...');
                 updateAll();
-            }, 30000); // 30,000 ms = 30 seconds
+            }, 5000); // 5,000 ms = 5 seconds
 
             return () => clearInterval(intervalId);
         } catch (e) {
