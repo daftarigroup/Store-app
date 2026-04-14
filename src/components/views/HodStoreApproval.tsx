@@ -186,10 +186,7 @@ export default () => {
             if (values.status === 'Approved' && !triggerStage7) {
                 // ✅ ONLY Insert into Payments if term is Advance-related
                 const terms = (selectedItem.paymentTerms || '').toString().toLowerCase();
-                const isAdvanceTerm = terms.includes('partly pi') || 
-                                     terms.includes('partly advance') || 
-                                     terms.includes('100% advance') ||
-                                     terms.includes('advance');
+                const isAdvanceTerm = terms.includes('advance') || terms.includes('pi');
 
                 if (isAdvanceTerm && selectedItem.transportationInclude !== 'Yes' && selectedItem.typeOfBill !== 'common') {
                     console.log('✅ Advance payment detected. Creating payment entry...');

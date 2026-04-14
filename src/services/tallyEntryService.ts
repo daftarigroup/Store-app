@@ -196,14 +196,14 @@ export async function updateTallyEntryRecord(
 }
 
 /**
- * Create a new tally entry record
- * @param record - Data to insert into tally_entry
+ * Create a new tally entry record, or update the existing one if lift_number already exists.
+ * @param record - Data to insert/upsert into tally_entry
  */
 export async function createTallyEntryRecord(record: Partial<TallyEntryRecord>) {
     try {
         const { error } = await supabase
             .from('tally_entry')
-            .insert([record]);
+            .upsert([record], { onConflict: 'lift_number', ignoreDuplicates: false });
 
         if (error) throw error;
         return true;

@@ -568,7 +568,7 @@ export default () => {
             gstPercent: 0,
             paymentTerm: '',
             advancePercent: 0,
-            deliveryTime: undefined,
+            deliveryTime: 0,
             make: '',
         },
     });
@@ -684,7 +684,7 @@ export default () => {
                     emailId: '',
                     quotationNo: '',
                     quotationDate: '',
-                    deliveryTime: undefined,
+                    deliveryTime: 0,
                     make: '',
                 },
                 {
@@ -697,7 +697,7 @@ export default () => {
                     emailId: '',
                     quotationNo: '',
                     quotationDate: '',
-                    deliveryTime: undefined,
+                    deliveryTime: 0,
                     make: '',
                 },
                 {
@@ -710,7 +710,7 @@ export default () => {
                     emailId: '',
                     quotationNo: '',
                     quotationDate: '',
-                    deliveryTime: undefined,
+                    deliveryTime: 0,
                     make: '',
                 },
             ],

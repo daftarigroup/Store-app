@@ -11,6 +11,17 @@ import { uploadFile } from '@/lib/fetchers';
 import { toast } from 'sonner';
 import { Checkbox } from '../ui/checkbox';
 import { formatDate, formatDateTime as formatTimestamp } from '@/lib/utils';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "../ui/dialog";
+import { Label } from "../ui/label";
+import { Textarea } from "../ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 
 interface PaymentsRecord {
     rowIndex?: number;
@@ -145,6 +156,12 @@ export default function MakePayment() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [originalData, setOriginalData] = useState<PaymentsRecord[]>([]);
     const [activeTab, setActiveTab] = useState('pending');
+    
+    // Payment Modal State
+    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    const [selectedPaymentItem, setSelectedPaymentItem] = useState<DisplayPayment | null>(null);
+    const [paymentModalStatus, setPaymentModalStatus] = useState('Paid');
+    const [paymentModalRemark, setPaymentModalRemark] = useState('');
 
     const [stats, setStats] = useState({
         total: 0,
@@ -263,11 +280,11 @@ export default function MakePayment() {
                         const status = String(sheet?.status || '').toLowerCase();
                         const isCompleted = status === 'completed';
 
-                        // Check payment terms: Only show if Partly Advance or Partly PI
+                        // Check payment terms: Show if term contains advance or PI (any variant)
                         const terms = String(sheet?.paymentTerms || '').toLowerCase();
-                        const isPartlyTerms = terms.includes('partly') && (terms.includes('advance') || terms.includes('pi'));
+                        const isAdvanceTerm = terms.includes('advance') || terms.includes('pi');
 
-                        if (!isPartlyTerms) {
+                        if (!isAdvanceTerm) {
                             return false;
                         }
 
@@ -570,6 +587,108 @@ export default function MakePayment() {
         }
     };
 
+    const handleSinglePaymentSubmit = async () => {
+        if (!selectedPaymentItem) return;
+
+        setIsSubmitting(true);
+        const isoNow = new Date().toISOString();
+        const currentDateOnly = isoNow.split('T')[0];
+
+        try {
+            // Prepare IDs and update payments table in Supabase
+            const ids = selectedPaymentItem.rowIds || [selectedPaymentItem.rowIndex];
+            
+            // Update payments rows
+            const { error: updateError } = await supabase
+                .from('payments')
+                .update({
+                    actual: currentDateOnly,
+                    status: 'Completed',
+                    status1: 'ok',
+                    payment_done: true
+                })
+                .in('id', ids);
+
+            if (updateError) {
+                console.error('❌ Supabase update error:', updateError);
+                toast.error('Failed to update payment status');
+                return;
+            }
+
+            // --- INSERT INTO PAYMENT_HISTORY ---
+            // Try to find the matching store_in record to get more metadata
+            const storeIn = storeInRecords.find(si =>
+                si.po_number === selectedPaymentItem.poNumber &&
+                (si.indent_no === selectedPaymentItem.internalCode || si.indent_number === selectedPaymentItem.internalCode)
+            );
+
+            // Auto-generate AP Payment Number (e.g., AP-7707)
+            const apPaymentNumber = `AP-${Math.floor(1000 + Math.random() * 9000)}`;
+
+            const historyRow = {
+                timestamp: isoNow,
+                ap_payment_number: apPaymentNumber,
+                status: paymentModalStatus,
+                unique_number: selectedPaymentItem.uniqueNo,
+                fms_name: selectedPaymentItem.firmNameMatch,
+                pay_to: selectedPaymentItem.partyName,
+                amount_to_be_paid: String(selectedPaymentItem.payAmount),
+                remarks: paymentModalRemark || `Payment completed for ${selectedPaymentItem.uniqueNo}`,
+                any_attachments: selectedPaymentItem.file || selectedPaymentItem.pdf || '',
+                timestamp1: isoNow,
+                planned: selectedPaymentItem.planned || '',
+                payment_terms: selectedPaymentItem.paymentTerms || '',
+                indent_no: selectedPaymentItem.internalCode,
+                po_number: selectedPaymentItem.poNumber,
+                product_name: selectedPaymentItem.product,
+                // Additional fields from store_in if found
+                lift_number: storeIn?.liftNumber || '',
+                bill_status: storeIn?.billStatus || '',
+                bill_no: String(storeIn?.billNo || ''),
+                qty: String(storeIn?.qty || ''),
+                vendor_name: storeIn?.vendorName || selectedPaymentItem.partyName,
+                type_of_bill: storeIn?.typeOfBill || '',
+                bill_amount: String(storeIn?.billAmount || ''),
+                discount_amount: String(storeIn?.discountAmount || ''),
+                payment_type: storeIn?.paymentType || '',
+                advance_amount_if_any: String(storeIn?.advanceAmountIfAny || ''),
+                photo_of_bill: storeIn?.photoOfBill || selectedPaymentItem.file || '',
+                transportation_include: storeIn?.transportationInclude || '',
+                transporter_name: storeIn?.transporterName || '',
+                amount: String(storeIn?.amount || ''),
+                lead_time_to_lift_material: String(storeIn?.leadTimeToLiftMaterial || ''),
+                vehicle_no: storeIn?.vehicleNo || '',
+                driver_name: storeIn?.driverName || '',
+                driver_mobile_no: storeIn?.driverMobileNo || '',
+                bill_remark: storeIn?.billRemark || paymentModalRemark || '',
+            };
+
+            const { error: historyError } = await supabase
+                .from('payment_history')
+                .insert([historyRow]);
+
+            if (historyError) {
+                console.warn('⚠️ Error inserting into payment_history:', historyError);
+                // We don't block the UI as the main payment update succeeded
+            }
+
+            toast.success(`Successfully recorded payment`);
+
+            // Refresh data
+            setIsPaymentModalOpen(false);
+            setTimeout(() => updateAll(), 800);
+            
+            // If the user wants to open the external form, we can do it here or via button in modal
+            // if (selectedPaymentItem.paymentForm) window.open(selectedPaymentItem.paymentForm, '_blank');
+            
+        } catch (error) {
+            console.error('❌ Error submitting payment:', error);
+            toast.error('Error updating payment.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     const pendingColumns: ColumnDef<DisplayPayment>[] = [
         {
             id: 'select',
@@ -607,10 +726,15 @@ export default function MakePayment() {
                             <Button
                                 variant="default"
                                 size="sm"
-                                onClick={() => window.open(item.paymentForm, '_blank')}
+                                onClick={() => {
+                                    setSelectedPaymentItem(item);
+                                    setPaymentModalRemark(item.remark || '');
+                                    setPaymentModalStatus('Paid');
+                                    setIsPaymentModalOpen(true);
+                                }}
                                 className="bg-green-600 hover:bg-green-700 shadow-sm"
                             >
-                                <ExternalLink className="mr-2 h-3 w-3" />
+                                <DollarSign className="mr-2 h-3 w-3" />
                                 Make Payment
                             </Button>
                         ) : (
@@ -1268,6 +1392,100 @@ export default function MakePayment() {
                     </CardContent>
                 </Card>
             </div>
+            
+            {/* Payment Confirmation Modal */}
+            <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
+                <DialogContent className="sm:max-w-[500px]">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <DollarSign className="h-5 w-5 text-green-600" />
+                            Confirm Payment Completion
+                        </DialogTitle>
+                        <DialogDescription>
+                            Please record the payment details for {selectedPaymentItem?.partyName}.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="grid gap-6 py-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="flex flex-col gap-1.5 p-3 bg-purple-50 rounded-lg border border-purple-100">
+                                <span className="text-[10px] font-bold text-purple-600 uppercase">Payment No.</span>
+                                <span className="font-semibold text-gray-800">{selectedPaymentItem?.uniqueNo}</span>
+                            </div>
+                            <div className="flex flex-col gap-1.5 p-3 bg-green-50 rounded-lg border border-green-100">
+                                <span className="text-[10px] font-bold text-green-600 uppercase">Amount</span>
+                                <span className="font-bold text-gray-800">₹{selectedPaymentItem?.payAmount.toLocaleString('en-IN')}</span>
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div className="grid gap-2">
+                                <Label htmlFor="status" className="text-sm font-semibold">Payment Status</Label>
+                                <Select value={paymentModalStatus} onValueChange={setPaymentModalStatus}>
+                                    <SelectTrigger id="status" className="w-full">
+                                        <SelectValue placeholder="Select status" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Paid">Paid / Completed</SelectItem>
+                                        <SelectItem value="Processing">Processing</SelectItem>
+                                        <SelectItem value="Partially Paid">Partially Paid</SelectItem>
+                                        <SelectItem value="Hold">On Hold</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="remark" className="text-sm font-semibold">Remarks</Label>
+                                <Textarea
+                                    id="remark"
+                                    placeholder="Add any internal payment notes..."
+                                    value={paymentModalRemark}
+                                    onChange={(e) => setPaymentModalRemark(e.target.value)}
+                                    className="min-h-[100px] resize-none"
+                                />
+                            </div>
+                        </div>
+
+                        {selectedPaymentItem?.paymentForm && (
+                            <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg flex items-center justify-between">
+                                <div className="flex flex-col">
+                                    <span className="text-xs font-semibold text-blue-700">External Payment Link</span>
+                                    <span className="text-[10px] text-blue-500">A form link is available for this payment</span>
+                                </div>
+                                <Button 
+                                    size="sm" 
+                                    variant="link" 
+                                    className="text-blue-600 h-8 p-0"
+                                    onClick={() => window.open(selectedPaymentItem.paymentForm, '_blank')}
+                                >
+                                    <ExternalLink className="h-3 w-3 mr-1" />
+                                    Open Form
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter className="gap-2 sm:gap-0">
+                        <Button variant="outline" onClick={() => setIsPaymentModalOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button 
+                            className="bg-green-600 hover:bg-green-700 text-white shadow-md transition-all hover:scale-[1.02]"
+                            onClick={handleSinglePaymentSubmit}
+                            disabled={isSubmitting}
+                        >
+                            {isSubmitting ? (
+                                <div className="flex items-center gap-2">
+                                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                                    Processing...
+                                </div>
+                            ) : (
+                                "Record & Complete"
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

@@ -670,6 +670,18 @@ export default function PIApprovals() {
         return `PAY-${(existingCount + 1).toString().padStart(4, '0')}`;
     }
 
+    /** Converts any date string to YYYY-MM-DD for Postgres. Handles DD-MM-YYYY and ISO formats. */
+    function toISODateString(raw: string | null | undefined): string | null {
+        if (!raw) return null;
+        // DD-MM-YYYY or DD-MM-YYYY HH:MM:SS AM/PM
+        const ddmmyyyy = raw.match(/^(\d{2})-(\d{2})-(\d{4})/);
+        if (ddmmyyyy) return `${ddmmyyyy[3]}-${ddmmyyyy[2]}-${ddmmyyyy[1]}`;
+        // Already ISO or parseable
+        const d = new Date(raw);
+        if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+        return null;
+    }
+
     async function onSubmit(values: z.infer<typeof schema>) {
         try {
             if (!selectedItem) {
@@ -730,7 +742,7 @@ export default function PIApprovals() {
                     total_po_amount: String(selectedItem.totalPoAmount || ''),
                     internal_code: selectedItem.internalCode,
                     product: selectedItem.product,
-                    delivery_date: selectedItem.deliveryDate,
+                    delivery_date: toISODateString(selectedItem.deliveryDate),
                     payment_terms: selectedItem.paymentTerms,
                     number_of_days: String(selectedItem.numberOfDays || '0'),
                     pdf: selectedItem.pdf || '',
