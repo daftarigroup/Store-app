@@ -1,4 +1,4 @@
-import { Plus, Building2, Mail, MapPin, Receipt, Package, RefreshCw, FileSpreadsheet, Store, Boxes, LayoutGrid, ClipboardList, Tag, Building, Phone, Globe, FileText, Landmark, Trash, Pencil } from 'lucide-react';
+import { Plus, Building2, Package, FileSpreadsheet, Boxes, LayoutGrid, Building, Trash, Pencil } from 'lucide-react';
 import Heading from '../element/Heading';
 import { useEffect, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -6,48 +6,63 @@ import DataTable from '../element/DataTable';
 import { Button } from '../ui/button';
 import {
     Dialog,
-    DialogClose,
     DialogContent,
-    DialogFooter,
     DialogHeader,
     DialogTitle,
 } from '../ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '../ui/form';
-import { PuffLoader as Loader } from 'react-spinners';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Input } from '../ui/input';
 import { toast } from 'sonner';
 import { fetchMasterRecords, insertMasterData, updateMasterData, deleteMasterData } from '@/services/masterService';
-import { Card, CardContent } from '../ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { ScrollArea } from '../ui/scroll-area';
 import { cn } from '@/lib/utils';
+import { Checkbox } from '../ui/checkbox';
+import { addItemToInventory } from '@/services/inventoryService';
+import { useSheets } from '@/context/SheetsContext';
 
 const vendorSchema = z.object({ vendor_name: z.string().min(1, 'Required'), vendor_gstin: z.string().optional(), vendor_address: z.string().optional(), vendor_email: z.string().email().or(z.literal('')) });
-const itemSchema = z.object({ item_name: z.string().min(1, 'Required'), group_head: z.string().min(1, 'Required'), uom: z.string().optional() });
+const itemSchema = z.object({
+    item_name: z.string().min(1, 'Required'),
+    group_head: z.string().min(1, 'Required'),
+    uom: z.string().optional(),
+    include_in_inventory: z.boolean().default(false),
+    inventory_quantity: z.coerce.number().min(0, 'Quantity cannot be negative').default(0),
+}).superRefine((data, ctx) => {
+    if (data.include_in_inventory && data.inventory_quantity <= 0) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['inventory_quantity'],
+            message: 'Quantity must be greater than 0',
+        });
+    }
+});
 const departmentSchema = z.object({ department: z.string().min(1, 'Required') });
 const companySchema = z.object({ company_name: z.string().min(1, 'Required'), company_gstin: z.string().optional(), company_pan: z.string().optional(), company_email: z.string().email().or(z.literal('')), company_phone: z.string().optional(), company_address: z.string().optional(), billing_address: z.string().optional(), destination_address: z.string().optional() });
 
-export default () => {
+export default function MasterManagement() {
+    const { updateInventorySheet } = useSheets();
     const [allRecords, setAllRecords] = useState<any[]>([]);
     const [dataLoading, setDataLoading] = useState(true);
     const [editingRecord, setEditingRecord] = useState<any>(null);
-    const [activeTab, setActiveTab] = useState('vendors');
     const [openDialog, setOpenDialog] = useState<string | null>(null);
 
     const vForm = useForm<z.infer<typeof vendorSchema>>({ resolver: zodResolver(vendorSchema), defaultValues: { vendor_name: '', vendor_gstin: '', vendor_address: '', vendor_email: '' } });
-    const iForm = useForm<z.infer<typeof itemSchema>>({ resolver: zodResolver(itemSchema), defaultValues: { item_name: '', group_head: '', uom: '' } });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const iForm = useForm<z.infer<typeof itemSchema>>({ resolver: zodResolver(itemSchema) as any, defaultValues: { item_name: '', group_head: '', uom: '', include_in_inventory: false, inventory_quantity: 0 } });
     const dForm = useForm<z.infer<typeof departmentSchema>>({ resolver: zodResolver(departmentSchema), defaultValues: { department: '' } });
     const cForm = useForm<z.infer<typeof companySchema>>({ resolver: zodResolver(companySchema), defaultValues: { company_name: '', company_gstin: '', company_pan: '', company_email: '', company_phone: '', company_address: '', billing_address: '', destination_address: '' } });
+    const includeInInventory = iForm.watch('include_in_inventory');
 
     useEffect(() => { loadData(); }, []);
     useEffect(() => {
         if (!editingRecord) return;
         const normalized = { ...editingRecord };
         if (openDialog === 'vendor') vForm.reset(normalized);
-        if (openDialog === 'item') iForm.reset(normalized);
+        if (openDialog === 'item') iForm.reset({ ...normalized, include_in_inventory: false, inventory_quantity: 0 });
         if (openDialog === 'dept') dForm.reset(normalized);
         if (openDialog === 'company') cForm.reset(normalized);
     }, [editingRecord, openDialog]);
@@ -110,6 +125,14 @@ export default () => {
 
     const onSubmit = async (values: any, type: string) => {
         let res;
+        const itemPayload = type === 'item'
+            ? {
+                item_name: values.item_name,
+                group_head: values.group_head,
+                uom: values.uom,
+            }
+            : values;
+
         if (editingRecord) {
             if (type === 'dept') {
                 const targets = allRecords.filter(r => r.department === editingRecord.department);
@@ -117,10 +140,25 @@ export default () => {
                 const results = await Promise.all(updates);
                 res = { success: results.every(r => r.success) };
             } else {
-                res = await updateMasterData(editingRecord.created_at, values);
+                res = await updateMasterData(editingRecord.created_at, itemPayload);
             }
         } else {
-            res = await insertMasterData(values);
+            res = await insertMasterData(itemPayload);
+            if (res.success && type === 'item' && values.include_in_inventory) {
+                const inventoryRes = await addItemToInventory({
+                    itemName: values.item_name,
+                    groupHead: values.group_head,
+                    uom: values.uom,
+                    quantity: values.inventory_quantity,
+                });
+
+                if (!inventoryRes.success) {
+                    toast.error('Item saved, but inventory could not be updated');
+                    return;
+                }
+
+                updateInventorySheet();
+            }
         }
         if (res.success) { toast.success('Saved'); setOpenDialog(null); setEditingRecord(null); loadData(); }
     };
@@ -137,7 +175,7 @@ export default () => {
         <div className="h-full space-y-6 flex flex-col">
             <Heading heading="Master Registry" subtext="Universal repository for Vendors, Items, Departments, and Corporate Profiles"><div className="bg-gradient-to-br from-indigo-500 to-cyan-500 p-3 rounded-2xl text-white"><FileSpreadsheet size={40} /></div></Heading>
 
-            <Tabs defaultValue="vendors" className="flex-1 flex flex-col" onValueChange={setActiveTab}>
+            <Tabs defaultValue="vendors" className="flex-1 flex flex-col">
                 <TabsList className="bg-muted/30 p-1 rounded-xl border border-border/50 mb-4 max-w-fit h-12">
                     <TabsTrigger value="vendors" className="gap-2 px-6"><Building2 size={16} /> Vendors</TabsTrigger>
                     <TabsTrigger value="items" className="gap-2 px-6"><Boxes size={16} /> Items</TabsTrigger>
@@ -158,7 +196,7 @@ export default () => {
                         <DialogHeader><DialogTitle>{editingRecord ? 'Edit' : 'Add'} {openDialog?.toUpperCase()}</DialogTitle></DialogHeader>
                         <ScrollArea className="max-h-[60vh]">
                             {openDialog === 'vendor' && <Form {...vForm}><form onSubmit={vForm.handleSubmit(v => onSubmit(v, 'vendor'))} className="grid gap-4"><FormField control={vForm.control} name="vendor_name" render={({field}) => <FormItem><FormLabel>Vendor Name</FormLabel><FormControl><Input {...field}/></FormControl><FormMessage/></FormItem>}/><FormField control={vForm.control} name="vendor_gstin" render={({field}) => <FormItem><FormLabel>GSTIN</FormLabel><FormControl><Input {...field}/></FormControl></FormItem>}/><FormField control={vForm.control} name="vendor_email" render={({field}) => <FormItem><FormLabel>Email</FormLabel><FormControl><Input {...field}/></FormControl></FormItem>}/><FormField control={vForm.control} name="vendor_address" render={({field}) => <FormItem><FormLabel>Address</FormLabel><FormControl><Input {...field}/></FormControl></FormItem>}/><Button type="submit">Save Vendor</Button></form></Form>}
-                            {openDialog === 'item' && <Form {...iForm}><form onSubmit={iForm.handleSubmit(v => onSubmit(v, 'item'))} className="grid gap-4"><FormField control={iForm.control} name="item_name" render={({field}) => <FormItem><FormLabel>Item Name</FormLabel><FormControl><Input {...field}/></FormControl><FormMessage/></FormItem>}/><FormField control={iForm.control} name="group_head" render={({field}) => <FormItem><FormLabel>Group Head</FormLabel><FormControl><Input {...field}/></FormControl></FormItem>}/><FormField control={iForm.control} name="uom" render={({field}) => <FormItem><FormLabel>UOM</FormLabel><FormControl><Input {...field}/></FormControl></FormItem>}/><Button type="submit">Save Item</Button></form></Form>}
+                            {openDialog === 'item' && <Form {...iForm}><form onSubmit={iForm.handleSubmit(v => onSubmit(v, 'item'))} className="grid gap-4"><FormField control={iForm.control} name="item_name" render={({field}) => <FormItem><FormLabel>Item Name</FormLabel><FormControl><Input {...field}/></FormControl><FormMessage/></FormItem>}/><FormField control={iForm.control} name="group_head" render={({field}) => <FormItem><FormLabel>Group Head</FormLabel><FormControl><Input {...field}/></FormControl><FormMessage/></FormItem>}/><FormField control={iForm.control} name="uom" render={({field}) => <FormItem><FormLabel>UOM</FormLabel><FormControl><Input {...field}/></FormControl><FormMessage/></FormItem>}/><FormField control={iForm.control} name="include_in_inventory" render={({ field }) => <FormItem className="flex flex-row items-start gap-3 rounded-xl border p-4"><FormControl><Checkbox checked={field.value} onCheckedChange={(checked) => field.onChange(checked === true)} /></FormControl><div className="space-y-1 leading-none"><FormLabel>Add to Inventory</FormLabel><p className="text-sm text-muted-foreground">Include this item in stock immediately after saving.</p></div></FormItem>} />{includeInInventory && <FormField control={iForm.control} name="inventory_quantity" render={({field}) => <FormItem><FormLabel>Initial Inventory Quantity</FormLabel><FormControl><Input type="number" min={0} {...field} onChange={(e) => field.onChange(e.target.value)} /></FormControl><FormMessage/></FormItem>} />}<Button type="submit">Save Item</Button></form></Form>}
                             {openDialog === 'dept' && <Form {...dForm}><form onSubmit={dForm.handleSubmit(v => onSubmit(v, 'dept'))} className="grid gap-4"><FormField control={dForm.control} name="department" render={({field}) => <FormItem><FormLabel>Department Name</FormLabel><FormControl><Input {...field}/></FormControl><FormMessage/></FormItem>}/><Button type="submit">Save Department</Button></form></Form>}
                             {openDialog === 'company' && <Form {...cForm}><form onSubmit={cForm.handleSubmit(v => onSubmit(v, 'company'))} className="grid gap-6"><FormField control={cForm.control} name="company_name" render={({field}) => <FormItem><FormLabel>Company Name</FormLabel><FormControl><Input {...field}/></FormControl><FormMessage/></FormItem>}/><div className="grid grid-cols-2 gap-4"><FormField control={cForm.control} name="company_gstin" render={({field}) => <FormItem><FormLabel>GSTIN</FormLabel><FormControl><Input {...field}/></FormControl></FormItem>}/><FormField control={cForm.control} name="company_pan" render={({field}) => <FormItem><FormLabel>PAN</FormLabel><FormControl><Input {...field}/></FormControl></FormItem>}/><FormField control={cForm.control} name="company_email" render={({field}) => <FormItem><FormLabel>Email</FormLabel><FormControl><Input {...field}/></FormControl></FormItem>}/><FormField control={cForm.control} name="company_phone" render={({field}) => <FormItem><FormLabel>Phone</FormLabel><FormControl><Input {...field}/></FormControl></FormItem>}/><FormField control={cForm.control} name="company_address" render={({field}) => <FormItem><FormLabel>Address</FormLabel><FormControl><Input {...field}/></FormControl></FormItem>}/><FormField control={cForm.control} name="billing_address" render={({field}) => <FormItem><FormLabel>Billing</FormLabel><FormControl><Input {...field}/></FormControl></FormItem>}/></div><Button type="submit">Save Company</Button></form></Form>}
                         </ScrollArea>
@@ -167,4 +205,4 @@ export default () => {
             </Dialog>
         </div>
     );
-};
+}

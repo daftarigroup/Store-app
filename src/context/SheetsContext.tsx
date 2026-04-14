@@ -56,6 +56,7 @@ interface SheetsState {
     updateReceivedSheet: () => void;
     updatePoMasterSheet: () => void;
     updateIndentSheet: () => void;
+    updateInventorySheet: () => void;
     updateAll: () => void;
 
     updateIssueSheet: () => void;
@@ -381,7 +382,7 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
             const intervalId = setInterval(() => {
                 console.log('🔄 Auto-refreshing data...');
                 updateAll();
-            }, 5000); // 5,000 ms = 5 seconds
+            }, 30000);
 
             return () => clearInterval(intervalId);
         } catch (e) {
@@ -474,6 +475,7 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                 updateIndentSheet,
                 updatePoMasterSheet,
                 updateReceivedSheet,
+                updateInventorySheet,
                 updateAll,
                 indentSheet,
                 sheets,

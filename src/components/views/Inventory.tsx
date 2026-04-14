@@ -1,33 +1,16 @@
 import Heading from '../element/Heading';
 
-import { useEffect, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Pill } from '../ui/pill';
 import { Store } from 'lucide-react';
 import DataTable from '../element/DataTable';
-
-
-import { fetchInventoryRecords, type InventoryRecord } from '@/services/inventoryService';
+import { useSheets } from '@/context/SheetsContext';
+import type { InventoryRecord } from '@/services/inventoryService';
 
 export default () => {
-    const [tableData, setTableData] = useState<InventoryRecord[]>([]);
-    const [dataLoading, setDataLoading] = useState(true);
+    const { inventorySheet, inventoryLoading } = useSheets();
+    const tableData = inventorySheet as unknown as InventoryRecord[];
 
-    const fetchData = async () => {
-        try {
-            setDataLoading(true);
-            const data = await fetchInventoryRecords();
-            setTableData(data);
-        } catch (error) {
-            console.error('Error fetching inventory:', error);
-        } finally {
-            setDataLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchData();
-    }, []);
     const columns: ColumnDef<InventoryRecord>[] = [
         {
             accessorKey: 'itemName',
@@ -88,7 +71,7 @@ export default () => {
             <DataTable
                 data={tableData}
                 columns={columns}
-                dataLoading={dataLoading}
+                dataLoading={inventoryLoading}
                 searchFields={['itemName', 'groupHead', 'uom', 'status']}
                 className="h-[80dvh]"
             />
