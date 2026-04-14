@@ -353,6 +353,28 @@ export async function updateLiftingStatus(indentNumber: string, status: string) 
     }
 }
 
+/**
+ * Update pending lift quantity for an indent
+ * @param indentNumber - Indent number to update
+ * @param liftQty - Quantity currently being lifted
+ */
+export async function updatePendingLiftQty(indentNumber: string, liftQty: number) {
+    try {
+        const { error } = await supabase
+            .from('indent')
+            .update({ pending_lift_qty: liftQty.toString() })
+            .eq('indent_number', indentNumber);
+
+        if (error) throw error;
+
+        console.log(`✅ Updated pending_lift_qty for indent ${indentNumber}: ${liftQty}`);
+        return true;
+    } catch (error) {
+        console.error('Error updating pending lift qty:', error);
+        throw error;
+    }
+}
+
 // ==================== FILE UPLOAD ====================
 
 /**

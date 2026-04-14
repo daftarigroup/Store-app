@@ -34,6 +34,7 @@ import {
     uploadBillPhoto,
     updateActual5Timestamp,
     updateLiftingStatus,
+    updatePendingLiftQty,
     type GetLiftIndentRecord,
     type GetLiftStoreInRecord,
 } from '@/services/getLiftService';
@@ -767,6 +768,9 @@ export default function GetPurchase() {
                     };
 
                     await insertStoreInRecord(newStoreInRecord);
+
+                    // ✅ Update pending_lift_qty in indent table as per requirement
+                    await updatePendingLiftQty(item.indentNo, Number(item.liftQty));
 
                     // Auto-complete status check
                     const remaining = (item.pendingLiftQty) - (Number(item.liftQty));

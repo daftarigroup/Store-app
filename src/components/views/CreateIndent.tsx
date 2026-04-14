@@ -87,6 +87,78 @@ export default () => {
         name: 'products',
     });
 
+    // Function to fetch and update inventory when product is clicked/selected
+    const handleProductSelect = async (index: number, productName: string, groupHead: string) => {
+        try {
+            if (!supabaseEnabled) {
+                toast.error('Supabase is not enabled');
+                return;
+            }
+
+            // First, fetch the current inventory record for this product
+            const { data: inventoryData, error: fetchError } = await supabase
+                .from('inventory')
+                .select('indented, current, item_name, group_head')
+                .eq('item_name', productName)
+                .eq('group_head', groupHead)
+                .maybeSingle();
+
+            console.log("inventoryData-->>  ", inventoryData);
+
+
+            if (fetchError) {
+                console.error('Error fetching inventory:', fetchError);
+                toast.error('Failed to fetch inventory data');
+                return;
+            }
+
+            if (inventoryData) {
+                // Update the indented column by adding 1
+                const currentIndented = Number(inventoryData.indented) || 0;
+                const newIndented = currentIndented + 1;
+                console.log("indent hereeee-->>  " + newIndented);
+
+
+                const { error: updateError } = await supabase
+                    .from('inventory')
+                    .update({ indented: newIndented })
+                    .eq('item_name', productName)
+                    .eq('group_head', groupHead);
+
+                if (updateError) {
+                    console.error('Error updating inventory:', updateError);
+                    toast.error('Failed to update inventory');
+                } else {
+                    console.log(`Inventory updated for ${productName}: indented increased from ${currentIndented} to ${newIndented}`);
+
+                    // Optionally update the minStockQty field in the form with current stock
+                    const currentStock = Number(inventoryData.current) || 0;
+                    form.setValue(`products.${index}.minStockQty`, currentStock);
+                }
+            } else {
+                // If no inventory record exists, create one with indented = 1
+                const { error: insertError } = await supabase
+                    .from('inventory')
+                    .insert({
+                        item_name: productName,
+                        group_head: groupHead,
+                        indented: 1,
+                        timestamp: new Date().toISOString(),
+                    });
+
+                if (insertError) {
+                    console.error('Error creating inventory record:', insertError);
+                    toast.error('Failed to create inventory record');
+                } else {
+                    console.log(`New inventory record created for ${productName} with indented = 1`);
+                }
+            }
+        } catch (error) {
+            console.error('Error in handleProductSelect:', error);
+            toast.error('Failed to process inventory update');
+        }
+    };
+
     // Helper: Generate next indent number from Supabase
     const getNextIndentNumber = async (): Promise<string> => {
         try {
@@ -172,7 +244,7 @@ export default () => {
                     area_of_use: product.areaOfUse,
                     group_head: product.groupHead,
                     product_name: product.productName,
-                    quantity: product.quantity,
+                    quantity: 1, // Set to 1 as per requirement
                     min_stock_qty: product.minStockQty || 0,
                     uom: product.uom,
                     firm_name: data.firmName,
@@ -521,6 +593,8 @@ export default () => {
                                                         <Select
                                                             onValueChange={(val) => {
                                                                 field.onChange(val);
+                                                                // Reset product name when group head changes
+                                                                form.setValue(`products.${index}.productName`, '');
                                                             }}
                                                             value={field.value}
                                                         >
@@ -599,7 +673,13 @@ export default () => {
                                                             </span>
                                                         </FormLabel>
                                                         <Select
-                                                            onValueChange={field.onChange}
+                                                            onValueChange={async (val) => {
+                                                                field.onChange(val);
+                                                                // Call the inventory update function when product is selected
+                                                                if (val && currentGroupHead) {
+                                                                    await handleProductSelect(index, val, currentGroupHead);
+                                                                }
+                                                            }}
                                                             value={field.value}
                                                             disabled={!currentGroupHead}
                                                         >
@@ -681,8 +761,9 @@ export default () => {
                                                             <Input
                                                                 type="number"
                                                                 {...field}
-                                                                placeholder="Enter min stock qty"
+                                                                placeholder="Current stock quantity"
                                                                 disabled={!currentGroupHead}
+                                                                readOnly
                                                             />
                                                         </FormControl>
                                                     </FormItem>
