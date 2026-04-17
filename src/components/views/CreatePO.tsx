@@ -167,7 +167,7 @@ const schema = z.object({
     companyEmail: z.string().email().optional(),
 
     ourEnqNo: z.string().optional(),
-    enquiryDate: z.coerce.date().optional(),
+    enquiryDate: z.union([z.coerce.date(), z.any().transform(() => undefined)]).optional(),
     description: z.string(),
     indents: z.array(
         z.object({
@@ -460,7 +460,8 @@ const CreatePO = () => {
                     const partyName = firstPoItem.partyName?.toLowerCase()?.trim();
                     return vendorName === partyName;
                 });
-                form.setValue('poDate', parseCustomDate(firstPoItem.timestamp));
+                const poDateParsed = parseCustomDate(firstPoItem.timestamp);
+                form.setValue('poDate', isNaN(poDateParsed.getTime()) ? new Date() : poDateParsed);
                 form.setValue('supplierName', firstPoItem.partyName || '');
 
                 if (vendor) {
@@ -478,8 +479,10 @@ const CreatePO = () => {
                 }
 
                 form.setValue('ourEnqNo', firstPoItem.enquiryNumber || '');
-                form.setValue('enquiryDate', parseCustomDate(firstPoItem.enquiryDate));
-                form.setValue('deliveryDate', parseCustomDate(firstPoItem.deliveryDate));
+                const enqDate = parseCustomDate(firstPoItem.enquiryDate);
+                form.setValue('enquiryDate', isNaN(enqDate.getTime()) ? undefined as any : enqDate);
+                const delDate = parseCustomDate(firstPoItem.deliveryDate);
+                form.setValue('deliveryDate', isNaN(delDate.getTime()) ? new Date() : delDate);
                 form.setValue('deliveryDays', firstPoItem.deliveryDays || 0);
                 form.setValue('deliveryType', (firstPoItem.deliveryType === 'for' || firstPoItem.deliveryType === 'exfactory') ? firstPoItem.deliveryType : undefined);
                 form.setValue('paymentTerms', firstPoItem.paymentTerms as any || undefined);

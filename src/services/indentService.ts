@@ -63,6 +63,7 @@ export interface IndentRecord {
     vendor1_rank?: string;
     vendor2_rank?: string;
     vendor3_rank?: string;
+    indent_url?: string; // Added for PDF link
 }
 
 // ==================== FETCH FUNCTIONS ====================
@@ -130,6 +131,7 @@ export async function fetchIndentRecords(): Promise<IndentRecord[]> {
             vendor1_rank: r.vendor1_rank || '',
             vendor2_rank: r.vendor2_rank || '',
             vendor3_rank: r.vendor3_rank || '',
+            indent_url: r.indent_url || '', // Populated from DB
         }));
     } catch (error) {
         console.error('Error fetching indent records:', error);

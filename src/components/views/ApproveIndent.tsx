@@ -329,11 +329,22 @@ export default function ApproveIndent() {
             header: 'Attachment',
             cell: ({ row }: { row: Row<IndentRecord> }) => {
                 const attachment = row.original.attachment;
-                return attachment ? (
-                    <a href={attachment} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                        Attachment
-                    </a>
-                ) : null;
+                const indentUrl = row.original.indent_url;
+                return (
+                    <div className="flex flex-col gap-1">
+                        {attachment && (
+                            <a href={attachment} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline whitespace-nowrap">
+                                User Attachment
+                            </a>
+                        )}
+                        {indentUrl && (
+                            <a href={indentUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-600 font-medium hover:underline whitespace-nowrap">
+                                Indent PDF
+                            </a>
+                        )}
+                        {!attachment && !indentUrl && <span className="text-muted-foreground text-[10px]">None</span>}
+                    </div>
+                );
             },
         },
         {

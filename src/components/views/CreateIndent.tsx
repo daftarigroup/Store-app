@@ -13,6 +13,12 @@ import {
     SelectContent,
     SelectItem,
 } from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import DataTable from '../element/DataTable';
+import { fetchIndentRecords, type IndentRecord } from '@/services/indentService';
+import { formatDate } from '@/lib/utils';
+import { type ColumnDef } from '@tanstack/react-table';
+import { Pill } from '../ui/pill';
 import { ClipLoader as Loader } from 'react-spinners';
 import { ClipboardList, Trash, Search, PlusCircle } from 'lucide-react';
 import { useSheets } from '@/context/SheetsContext';
@@ -32,6 +38,8 @@ export default () => {
     const [searchTermProductName, setSearchTermProductName] = useState('');
     const [searchTermUOM, setSearchTermUOM] = useState('');
     const [searchTermFirmName, setSearchTermFirmName] = useState('');
+    const [historyData, setHistoryData] = useState<IndentRecord[]>([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
 
     const [indenterOptions, setIndenterOptions] = useState<string[]>([]);
     const [indenterLoading, setIndenterLoading] = useState(false);
@@ -89,6 +97,89 @@ export default () => {
         control: form.control,
         name: 'products',
     });
+
+    const fetchHistory = async () => {
+        setHistoryLoading(true);
+        try {
+            const data = await fetchIndentRecords();
+            // Filter by current project if needed, or show all
+            setHistoryData(data);
+        } catch (error) {
+            console.error('Error fetching history:', error);
+        } finally {
+            setHistoryLoading(false);
+        }
+    };
+
+    const historyColumns: ColumnDef<IndentRecord>[] = [
+        { accessorKey: 'indent_number', header: 'Indent No.' },
+        { accessorKey: 'product_name', header: 'Product' },
+        { accessorKey: 'quantity', header: 'Qty' },
+        { accessorKey: 'uom', header: 'UOM' },
+        { accessorKey: 'firm_name_match', header: 'Project' },
+        {
+            accessorKey: 'indent_status',
+            header: 'Priority',
+            cell: ({ row }) => (
+                <Pill variant={row.original.indent_status === 'Critical' ? 'reject' : 'secondary'}>
+                    {row.original.indent_status}
+                </Pill>
+            ),
+        },
+        {
+            accessorKey: 'vendor_type',
+            header: 'Status',
+            cell: ({ row }) => (
+                <Pill variant={row.original.vendor_type === 'Reject' ? 'reject' : row.original.vendor_type === 'Pending' ? 'secondary' : 'primary'}>
+                    {row.original.vendor_type}
+                </Pill>
+            ),
+        },
+        {
+            accessorKey: 'indent_url',
+            header: 'PDF',
+            cell: ({ row }) => row.original.indent_url ? (
+                <a href={row.original.indent_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">
+                    View PDF
+                </a>
+            ) : <span className="text-muted-foreground text-[10px]">N/A</span>
+        },
+        {
+            accessorKey: 'timestamp',
+            header: 'Date',
+            cell: ({ row }) => row.original.timestamp ? formatDate(new Date(row.original.timestamp)) : '-',
+        },
+    ];
+
+    const handleFirmNameSelect = async (val: string) => {
+        form.setValue('indenterName', '');
+        setIndenterOptions([]);
+        setIndenterLoading(true);
+        try {
+            const { data, error } = await supabase
+                .from('master')
+                .select('indenter_name')
+                .eq('firm_name', val);
+
+            if (!error && data) {
+                const unique = Array.from(
+                    new Set(
+                        data
+                            .map((r: any) => r.indenter_name)
+                            .filter(Boolean)
+                    )
+                ) as string[];
+                setIndenterOptions(unique);
+                if (unique.length === 1) {
+                    form.setValue('indenterName', unique[0]);
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching indenter names:', err);
+        } finally {
+            setIndenterLoading(false);
+        }
+    };
 
     // Function to fetch and update inventory when product is clicked/selected
     const handleProductSelect = async (index: number, productName: string, groupHead: string) => {
@@ -340,451 +431,546 @@ export default () => {
     }
 
     return (
-        <div>
-            <Heading heading="Create Indent" subtext="Create new Indent">
-                <PlusCircle size={50} className="text-primary" />
-            </Heading>
-            <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit, onError)} className="space-y-6 p-5">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                        <FormField
-                            control={form.control}
-                            name="firmName"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>
-                                        Project Name
-                                        <span className="text-destructive">*</span>
-                                    </FormLabel>
-                                    <Select
-                                        onValueChange={async (val) => {
-                                            field.onChange(val);
-                                            form.setValue('indenterName', '');
-                                            setIndenterOptions([]);
-                                            setIndenterLoading(true);
-                                            try {
-                                                const { data, error } = await supabase
-                                                    .from('master')
-                                                    .select('indenter_name')
-                                                    .eq('firm_name', val);
+        <div className="h-full space-y-4 md:space-y-6 flex flex-col px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+            <Tabs defaultValue="pending" onValueChange={(val) => val === 'history' && fetchHistory()}>
+                <Heading
+                    heading="Create Indent"
+                    subtext="Create new Indent"
+                    tabs
+                    pendingLabel="Create"
+                >
+                    <PlusCircle size={50} className="text-primary" />
+                </Heading>
 
-                                                if (!error && data) {
-                                                    // Deduplicate indenter names
-                                                    const unique = Array.from(
-                                                        new Set(
-                                                            data
-                                                                .map((r: any) => r.indenter_name)
-                                                                .filter(Boolean)
-                                                        )
-                                                    ) as string[];
-                                                    setIndenterOptions(unique);
-                                                    if (unique.length === 1) {
-                                                        form.setValue('indenterName', unique[0]);
-                                                    }
-                                                }
-                                            } catch (err) {
-                                                console.error('Error fetching indenter names:', err);
-                                            } finally {
-                                                setIndenterLoading(false);
-                                            }
-                                        }}
-                                        value={field.value}
-                                    >
-                                        <FormControl>
-                                            <SelectTrigger className="w-full">
-                                                <SelectValue placeholder="Select Project Name" />
-                                            </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                            <div className="flex items-center border-b px-3 pb-3">
-                                                <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                                                <input
-                                                    placeholder="Search Project Name..."
-                                                    value={searchTermFirmName}
-                                                    onChange={(e) => setSearchTermFirmName(e.target.value)}
-                                                    onKeyDown={(e) => e.stopPropagation()}
-                                                    className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
-                                                />
-                                            </div>
-                                            {(options?.firms || [])
-                                                .filter((firm) =>
-                                                    firm
-                                                        .toLowerCase()
-                                                        .includes(searchTermFirmName.toLowerCase())
-                                                )
-                                                .map((firm, i) => (
-                                                    <SelectItem key={i} value={firm}>
-                                                        {firm}
-                                                    </SelectItem>
-                                                ))}
-                                        </SelectContent>
-                                    </Select>
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="indenterName"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>
-                                        Indenter Name
-                                        <span className="text-destructive">*</span>
-                                    </FormLabel>
-                                    {indenterLoading ? (
-                                        <div className="flex items-center h-10 px-3 border rounded-md text-sm text-muted-foreground gap-2">
-                                            <svg className="animate-spin h-4 w-4 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                                            </svg>
-                                            Fetching indenters...
-                                        </div>
-                                    ) : indenterOptions.length > 1 ? (
-                                        // Multiple indenters → show dropdown
-                                        <Select onValueChange={field.onChange} value={field.value}>
+                <TabsContent value="pending">
+                <Form {...form}>
+                    <form
+                        onSubmit={form.handleSubmit(onSubmit, onError)}
+                        className="space-y-8"
+                    >
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <FormField
+                                control={form.control}
+                                name="firmName"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>
+                                            Project Name
+                                            <span className="text-destructive">*</span>
+                                        </FormLabel>
+                                        <Select
+                                            onValueChange={(val) => {
+                                                field.onChange(val);
+                                                handleFirmNameSelect(val);
+                                            }}
+                                            value={field.value}
+                                        >
                                             <FormControl>
                                                 <SelectTrigger className="w-full">
-                                                    <SelectValue placeholder="Select Indenter Name" />
+                                                    <SelectValue placeholder="Select Project Name" />
                                                 </SelectTrigger>
                                             </FormControl>
                                             <SelectContent>
                                                 <div className="flex items-center border-b px-3 pb-3">
                                                     <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
                                                     <input
-                                                        placeholder="Search indenter..."
-                                                        value={searchTermIndenter}
-                                                        onChange={(e) => setSearchTermIndenter(e.target.value)}
+                                                        placeholder="Search Project Name..."
+                                                        value={searchTermFirmName}
+                                                        onChange={(e) => setSearchTermFirmName(e.target.value)}
                                                         onKeyDown={(e) => e.stopPropagation()}
                                                         className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
                                                     />
                                                 </div>
-                                                {indenterOptions
-                                                    .filter((name) =>
-                                                        name.toLowerCase().includes(searchTermIndenter.toLowerCase())
+                                                {(options?.firms || [])
+                                                    .filter((firm) =>
+                                                        firm
+                                                            .toLowerCase()
+                                                            .includes(searchTermFirmName.toLowerCase())
                                                     )
-                                                    .map((name, i) => (
-                                                        <SelectItem key={i} value={name}>
-                                                            {name}
+                                                    .map((firm, i) => (
+                                                        <SelectItem key={i} value={firm}>
+                                                            {firm}
                                                         </SelectItem>
                                                     ))}
                                             </SelectContent>
                                         </Select>
-                                    ) : (
-                                        // Single or no indenter → auto-filled read-only input
-                                        <FormControl>
-                                            <Input
-                                                placeholder={indenterOptions.length === 0 ? 'Select a Project Name first' : 'Indenter name (auto-filled)'}
-                                                readOnly={indenterOptions.length === 1}
-                                                {...field}
-                                            />
-                                        </FormControl>
-                                    )}
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="indentStatus"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>
-                                        Indent Status
-                                        <span className="text-destructive">*</span>
-                                    </FormLabel>
-                                    <Select onValueChange={field.onChange} value={field.value || ""}>
-                                        <FormControl>
-                                            <SelectTrigger className="w-full">
-                                                <SelectValue placeholder="Select status" />
-                                            </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                            <SelectItem value="Critical">Critical</SelectItem>
-                                            <SelectItem value="Non-Critical">
-                                                Non-Critical
-                                            </SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </FormItem>
-                            )}
-                        />
-                    </div>
-
-                    <div className="space-y-4">
-                        <div className="flex justify-between items-center">
-                            <h2 className="text-lg font-semibold">Products</h2>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() =>
-                                    append({
-                                        department: '',
-                                        groupHead: '',
-                                        productName: '',
-                                        quantity: '' as any,
-                                        minStockQty: 0,
-                                        uom: '',
-                                        areaOfUse: '',
-                                        expectedRequirementDate: '',
-                                        attachment: undefined,
-                                        specifications: '',
-                                    })
-                                }
-                            >
-                                Add Product
-                            </Button>
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="indenterName"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>
+                                            Indenter Name
+                                            <span className="text-destructive">*</span>
+                                        </FormLabel>
+                                        {indenterLoading ? (
+                                            <div className="flex items-center h-10 px-3 border rounded-md text-sm text-muted-foreground gap-2">
+                                                <svg className="animate-spin h-4 w-4 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                                                </svg>
+                                                Fetching indenters...
+                                            </div>
+                                        ) : indenterOptions.length > 1 ? (
+                                            // Multiple indenters → show dropdown
+                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                <FormControl>
+                                                    <SelectTrigger className="w-full">
+                                                        <SelectValue placeholder="Select Indenter Name" />
+                                                    </SelectTrigger>
+                                                </FormControl>
+                                                <SelectContent>
+                                                    <div className="flex items-center border-b px-3 pb-3">
+                                                        <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                                                        <input
+                                                            placeholder="Search indenter..."
+                                                            value={searchTermIndenter}
+                                                            onChange={(e) => setSearchTermIndenter(e.target.value)}
+                                                            onKeyDown={(e) => e.stopPropagation()}
+                                                            className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
+                                                        />
+                                                    </div>
+                                                    {indenterOptions
+                                                        .filter((name) =>
+                                                            name.toLowerCase().includes(searchTermIndenter.toLowerCase())
+                                                        )
+                                                        .map((name, i) => (
+                                                          <SelectItem key={i} value={name}>
+                                                                {name}
+                                                            </SelectItem>
+                                                        ))}
+                                                </SelectContent>
+                                            </Select>
+                                        ) : (
+                                            // Single or no indenter → auto-filled read-only input
+                                            <FormControl>
+                                                <Input
+                                                    placeholder={indenterOptions.length === 0 ? 'Select a Project Name first' : 'Indenter name (auto-filled)'}
+                                                    readOnly={indenterOptions.length === 1}
+                                                    {...field}
+                                                />
+                                            </FormControl>
+                                        )}
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="indentStatus"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>
+                                            Indent Status
+                                            <span className="text-destructive">*</span>
+                                        </FormLabel>
+                                        <Select onValueChange={field.onChange} value={field.value || ""}>
+                                            <FormControl>
+                                                <SelectTrigger className="w-full">
+                                                    <SelectValue placeholder="Select status" />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                <SelectItem value="Critical">Critical</SelectItem>
+                                                <SelectItem value="Non-Critical">
+                                                    Non-Critical
+                                                </SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </FormItem>
+                                )}
+                            />
                         </div>
 
-                        {fields.map((field, index) => {
-                            const currentDept = products[index]?.department;
-                            const currentGroupHead = products[index]?.groupHead;
-                            const groupHeadOptions = options?.allGroupHeads || [];
-                            const productOptions = options?.products[currentGroupHead] || [];
-
-                            return (
-                                <div
-                                    key={field.id}
-                                    className="flex flex-col gap-4 border p-4 rounded-lg"
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center">
+                                <h2 className="text-lg font-semibold">Products</h2>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() =>
+                                        append({
+                                            department: '',
+                                            groupHead: '',
+                                            productName: '',
+                                            quantity: '' as any,
+                                            minStockQty: 0,
+                                            uom: '',
+                                            areaOfUse: '',
+                                            expectedRequirementDate: '',
+                                            attachment: undefined,
+                                            specifications: '',
+                                        })
+                                    }
                                 >
-                                    <div className="flex justify-between">
-                                        <h3 className="text-md font-semibold">
-                                            Product {index + 1}
-                                        </h3>
-                                        <Button
-                                            variant="destructive"
-                                            type="button"
-                                            onClick={() => fields.length > 1 && remove(index)}
-                                            disabled={fields.length === 1}
-                                        >
-                                            <Trash />
-                                        </Button>
-                                    </div>
-                                    <div className="grid gap-4">
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                            <FormField
-                                                control={form.control}
-                                                name={`products.${index}.department`}
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>
-                                                            Department
-                                                            <span className="text-destructive">
-                                                                *
-                                                            </span>
-                                                        </FormLabel>
-                                                        <Select
-                                                            onValueChange={(val) => {
-                                                                field.onChange(val);
-                                                            }}
-                                                            value={field.value}
-                                                        >
+                                    Add Product
+                                </Button>
+                            </div>
+
+                            {fields.map((field, index) => {
+                                const currentDept = products[index]?.department;
+                                const currentGroupHead = products[index]?.groupHead;
+                                const groupHeadOptions = options?.allGroupHeads || [];
+                                const productOptions = options?.products[currentGroupHead] || [];
+
+                                return (
+                                    <div
+                                        key={field.id}
+                                        className="flex flex-col gap-4 border p-4 rounded-lg"
+                                    >
+                                        <div className="flex justify-between">
+                                            <h3 className="text-md font-semibold">
+                                                Product {index + 1}
+                                            </h3>
+                                            <Button
+                                                variant="destructive"
+                                                type="button"
+                                                onClick={() => fields.length > 1 && remove(index)}
+                                                disabled={fields.length === 1}
+                                            >
+                                                <Trash />
+                                            </Button>
+                                        </div>
+                                        <div className="grid gap-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                <FormField
+                                                    control={form.control}
+                                                    name={`products.${index}.department`}
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel>
+                                                                Department
+                                                                <span className="text-destructive">
+                                                                    *
+                                                                </span>
+                                                            </FormLabel>
+                                                            <Select
+                                                                onValueChange={(val) => {
+                                                                    field.onChange(val);
+                                                                }}
+                                                                value={field.value}
+                                                            >
+                                                                <FormControl>
+                                                                    <SelectTrigger className="w-full">
+                                                                        <SelectValue placeholder="Select department" />
+                                                                    </SelectTrigger>
+                                                                </FormControl>
+                                                                <SelectContent>
+                                                                    <div className="flex items-center border-b px-3 pb-3">
+                                                                        <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                                                                        <input
+                                                                            placeholder="Search locations..."
+                                                                            value={searchTerm}
+                                                                            onChange={(e) =>
+                                                                                setSearchTerm(
+                                                                                    e.target.value
+                                                                                )
+                                                                            }
+                                                                            onKeyDown={(e) =>
+                                                                                e.stopPropagation()
+                                                                            }
+                                                                            className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
+                                                                        />
+                                                                    </div>
+                                                                    {(options?.departments || [])
+                                                                        .filter((dept) =>
+                                                                            dept
+                                                                                .toLowerCase()
+                                                                                .includes(
+                                                                                    searchTerm.toLowerCase()
+                                                                                )
+                                                                        )
+                                                                        .map((dept, i) => (
+                                                                            <SelectItem
+                                                                                key={i}
+                                                                                value={dept}
+                                                                            >
+                                                                                {dept}
+                                                                            </SelectItem>
+                                                                        ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                                <FormField
+                                                    control={form.control}
+                                                    name={`products.${index}.groupHead`}
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel>
+                                                                Group Head
+                                                                <span className="text-destructive">
+                                                                    *
+                                                                </span>
+                                                            </FormLabel>
+                                                            <Select
+                                                                onValueChange={(val) => {
+                                                                    field.onChange(val);
+                                                                }}
+                                                                value={field.value}
+                                                                disabled={!currentDept}
+                                                            >
+                                                                <FormControl>
+                                                                    <SelectTrigger className="w-full">
+                                                                        <SelectValue placeholder="Select group head" />
+                                                                    </SelectTrigger>
+                                                                </FormControl>
+                                                                <SelectContent>
+                                                                    <div className="flex items-center border-b px-3 pb-3">
+                                                                        <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                                                                        <input
+                                                                            placeholder="Search group head..."
+                                                                            value={searchTermGroupHead}
+                                                                            onChange={(e) =>
+                                                                                setSearchTermGroupHead(
+                                                                                    e.target.value
+                                                                                )
+                                                                            }
+                                                                            onKeyDown={(e) =>
+                                                                                e.stopPropagation()
+                                                                            }
+                                                                            className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
+                                                                        />
+                                                                    </div>
+                                                                    {groupHeadOptions
+                                                                        .filter((gh) =>
+                                                                            gh
+                                                                                .toLowerCase()
+                                                                                .includes(
+                                                                                    searchTermGroupHead.toLowerCase()
+                                                                                )
+                                                                        )
+                                                                        .map((gh, i) => (
+                                                                            <SelectItem
+                                                                                key={i}
+                                                                                value={gh}
+                                                                            >
+                                                                                {gh}
+                                                                            </SelectItem>
+                                                                        ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                                <FormField
+                                                    control={form.control}
+                                                    name={`products.${index}.areaOfUse`}
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel>
+                                                                Area Of Use
+                                                                <span className="text-destructive">
+                                                                    *
+                                                                </span>
+                                                            </FormLabel>
                                                             <FormControl>
-                                                                <SelectTrigger className="w-full">
-                                                                    <SelectValue placeholder="Select department" />
-                                                                </SelectTrigger>
+                                                                <Input
+                                                                    placeholder="Enter area of use"
+                                                                    {...field}
+                                                                    disabled={!currentGroupHead}
+                                                                />
                                                             </FormControl>
-                                                            <SelectContent>
-                                                                <div className="flex items-center border-b px-3 pb-3">
-                                                                    <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                                                                    <input
-                                                                        placeholder="Search locations..."
-                                                                        value={searchTerm}
-                                                                        onChange={(e) =>
-                                                                            setSearchTerm(
-                                                                                e.target.value
-                                                                            )
-                                                                        }
-                                                                        onKeyDown={(e) =>
-                                                                            e.stopPropagation()
-                                                                        }
-                                                                        className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
-                                                                    />
-                                                                </div>
-                                                                {(options?.departments || [])
-                                                                    .filter((dep) =>
-                                                                        dep
-                                                                            .toLowerCase()
-                                                                            .includes(
-                                                                                searchTerm.toLowerCase()
-                                                                            )
-                                                                    )
-                                                                    .map((dep, i) => (
-                                                                        <SelectItem
-                                                                            key={i}
-                                                                            value={dep}
-                                                                        >
-                                                                            {dep}
-                                                                        </SelectItem>
-                                                                    ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </FormItem>
-                                                )}
-                                            />
-                                            <FormField
-                                                control={form.control}
-                                                name={`products.${index}.groupHead`}
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>
-                                                            Group Head
-                                                            <span className="text-destructive">
-                                                                *
-                                                            </span>
-                                                        </FormLabel>
-                                                        <Select
-                                                            onValueChange={(val) => {
-                                                                field.onChange(val);
-                                                                // Reset product name when group head changes
-                                                                form.setValue(`products.${index}.productName`, '');
-                                                            }}
-                                                            value={field.value}
-                                                        >
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                            </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                <FormField
+                                                    control={form.control}
+                                                    name={`products.${index}.productName`}
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel>
+                                                                Product Name
+                                                                <span className="text-destructive">
+                                                                    *
+                                                                </span>
+                                                            </FormLabel>
+                                                            <Select
+                                                                onValueChange={(val) => {
+                                                                    field.onChange(val);
+                                                                    handleProductSelect(
+                                                                        index,
+                                                                        val,
+                                                                        currentGroupHead
+                                                                    );
+                                                                }}
+                                                                value={field.value}
+                                                                disabled={!currentGroupHead}
+                                                            >
+                                                                <FormControl>
+                                                                    <SelectTrigger className="w-full">
+                                                                        <SelectValue placeholder="Select product" />
+                                                                    </SelectTrigger>
+                                                                </FormControl>
+                                                                <SelectContent>
+                                                                    <div className="flex items-center border-b px-3 pb-3">
+                                                                        <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                                                                        <input
+                                                                            placeholder="Search product..."
+                                                                            value={searchTermProductName}
+                                                                            onChange={(e) =>
+                                                                                setSearchTermProductName(
+                                                                                    e.target.value
+                                                                                )
+                                                                            }
+                                                                            onKeyDown={(e) =>
+                                                                                e.stopPropagation()
+                                                                            }
+                                                                            className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
+                                                                        />
+                                                                    </div>
+                                                                    {productOptions
+                                                                        .filter((p) =>
+                                                                            p
+                                                                                .toLowerCase()
+                                                                                .includes(
+                                                                                    searchTermProductName.toLowerCase()
+                                                                                )
+                                                                        )
+                                                                        .map((p, i) => (
+                                                                            <SelectItem
+                                                                                key={i}
+                                                                                value={p}
+                                                                            >
+                                                                                {p}
+                                                                            </SelectItem>
+                                                                        ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                                <FormField
+                                                    control={form.control}
+                                                    name={`products.${index}.quantity`}
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel>
+                                                                Quantity
+                                                                <span className="text-destructive">
+                                                                    *
+                                                                </span>
+                                                            </FormLabel>
                                                             <FormControl>
-                                                                <SelectTrigger className="w-full">
-                                                                    <SelectValue placeholder="Select group head" />
-                                                                </SelectTrigger>
+                                                                <Input
+                                                                    type="number"
+                                                                    {...field}
+                                                                    placeholder="Enter quantity"
+                                                                    disabled={!currentGroupHead}
+                                                                />
                                                             </FormControl>
-                                                            <SelectContent>
-                                                                <div className="flex items-center border-b px-3 pb-3">
-                                                                    <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                                                                    <input
-                                                                        placeholder="Search group heads..."
-                                                                        value={searchTermGroupHead}
-                                                                        onChange={(e) =>
-                                                                            setSearchTermGroupHead(
-                                                                                e.target.value
-                                                                            )
-                                                                        }
-                                                                        onKeyDown={(e) =>
-                                                                            e.stopPropagation()
-                                                                        }
-                                                                        className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
-                                                                    />
-                                                                </div>
-                                                                {groupHeadOptions
-                                                                    .filter((gh) =>
-                                                                        gh
-                                                                            .toLowerCase()
-                                                                            .includes(
-                                                                                searchTermGroupHead.toLowerCase()
-                                                                            )
-                                                                    )
-                                                                    .map((gh, i) => (
-                                                                        <SelectItem
-                                                                            key={i}
-                                                                            value={gh}
-                                                                        >
-                                                                            {gh}
-                                                                        </SelectItem>
-                                                                    ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </FormItem>
-                                                )}
-                                            />
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                                <FormField
+                                                    control={form.control}
+                                                    name={`products.${index}.minStockQty`}
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel>
+                                                                Current Stock Qty
+                                                            </FormLabel>
+                                                            <FormControl>
+                                                                <Input
+                                                                    type="number"
+                                                                    {...field}
+                                                                    placeholder="Current stock quantity"
+                                                                    disabled={!currentGroupHead}
+                                                                    readOnly
+                                                                />
+                                                            </FormControl>
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                                <FormField
+                                                    control={form.control}
+                                                    name={`products.${index}.uom`}
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel>
+                                                                UOM
+                                                                <span className="text-destructive">
+                                                                    *
+                                                                </span>
+                                                            </FormLabel>
+                                                            <Select
+                                                                onValueChange={field.onChange}
+                                                                value={field.value}
+                                                                disabled={!currentGroupHead}
+                                                            >
+                                                                <FormControl>
+                                                                    <SelectTrigger className="w-full">
+                                                                        <SelectValue placeholder="Select UOM" />
+                                                                    </SelectTrigger>
+                                                                </FormControl>
+                                                                <SelectContent>
+                                                                    <div className="flex items-center border-b px-3 pb-3">
+                                                                        <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                                                                        <input
+                                                                            placeholder="Search UOM..."
+                                                                            value={searchTermUOM}
+                                                                            onChange={(e) =>
+                                                                                setSearchTermUOM(e.target.value)
+                                                                            }
+                                                                            onKeyDown={(e) => e.stopPropagation()}
+                                                                            className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
+                                                                        />
+                                                                    </div>
+                                                                    {(options?.uoms || [])
+                                                                        .filter((uom) =>
+                                                                            uom
+                                                                                .toLowerCase()
+                                                                                .includes(searchTermUOM.toLowerCase())
+                                                                        )
+                                                                        .map((uom, i) => (
+                                                                            <SelectItem key={i} value={uom}>
+                                                                                {uom}
+                                                                            </SelectItem>
+                                                                        ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                                <FormField
+                                                    control={form.control}
+                                                    name={`products.${index}.expectedRequirementDate`}
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel>
+                                                                Expected Requirement Date
+                                                                <span className="text-destructive">
+                                                                    *
+                                                                </span>
+                                                            </FormLabel>
+                                                            <FormControl>
+                                                                <Input
+                                                                    type="date"
+                                                                    {...field}
+                                                                    disabled={!currentGroupHead}
+                                                                />
+                                                            </FormControl>
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                            </div>
                                             <FormField
                                                 control={form.control}
-                                                name={`products.${index}.areaOfUse`}
+                                                name={`products.${index}.attachment`}
                                                 render={({ field }) => (
                                                     <FormItem>
-                                                        <FormLabel>
-                                                            Area Of Use
-                                                            <span className="text-destructive">
-                                                                *
-                                                            </span>
-                                                        </FormLabel>
+                                                        <FormLabel>Attachment</FormLabel>
                                                         <FormControl>
                                                             <Input
-                                                                placeholder="Enter area of use"
-                                                                {...field}
-                                                            />
-                                                        </FormControl>
-                                                    </FormItem>
-                                                )}
-                                            />
-                                            <FormField
-                                                control={form.control}
-                                                name={`products.${index}.productName`}
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>
-                                                            Product Name
-                                                            <span className="text-destructive">
-                                                                *
-                                                            </span>
-                                                        </FormLabel>
-                                                        <Select
-                                                            onValueChange={async (val) => {
-                                                                field.onChange(val);
-                                                                // Call the inventory update function when product is selected
-                                                                if (val && currentGroupHead) {
-                                                                    await handleProductSelect(index, val, currentGroupHead);
+                                                                type="file"
+                                                                onChange={(e) =>
+                                                                    field.onChange(e.target.files?.[0])
                                                                 }
-                                                            }}
-                                                            value={field.value}
-                                                            disabled={!currentGroupHead}
-                                                        >
-                                                            <FormControl>
-                                                                <SelectTrigger className="w-full">
-                                                                    <SelectValue placeholder="Select product" />
-                                                                </SelectTrigger>
-                                                            </FormControl>
-                                                            <SelectContent>
-                                                                <div className="flex items-center border-b px-3 pb-3">
-                                                                    <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                                                                    <input
-                                                                        placeholder="Search products..."
-                                                                        value={
-                                                                            searchTermProductName
-                                                                        }
-                                                                        onChange={(e) =>
-                                                                            setSearchTermProductName(
-                                                                                e.target.value
-                                                                            )
-                                                                        }
-                                                                        onKeyDown={(e) =>
-                                                                            e.stopPropagation()
-                                                                        }
-                                                                        className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
-                                                                    />
-                                                                </div>
-                                                                {productOptions
-                                                                    .filter((prod: string) =>
-                                                                        prod
-                                                                            .toLowerCase()
-                                                                            .includes(
-                                                                                searchTermProductName.toLowerCase()
-                                                                            )
-                                                                    )
-                                                                    .map((prod: string, i: number) => (
-                                                                        <SelectItem
-                                                                            key={i}
-                                                                            value={prod}
-                                                                        >
-                                                                            {prod}
-                                                                        </SelectItem>
-                                                                    ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </FormItem>
-                                                )}
-                                            />
-                                            <FormField
-                                                control={form.control}
-                                                name={`products.${index}.quantity`}
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>
-                                                            Quantity
-                                                            <span className="text-destructive">
-                                                                *
-                                                            </span>
-                                                        </FormLabel>
-                                                        <FormControl>
-                                                            <Input
-                                                                type="number"
-                                                                {...field}
-                                                                disabled={!currentGroupHead}
                                                             />
                                                         </FormControl>
                                                     </FormItem>
@@ -792,149 +978,51 @@ export default () => {
                                             />
                                             <FormField
                                                 control={form.control}
-                                                name={`products.${index}.minStockQty`}
+                                                name={`products.${index}.specifications`}
                                                 render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>
-                                                            Current Stock Qty
-                                                        </FormLabel>
+                                                    <FormItem className="w-full">
+                                                        <FormLabel>Specifications</FormLabel>
                                                         <FormControl>
-                                                            <Input
-                                                                type="number"
+                                                            <Textarea
+                                                                placeholder="Enter specifications"
+                                                                className="resize-y"
                                                                 {...field}
-                                                                placeholder="Current stock quantity"
-                                                                disabled={!currentGroupHead}
-                                                                readOnly
-                                                            />
-                                                        </FormControl>
-                                                    </FormItem>
-                                                )}
-                                            />
-                                            <FormField
-                                                control={form.control}
-                                                name={`products.${index}.uom`}
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>
-                                                            UOM
-                                                            <span className="text-destructive">
-                                                                *
-                                                            </span>
-                                                        </FormLabel>
-                                                        <Select
-                                                            onValueChange={field.onChange}
-                                                            value={field.value}
-                                                            disabled={!currentGroupHead}
-                                                        >
-                                                            <FormControl>
-                                                                <SelectTrigger className="w-full">
-                                                                    <SelectValue placeholder="Select UOM" />
-                                                                </SelectTrigger>
-                                                            </FormControl>
-                                                            <SelectContent>
-                                                                <div className="flex items-center border-b px-3 pb-3">
-                                                                    <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                                                                    <input
-                                                                        placeholder="Search UOM..."
-                                                                        value={searchTermUOM}
-                                                                        onChange={(e) =>
-                                                                            setSearchTermUOM(e.target.value)
-                                                                        }
-                                                                        onKeyDown={(e) => e.stopPropagation()}
-                                                                        className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
-                                                                    />
-                                                                </div>
-                                                                {(options?.uoms || [])
-                                                                    .filter((uom) =>
-                                                                        uom
-                                                                            .toLowerCase()
-                                                                            .includes(searchTermUOM.toLowerCase())
-                                                                    )
-                                                                    .map((uom, i) => (
-                                                                        <SelectItem key={i} value={uom}>
-                                                                            {uom}
-                                                                        </SelectItem>
-                                                                    ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </FormItem>
-                                                )}
-                                            />
-                                            <FormField
-                                                control={form.control}
-                                                name={`products.${index}.expectedRequirementDate`}
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>
-                                                            Expected Requirement Date
-                                                            <span className="text-destructive">
-                                                                *
-                                                            </span>
-                                                        </FormLabel>
-                                                        <FormControl>
-                                                            <Input
-                                                                type="date"
-                                                                {...field}
-                                                                disabled={!currentGroupHead}
                                                             />
                                                         </FormControl>
                                                     </FormItem>
                                                 )}
                                             />
                                         </div>
-                                        <FormField
-                                            control={form.control}
-                                            name={`products.${index}.attachment`}
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Attachment</FormLabel>
-                                                    <FormControl>
-                                                        <Input
-                                                            type="file"
-                                                            onChange={(e) =>
-                                                                field.onChange(e.target.files?.[0])
-                                                            }
-                                                        />
-                                                    </FormControl>
-                                                </FormItem>
-                                            )}
-                                        />
-                                        <FormField
-                                            control={form.control}
-                                            name={`products.${index}.specifications`}
-                                            render={({ field }) => (
-                                                <FormItem className="w-full">
-                                                    <FormLabel>Specifications</FormLabel>
-                                                    <FormControl>
-                                                        <Textarea
-                                                            placeholder="Enter specifications"
-                                                            className="resize-y"
-                                                            {...field}
-                                                        />
-                                                    </FormControl>
-                                                </FormItem>
-                                            )}
-                                        />
                                     </div>
-                                </div>
-                            );
-                        })}
-                    </div>
+                                );
+                            })}
+                        </div>
 
-                    <div>
-                        <Button
-                            className="w-full"
-                            type="submit"
-                            disabled={form.formState.isSubmitting}
-                        >
-                            {form.formState.isSubmitting && (
-                                <Loader size={20} color="white" aria-label="Loading Spinner" />
-                            )}
-                            Create Indent
-                        </Button>
-                    </div>
-                </form>
-            </Form>
+                        <div>
+                            <Button
+                                className="w-full"
+                                type="submit"
+                                disabled={form.formState.isSubmitting}
+                            >
+                                {form.formState.isSubmitting && (
+                                    <Loader size={20} color="white" aria-label="Loading Spinner" />
+                                )}
+                                Create Indent
+                            </Button>
+                        </div>
+                    </form>
+                </Form>
+                </TabsContent>
+                
+                <TabsContent value="history">
+                    <DataTable
+                        data={historyData}
+                        columns={historyColumns}
+                        dataLoading={historyLoading}
+                        searchFields={['indent_number', 'product_name', 'indenter_name', 'firm_name_match']}
+                    />
+                </TabsContent>
+            </Tabs>
         </div>
     );
 };
