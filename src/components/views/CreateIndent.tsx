@@ -20,9 +20,12 @@ import Heading from '../element/Heading';
 import { useState } from 'react';
 import { supabase, supabaseEnabled } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
+import IndentPdf from '../element/IndentPdf';
+import { pdf } from '@react-pdf/renderer';
+import logo from '../../assets/logo.jpeg';
 
 export default () => {
-    const { masterSheet: options } = useSheets();
+    const { masterSheet: options, updateInventorySheet } = useSheets();
     const { user } = useAuth();
     const [searchTerm, setSearchTerm] = useState('');
     const [searchTermGroupHead, setSearchTermGroupHead] = useState('');
@@ -217,6 +220,43 @@ export default () => {
             // Generate next indent number
             const nextIndentNumber = await getNextIndentNumber();
 
+            // 1. Generate PDF of the indent
+            let indentUrl = '';
+            try {
+                const blob = await pdf(
+                    <IndentPdf 
+                        indentNumber={nextIndentNumber}
+                        indenterName={data.indenterName}
+                        firmName={data.firmName}
+                        indentStatus={data.indentStatus}
+                        date={new Date().toLocaleDateString()}
+                        products={data.products}
+                        logo={logo}
+                    />
+                ).toBlob();
+
+                const pdfFile = new File([blob], `${nextIndentNumber}_indent.pdf`, { type: 'application/pdf' });
+                
+                // 2. Upload PDF to Supabase
+                const fileName = `${nextIndentNumber}_${Date.now()}.pdf`;
+                const filePath = `indent-pdfs/${fileName}`;
+
+                const { error: uploadError } = await supabase.storage
+                    .from('indent_attachment')
+                    .upload(filePath, pdfFile);
+
+                if (uploadError) throw uploadError;
+
+                const { data: { publicUrl } } = supabase.storage
+                    .from('indent_attachment')
+                    .getPublicUrl(filePath);
+                
+                indentUrl = publicUrl;
+            } catch (pdfError) {
+                console.error('PDF generation/upload failed:', pdfError);
+                toast.warning('Indent PDF could not be generated, continuing...');
+            }
+
             // Prepare rows for insertion (with snake_case for database)
             const rows = [];
             for (const product of data.products) {
@@ -244,7 +284,7 @@ export default () => {
                     area_of_use: product.areaOfUse,
                     group_head: product.groupHead,
                     product_name: product.productName,
-                    quantity: 1, // Set to 1 as per requirement
+                    quantity: product.quantity,
                     min_stock_qty: product.minStockQty || 0,
                     uom: product.uom,
                     firm_name: data.firmName,
@@ -252,6 +292,7 @@ export default () => {
                     indent_status: data.indentStatus,
                     expected_req_date: product.expectedRequirementDate,
                     attachment: attachmentUrl,
+                    indent_url: indentUrl, // New field for PDF URL
                     firm_name_match: user?.firmNameMatch || '',
                     status: 'Pending',
                 };
