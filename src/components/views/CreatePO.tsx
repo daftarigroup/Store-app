@@ -508,14 +508,26 @@ const CreatePO = () => {
                 });
                 form.setValue('indents', poIndents);
 
-                const terms = [];
-                for (let i = 1; i <= 10; i++) {
+                const terms: string[] = [];
+                // 1. Fetch from Term 1, 2, 3... legacy columns
+                for (let i = 1; i <= 20; i++) {
                     const termKey = `term${i}` as keyof PoMasterSheet;
                     const term = firstPoItem[termKey] as string;
                     if (term && typeof term === 'string' && term.trim() !== '') {
                         terms.push(term.trim());
                     }
                 }
+
+                // 2. Also fetch from the JSONB 'terms' column
+                if (firstPoItem.terms && typeof firstPoItem.terms === 'object') {
+                    Object.keys(firstPoItem.terms).forEach(key => {
+                        const val = (firstPoItem.terms as any)[key];
+                        if (val && typeof val === 'string' && val.trim() !== '' && !terms.includes(val.trim())) {
+                            terms.push(val.trim());
+                        }
+                    });
+                }
+
                 form.setValue('terms', terms.length > 0 ? terms : ((details as MasterDetails)?.defaultTerms || []));
             }
         }
@@ -741,6 +753,16 @@ const CreatePO = () => {
                     term8: values.terms[7],
                     term9: values.terms[8],
                     term10: values.terms[9],
+                    term11: values.terms[10],
+                    term12: values.terms[11],
+                    term13: values.terms[12],
+                    term14: values.terms[13],
+                    term15: values.terms[14],
+                    term16: values.terms[15],
+                    term17: values.terms[16],
+                    term18: values.terms[17],
+                    term19: values.terms[18],
+                    term20: values.terms[19],
                     discountPercent: v.discount || 0,
                     gstPercent: v.gst,
                     deliveryDate: formatDateTime(values.deliveryDate),
@@ -750,7 +772,11 @@ const CreatePO = () => {
                     deliveryType: values.deliveryType || '',
                     firmNameMatch: (indent as any)?.firmNameMatch ?? '',
                     advancePercent: (values.paymentTerms.toLowerCase().includes('partly') && (values.paymentTerms.toLowerCase().includes('advance') || values.paymentTerms.toLowerCase().includes('pi'))) ? (values.numberOfDays || 0) : 0,
-                    advanceAmount: (values.paymentTerms.toLowerCase().includes('partly') && (values.paymentTerms.toLowerCase().includes('advance') || values.paymentTerms.toLowerCase().includes('pi'))) ? (calculateTotal(v.rate || 0, v.gst, v.discount || 0, v.quantity || 0) * (values.numberOfDays || 0)) / 100 : 0
+                    advanceAmount: (values.paymentTerms.toLowerCase().includes('partly') && (values.paymentTerms.toLowerCase().includes('advance') || values.paymentTerms.toLowerCase().includes('pi'))) ? (calculateTotal(v.rate || 0, v.gst, v.discount || 0, v.quantity || 0) * (values.numberOfDays || 0)) / 100 : 0,
+                    termsObject: values.terms.reduce((acc, term, idx) => {
+                        acc[`term${idx + 1}`] = term;
+                        return acc;
+                    }, {} as Record<string, string>)
                 };
             });
 
@@ -1128,7 +1154,7 @@ const CreatePO = () => {
 
                             {/* Items Table */}
                             <div className="mx-4 grid">
-                                <div className="rounded-[3px] w-full min-w-full overflow-x-auto">
+                                <div className="rounded-[3px] w-full min-w-full overflow-x-auto max-h-[400px] overflow-y-auto">
                                     <Table>
                                         <TableHeader className="bg-muted">
                                             <TableRow>
@@ -1319,7 +1345,7 @@ const CreatePO = () => {
                                 <div className="w-full flex justify-end p-3">
                                     <Button className="w-48" variant="outline" type="button" onClick={(e) => {
                                         e.preventDefault();
-                                        if (termsArray.fields.length < 11) {
+                                        if (termsArray.fields.length < 21) {
                                             if (readOnly === -1) {
                                                 termsArray.append('');
                                                 setReadOnly(termsArray.fields.length);
@@ -1327,12 +1353,15 @@ const CreatePO = () => {
                                                 toast.error(`Please save term ${readOnly + 1} before creating`);
                                             }
                                         } else {
-                                            toast.error('Only 10 terms are allowed');
+                                            toast.error('Only 20 terms are allowed');
                                         }
+
                                     }}>
+
                                         Add Term
                                     </Button>
                                 </div>
+
                             </div>
 
                             <hr />

@@ -95,6 +95,16 @@ export async function fetchPoMaster() {
             term8: r.term8 || '',
             term9: r.term9 || '',
             term10: r.term10 || '',
+            term11: r.term11 || '',
+            term12: r.term12 || '',
+            term13: r.term13 || '',
+            term14: r.term14 || '',
+            term15: r.term15 || '',
+            term16: r.term16 || '',
+            term17: r.term17 || '',
+            term18: r.term18 || '',
+            term19: r.term19 || '',
+            term20: r.term20 || '',
             deliveryDate: r.delivery_date || '',
             paymentTerms: r.payment_terms || '',
             numberOfDays: Number(r.number_of_days) || 0,
@@ -104,6 +114,7 @@ export async function fetchPoMaster() {
             emailSendStatus: r.email_send_status || '',
             preparedBy: r.prepared_by || '',
             approvedBy: r.approved_by || '',
+            terms: r.terms || null,
         }));
     } catch (error) {
         console.error('Error fetching PO master:', error);
@@ -250,6 +261,16 @@ export async function insertPoRecords(poRecords: any[]) {
             term8: record.term8 || '',
             term9: record.term9 || '',
             term10: record.term10 || '',
+            term11: record.term11 || '',
+            term12: record.term12 || '',
+            term13: record.term13 || '',
+            term14: record.term14 || '',
+            term15: record.term15 || '',
+            term16: record.term16 || '',
+            term17: record.term17 || '',
+            term18: record.term18 || '',
+            term19: record.term19 || '',
+            term20: record.term20 || '',
             delivery_date: record.deliveryDate || '',
             payment_terms: record.paymentTerms || '',
             number_of_days: String(record.numberOfDays || 0),
@@ -259,6 +280,7 @@ export async function insertPoRecords(poRecords: any[]) {
             company_email: record.companyEmail || '',
             advance_percent: record.advancePercent || 0,
             advance_amount: record.advanceAmount || 0,
+            terms: record.termsObject || {},
         }));
 
         const { data, error } = await supabase

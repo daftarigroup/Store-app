@@ -202,6 +202,16 @@ export type PoMasterSheet = {
     term8: string;
     term9: string;
     term10: string;
+    term11?: string;
+    term12?: string;
+    term13?: string;
+    term14?: string;
+    term15?: string;
+    term16?: string;
+    term17?: string;
+    term18?: string;
+    term19?: string;
+    term20?: string;
     deliveryDays: number;
     deliveryType: string;
     firmNameMatch: string;

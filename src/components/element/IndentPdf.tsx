@@ -118,9 +118,10 @@ export interface IndentPdfProps {
     date: string;
     products: Product[];
     logo?: string;
+    status?: string;
 }
 
-const IndentPdf = ({ indentNumber, indenterName, firmName, indentStatus, date, products, logo }: IndentPdfProps) => (
+const IndentPdf = ({ indentNumber, indenterName, firmName, indentStatus, date, products, logo, status }: IndentPdfProps) => (
     <Document>
         <Page size="A4" style={styles.page}>
             {logo && (
@@ -128,6 +129,13 @@ const IndentPdf = ({ indentNumber, indenterName, firmName, indentStatus, date, p
                     <Image src={logo} style={styles.logo} />
                 </View>
             )}
+
+            {status && (
+                <View style={{ position: 'absolute', top: 20, right: 30, padding: '4 8', backgroundColor: status === 'Completed' ? '#dcfce7' : '#fee2e2', borderRadius: 4, border: `1 solid ${status === 'Completed' ? '#166534' : '#991b1b'}` }}>
+                    <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: status === 'Completed' ? '#166534' : '#991b1b', textTransform: 'uppercase' }}>{status}</Text>
+                </View>
+            )}
+
             <View style={styles.header}>
                 <Text style={styles.title}>PURCHASE INDENT</Text>
                 <Text style={styles.subtitle}>Material Requisition Note</Text>

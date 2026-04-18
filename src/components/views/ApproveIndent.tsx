@@ -36,6 +36,10 @@ import {
     updateIndentHistoryFields,
     type IndentRecord
 } from '@/services/indentService';
+import IndentPdf from '../element/IndentPdf';
+import { pdf } from '@react-pdf/renderer';
+import logo from '../../assets/logo.jpeg';
+import { supabase } from '@/lib/supabase';
 
 export default function ApproveIndent() {
     const { user } = useAuth();
@@ -140,6 +144,65 @@ export default function ApproveIndent() {
         setEditValues(prev => ({ ...prev, [field]: value }));
     };
 
+    const handlePdfUpdate = async (indentNumber: string) => {
+        try {
+            const { data: allItems, error: fetchError } = await supabase
+                .from('indent')
+                .select('*')
+                .eq('indent_number', indentNumber);
+
+            if (fetchError || !allItems || allItems.length === 0) return null;
+
+            const productsForPdf = allItems.map(item => ({
+                productName: item.product_name,
+                groupHead: item.group_head,
+                department: item.department,
+                quantity: item.quantity,
+                uom: item.uom,
+                expectedRequirementDate: item.expected_req_date || (item.timestamp ? formatDate(new Date(item.timestamp)) : ''),
+                specifications: item.specifications,
+                areaOfUse: item.area_of_use
+            }));
+
+            const firstItem = allItems[0];
+            const blob = await pdf(
+                <IndentPdf
+                    indentNumber={indentNumber}
+                    indenterName={firstItem.indenter_name}
+                    firmName={firstItem.firm_name}
+                    indentStatus={firstItem.indent_status}
+                    date={firstItem.timestamp ? formatDate(new Date(firstItem.timestamp)) : formatDate(new Date())}
+                    products={productsForPdf}
+                    logo={logo}
+                    status="Completed"
+                />
+            ).toBlob();
+
+            const fileName = `${indentNumber}_completed_${Date.now()}.pdf`;
+            const filePath = `indent-pdfs/${fileName}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('indent_attachment')
+                .upload(filePath, blob);
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('indent_attachment')
+                .getPublicUrl(filePath);
+
+            await supabase
+                .from('indent')
+                .update({ indent_url: publicUrl })
+                .eq('indent_number', indentNumber);
+
+            return publicUrl;
+        } catch (error) {
+            console.error('Error updating PDF:', error);
+            return null;
+        }
+    };
+
     const handleSpecificationUpdate = async (id: number, value: string) => {
         try {
             await updateIndentSpecifications(id, value);
@@ -179,7 +242,7 @@ export default function ApproveIndent() {
                     cell: ({ row, table }: { row: Row<IndentRecord>, table: any }) => {
                         const id = row.original.id;
                         const status = table.options.meta?.editedStatuses[id] ?? 'Regular';
-                        
+
                         return (
                             <div className="flex items-center gap-2">
                                 <Select
@@ -329,22 +392,23 @@ export default function ApproveIndent() {
             header: 'Attachment',
             cell: ({ row }: { row: Row<IndentRecord> }) => {
                 const attachment = row.original.attachment;
+                return attachment ? (
+                    <a href={attachment} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline whitespace-nowrap flex items-center gap-1">
+                        <DownloadOutlined className="text-[10px]" /> User File
+                    </a>
+                ) : <span className="text-muted-foreground text-[10px]">None</span>;
+            },
+        },
+        {
+            accessorKey: 'indent_url',
+            header: 'PDF',
+            cell: ({ row }: { row: Row<IndentRecord> }) => {
                 const indentUrl = row.original.indent_url;
-                return (
-                    <div className="flex flex-col gap-1">
-                        {attachment && (
-                            <a href={attachment} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline whitespace-nowrap">
-                                User Attachment
-                            </a>
-                        )}
-                        {indentUrl && (
-                            <a href={indentUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-600 font-medium hover:underline whitespace-nowrap">
-                                Indent PDF
-                            </a>
-                        )}
-                        {!attachment && !indentUrl && <span className="text-muted-foreground text-[10px]">None</span>}
-                    </div>
-                );
+                return indentUrl ? (
+                    <a href={indentUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-600 font-medium hover:underline whitespace-nowrap flex items-center gap-1">
+                        <DownloadOutlined className="text-[10px]" /> Indent PDF
+                    </a>
+                ) : <span className="text-muted-foreground text-[10px]">None</span>;
             },
         },
         {
@@ -465,6 +529,31 @@ export default function ApproveIndent() {
             ),
         },
         {
+            accessorKey: 'attachment',
+            header: 'Attachment',
+            cell: ({ row }: { row: Row<IndentRecord> }) => {
+                const attachment = row.original.attachment;
+                return attachment ? (
+                    <a href={attachment} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline whitespace-nowrap flex items-center gap-1">
+                        <DownloadOutlined className="text-[10px]" /> User File
+                    </a>
+                ) : <span className="text-muted-foreground text-[10px]">None</span>;
+            },
+        },
+        {
+            accessorKey: 'indent_url',
+            header: 'PDF',
+            cell: ({ row }: { row: Row<IndentRecord> }) => {
+                const { indent_url, vendor_type } = row.original;
+                return indent_url ? (
+                    <a href={indent_url} download target="_blank" rel="noopener noreferrer" className="text-indigo-600 font-bold hover:underline whitespace-nowrap flex items-center gap-1">
+                        <DownloadOutlined className="text-[10px]" />
+                        {vendor_type === 'Reject' ? 'Rejected PDF' : 'Completed PDF'}
+                    </a>
+                ) : <span className="text-muted-foreground text-[10px]">None</span>;
+            },
+        },
+        {
             accessorKey: 'timestamp',
             header: 'Request Date',
             cell: ({ row }) => row.original.timestamp ? formatDate(new Date(row.original.timestamp)) : '-',
@@ -567,9 +656,14 @@ export default function ApproveIndent() {
                 actual1: currentDateTime,
                 vendor_type: values.approval,
                 approved_quantity: values.approvedQuantity ?? selectedIndent.quantity,
+                status: values.approval === 'Reject' ? 'Rejected' : 'Completed',
                 // Set planned2 for approved indents (not rejected)
                 ...(values.approval !== 'Reject' && { planned2: currentDateTime }),
             });
+
+            if (values.approval !== 'Reject') {
+                await handlePdfUpdate(selectedIndent.indent_number);
+            }
 
             toast.success(`Updated approval status of ${selectedIndent.indent_number}`);
             setOpenDialog(false);
@@ -601,8 +695,18 @@ export default function ApproveIndent() {
                     actual1: currentDateTime,
                     vendor_type: status,
                     approved_quantity: status === 'Reject' ? 0 : qtyToApprove,
+                    status: status === 'Reject' ? 'Rejected' : 'Completed',
                     ...(status !== 'Reject' && { planned2: currentDateTime }),
                 });
+            }
+
+            // Update PDFs for all affected indents (bulk)
+            const uniqueIndentNumbers = Array.from(new Set(selectedIndents.map(i => i.indent_number)));
+            for (const indentNo of uniqueIndentNumbers) {
+                const someApproved = selectedIndents.some(i => i.indent_number === indentNo && (editedStatuses[i.id] ?? 'Regular') !== 'Reject');
+                if (someApproved) {
+                    await handlePdfUpdate(indentNo);
+                }
             }
 
             toast.success(`Succesfully processed ${selectedIds.length} items`);

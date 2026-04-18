@@ -64,6 +64,7 @@ export interface IndentRecord {
     vendor2_rank?: string;
     vendor3_rank?: string;
     indent_url?: string; // Added for PDF link
+    expected_req_date?: string; // Added
 }
 
 // ==================== FETCH FUNCTIONS ====================
@@ -132,6 +133,7 @@ export async function fetchIndentRecords(): Promise<IndentRecord[]> {
             vendor2_rank: r.vendor2_rank || '',
             vendor3_rank: r.vendor3_rank || '',
             indent_url: r.indent_url || '', // Populated from DB
+            expected_req_date: r.expected_req_date || '', // Added
         }));
     } catch (error) {
         console.error('Error fetching indent records:', error);
@@ -151,6 +153,8 @@ export async function updateIndentApproval(
         vendor_type: string;
         approved_quantity: number;
         planned2?: string;
+        status?: string;
+        indent_url?: string;
     }
 ) {
     try {
@@ -161,6 +165,8 @@ export async function updateIndentApproval(
                 vendor_type: updateData.vendor_type,
                 approved_quantity: updateData.approved_quantity,
                 planned2: updateData.planned2,
+                status: updateData.status,
+                indent_url: updateData.indent_url,
             })
             .eq('id', id);
 

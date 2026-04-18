@@ -1,4 +1,4 @@
-import { Plus, Building2, Package, FileSpreadsheet, Boxes, LayoutGrid, Building, Trash, Pencil, X } from 'lucide-react';
+import { Plus, Building2, Package, FileSpreadsheet, Boxes, LayoutGrid, Building, Trash, Pencil, X, Search } from 'lucide-react';
 import Heading from '../element/Heading';
 import { useEffect, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -24,6 +24,20 @@ import { Checkbox } from '../ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { addItemToInventory } from '@/services/inventoryService';
 import { useSheets } from '@/context/SheetsContext';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '../ui/select';
+import { ClipLoader as Loader } from 'react-spinners';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "../ui/tooltip";
 
 const nullishToUndefined = (value: unknown) => (value === null || value === '' ? undefined : value);
 const optionalText = () => z.preprocess(nullishToUndefined, z.string().optional());
@@ -38,8 +52,6 @@ const vendorSchema = z.object({
     responsible_person: optionalText(),
     location: optionalText(),
     phone: optionalText(),
-    regular_conditions: z.array(z.object({ value: z.string() })).default([{ value: '' }]),
-    third_party_conditions: z.array(z.object({ value: z.string() })).default([{ value: '' }]),
 });
 type VendorFormValues = {
     vendor_name: string;
@@ -49,8 +61,6 @@ type VendorFormValues = {
     responsible_person: string;
     location: string;
     phone: string;
-    regular_conditions: { value: string }[];
-    third_party_conditions: { value: string }[];
 };
 const itemSchema = z.object({
     item_name: z.string().min(1, 'Required'),
@@ -58,6 +68,8 @@ const itemSchema = z.object({
     uom: z.string().optional(),
     include_in_inventory: z.boolean().default(false),
     inventory_quantity: z.coerce.number().min(0, 'Quantity cannot be negative').default(0),
+    regular_conditions: z.array(z.object({ value: z.string() })).default([{ value: '' }]),
+    third_party_conditions: z.array(z.object({ value: z.string() })).default([{ value: '' }]),
 }).superRefine((data, ctx) => {
     if (data.include_in_inventory && data.inventory_quantity <= 0) {
         ctx.addIssue({
@@ -71,12 +83,60 @@ const departmentSchema = z.object({ department: z.string().min(1, 'Required') })
 const projectSchema = z.object({ firm_name: z.string().min(1, 'Required') });
 const companySchema = z.object({ company_name: z.string().min(1, 'Required'), company_gstin: z.string().optional(), company_pan: z.string().optional(), company_email: z.string().email().or(z.literal('')), company_phone: z.string().optional(), company_address: z.string().optional(), billing_address: z.string().optional(), destination_address: z.string().optional() });
 
+const ConditionsCell = ({ val }: { val: any }) => {
+    if (!val) return <span className="text-muted-foreground italic text-xs">--</span>;
+    try {
+        const parsed = typeof val === 'string' ? JSON.parse(val) : val;
+        if (!Array.isArray(parsed) || parsed.length === 0) return <span className="text-muted-foreground italic text-xs">--</span>;
+
+        const first = parsed[0];
+        const remaining = parsed.length - 1;
+
+        if (remaining === 0) return <div className="text-xs truncate max-w-[150px]">{first}</div>;
+
+        return (
+            <div className="flex items-center gap-1.5 text-xs">
+                <span className="truncate max-w-[80px] sm:max-w-[120px]">{first}</span>
+                <TooltipProvider>
+                    <Tooltip delayDuration={0}>
+                        <TooltipTrigger asChild>
+                            <div className="cursor-help px-1.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold border border-indigo-100 dark:border-indigo-900/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors shrink-0">
+                                +{remaining} more
+                            </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-xs p-3 bg-popover text-popover-foreground border shadow-xl rounded-xl">
+                            <div className="space-y-2">
+                                <div className="flex items-center gap-2 border-b border-border/50 pb-1.5 mb-1.5">
+                                    <FileSpreadsheet size={14} className="text-primary" />
+                                    <p className="font-bold text-xs uppercase tracking-wider">Terms & Conditions</p>
+                                </div>
+                                <ul className="space-y-1.5">
+                                    {parsed.map((c, i) => (
+                                        <li key={i} className="flex gap-2 items-start leading-relaxed animate-in fade-in slide-in-from-left-1 duration-200" style={{ animationDelay: `${i * 30}ms` }}>
+                                            <span className="text-primary/70 font-bold shrink-0 mt-0.5">{i + 1}.</span>
+                                            <span className="text-xs font-medium">{c}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
+            </div>
+        );
+    } catch (e) {
+        return <span className="text-muted-foreground italic text-xs">--</span>;
+    }
+};
+
 export default function MasterManagement() {
     const { updateInventorySheet } = useSheets();
     const [allRecords, setAllRecords] = useState<any[]>([]);
     const [dataLoading, setDataLoading] = useState(true);
     const [editingRecord, setEditingRecord] = useState<any>(null);
     const [openDialog, setOpenDialog] = useState<string | null>(null);
+    const [searchTermDept, setSearchTermDept] = useState('');
+    const [isAddingDept, setIsAddingDept] = useState(false);
 
     const vForm = useForm<VendorFormValues>({
         resolver: zodResolver(vendorSchema) as any,
@@ -88,18 +148,16 @@ export default function MasterManagement() {
             responsible_person: '',
             location: '',
             phone: '',
-            regular_conditions: [{ value: '' }],
-            third_party_conditions: [{ value: '' }]
         }
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const iForm = useForm<z.infer<typeof itemSchema>>({ resolver: zodResolver(itemSchema) as any, defaultValues: { item_name: '', group_head: '', uom: '', include_in_inventory: false, inventory_quantity: 0 } });
+    const iForm = useForm<z.infer<typeof itemSchema>>({ resolver: zodResolver(itemSchema) as any, defaultValues: { item_name: '', group_head: '', uom: '', include_in_inventory: false, inventory_quantity: 0, regular_conditions: [{ value: '' }], third_party_conditions: [{ value: '' }] } });
     const dForm = useForm<z.infer<typeof departmentSchema>>({ resolver: zodResolver(departmentSchema), defaultValues: { department: '' } });
     const pForm = useForm<z.infer<typeof projectSchema>>({ resolver: zodResolver(projectSchema), defaultValues: { firm_name: '' } });
     const cForm = useForm<z.infer<typeof companySchema>>({ resolver: zodResolver(companySchema), defaultValues: { company_name: '', company_gstin: '', company_pan: '', company_email: '', company_phone: '', company_address: '', billing_address: '', destination_address: '' } });
 
-    const { fields: regFields, append: regAppend, remove: regRemove } = useFieldArray({ control: vForm.control, name: "regular_conditions" });
-    const { fields: tpFields, append: tpAppend, remove: tpRemove } = useFieldArray({ control: vForm.control, name: "third_party_conditions" });
+    const { fields: regFields, append: regAppend, remove: regRemove } = useFieldArray({ control: iForm.control, name: "regular_conditions" });
+    const { fields: tpFields, append: tpAppend, remove: tpRemove } = useFieldArray({ control: iForm.control, name: "third_party_conditions" });
 
     const includeInInventory = iForm.watch('include_in_inventory');
 
@@ -148,8 +206,8 @@ export default function MasterManagement() {
             if (openDialog === 'project') pForm.reset(normalized);
             if (openDialog === 'company') cForm.reset(normalized);
         } else if (openDialog) {
-            if (openDialog === 'vendor') vForm.reset({ vendor_name: '', vendor_gstin: '', vendor_address: '', vendor_email: '', responsible_person: '', location: '', phone: '', regular_conditions: [{ value: '' }], third_party_conditions: [{ value: '' }] });
-            if (openDialog === 'item') iForm.reset({ item_name: '', group_head: '', uom: '', include_in_inventory: false, inventory_quantity: 0 });
+            if (openDialog === 'vendor') vForm.reset({ vendor_name: '', vendor_gstin: '', vendor_address: '', vendor_email: '', responsible_person: '', location: '', phone: '' });
+            if (openDialog === 'item') iForm.reset({ item_name: '', group_head: '', uom: '', include_in_inventory: false, inventory_quantity: 0, regular_conditions: [{ value: '' }], third_party_conditions: [{ value: '' }] });
             if (openDialog === 'dept') dForm.reset({ department: '' });
             if (openDialog === 'project') pForm.reset({ firm_name: '' });
             if (openDialog === 'company') cForm.reset({ company_name: '', company_gstin: '', company_pan: '', company_email: '', company_phone: '', company_address: '', billing_address: '', destination_address: '' });
@@ -181,6 +239,27 @@ export default function MasterManagement() {
         </div>
     );
 
+    const handleAddDeptInline = async (formInstance: any, fieldName: string) => {
+        if (!searchTermDept.trim()) return;
+        setIsAddingDept(true);
+        try {
+            const res = await insertMasterData({ department: searchTermDept.trim() });
+            if (res.success) {
+                toast.success(`Department "${searchTermDept}" added successfully!`);
+                await loadData();
+                formInstance.setValue(fieldName, searchTermDept.trim());
+                setSearchTermDept('');
+            } else {
+                toast.error('Failed to add department');
+            }
+        } catch (error) {
+            console.error('Error adding department:', error);
+            toast.error('Error adding department');
+        } finally {
+            setIsAddingDept(false);
+        }
+    };
+
     const vendorColumns: ColumnDef<any>[] = [
         { accessorKey: 'vendor_name', header: 'Vendor Name', cell: ({ row }) => <div className="flex items-center gap-2 font-medium"><Building2 size={16} className="text-primary" />{row.original.vendor_name}</div> },
         { accessorKey: 'vendor_gstin', header: 'GSTIN' },
@@ -195,7 +274,17 @@ export default function MasterManagement() {
         { accessorKey: 'item_name', header: 'Product Name', cell: ({ row }) => <div className="flex items-center gap-2 font-medium"><Package size={16} className="text-blue-500" />{row.original.item_name}</div> },
         { accessorKey: 'group_head', header: 'Group Head' },
         { accessorKey: 'uom', header: 'UOM' },
-        { id: 'actions', cell: ({ row }) => getActions(row.original, 'item') }
+        {
+            accessorKey: 'regular_conditions',
+            header: 'Regular Terms Conditions',
+            cell: ({ row }) => <ConditionsCell val={row.original.regular_conditions} />
+        },
+        {
+            accessorKey: 'third_party_conditions',
+            header: '3rd Party terms Conditions',
+            cell: ({ row }) => <ConditionsCell val={row.original.third_party_conditions} />
+        },
+        { header: 'Actions', id: 'actions', cell: ({ row }) => getActions(row.original, 'item') }
     ];
 
     const departmentColumns: ColumnDef<any>[] = [
@@ -211,6 +300,7 @@ export default function MasterManagement() {
     ];
     const projectColumns: ColumnDef<any>[] = [
         { accessorKey: 'firm_name', header: 'Project Name', cell: ({ row }) => <div className="flex items-center gap-2 font-medium"><Building size={16} className="text-purple-500" />{row.original.firm_name}</div> },
+
         { id: 'actions', cell: ({ row }) => getActions(row.original, 'project') }
     ];
 
@@ -232,8 +322,6 @@ export default function MasterManagement() {
                 responsible_person: values.responsible_person || null,
                 location: values.location || null,
                 phone: values.phone || null,
-                regular_conditions: JSON.stringify(values.regular_conditions?.map((c: any) => c.value).filter(Boolean) || []),
-                third_party_conditions: JSON.stringify(values.third_party_conditions?.map((c: any) => c.value).filter(Boolean) || []),
             }
             : values;
         const itemPayload = type === 'item'
@@ -241,8 +329,16 @@ export default function MasterManagement() {
                 item_name: values.item_name,
                 group_head: values.group_head,
                 uom: values.uom,
+                regular_conditions: values.regular_conditions?.map((c: any) => c.value).filter(Boolean) || [],
+                third_party_conditions: values.third_party_conditions?.map((c: any) => c.value).filter(Boolean) || [],
             }
             : vendorPayload;
+
+        const finalPayload = type === 'project'
+            ? {
+                firm_name: values.firm_name,
+            }
+            : itemPayload;
 
         if (editingRecord) {
             if (type === 'dept') {
@@ -256,10 +352,10 @@ export default function MasterManagement() {
                 const results = await Promise.all(updates);
                 res = { success: results.every(r => r.success) };
             } else {
-                res = await updateMasterData(editingRecord.id, itemPayload);
+                res = await updateMasterData(editingRecord.id, finalPayload);
             }
         } else {
-            res = await insertMasterData(itemPayload);
+            res = await insertMasterData(finalPayload);
             if (res.success && type === 'item' && values.include_in_inventory) {
                 const inventoryRes = await addItemToInventory({
                     itemName: values.item_name,
@@ -300,14 +396,50 @@ export default function MasterManagement() {
                     <TabsTrigger value="vendors" className="gap-1 sm:gap-2 px-3 sm:px-6 text-xs sm:text-sm"><Building2 size={14} className="sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Vendors</span></TabsTrigger>
                     <TabsTrigger value="items" className="gap-1 sm:gap-2 px-3 sm:px-6 text-xs sm:text-sm"><Boxes size={14} className="sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Items</span></TabsTrigger>
                     <TabsTrigger value="departments" className="gap-1 sm:gap-2 px-3 sm:px-6 text-xs sm:text-sm"><LayoutGrid size={14} className="sm:w-4 sm:h-4" /> <span className="hidden md:inline">Depts</span><span className="md:hidden">D</span></TabsTrigger>
-                    <TabsTrigger value="projects" className="gap-1 sm:gap-2 px-3 sm:px-6 text-xs sm:text-sm"><Building size={14} className="sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Project</span></TabsTrigger>
                     <TabsTrigger value="companies" className="gap-1 sm:gap-2 px-3 sm:px-6 text-xs sm:text-sm"><Building size={14} className="sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Companies</span></TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="vendors" className="flex-1 outline-none"><DataTable data={vendorsData} columns={vendorColumns} searchFields={['vendor_name']} dataLoading={dataLoading} extraActions={<Button className="bg-indigo-600" onClick={() => { vForm.reset(); setEditingRecord(null); setOpenDialog('vendor'); }}><Plus size={18} /> Add Vendor</Button>} /></TabsContent>
                 <TabsContent value="items" className="flex-1 outline-none"><DataTable data={itemsData} columns={itemColumns} searchFields={['item_name']} dataLoading={dataLoading} extraActions={<Button className="bg-blue-600" onClick={() => { iForm.reset(); setEditingRecord(null); setOpenDialog('item'); }}><Plus size={18} /> Add Item</Button>} /></TabsContent>
-                <TabsContent value="departments" className="flex-1 outline-none"><DataTable data={departmentsData} columns={departmentColumns} searchFields={['department']} dataLoading={dataLoading} extraActions={<Button className="bg-orange-600" onClick={() => { dForm.reset(); setEditingRecord(null); setOpenDialog('dept'); }}><Plus size={18} /> Add Dept</Button>} /></TabsContent>
-                <TabsContent value="projects" className="flex-1 outline-none"><DataTable data={projectsData} columns={projectColumns} searchFields={['firm_name']} dataLoading={dataLoading} extraActions={<Button className="bg-purple-600" onClick={() => { pForm.reset(); setEditingRecord(null); setOpenDialog('project'); }}><Plus size={18} /> Add Project</Button>} /></TabsContent>
+                <TabsContent value="departments" className="flex-1 outline-none">
+                    <Tabs defaultValue="dept-table" className="h-full flex flex-col">
+                        <div className="flex w-full mb-4">
+                            <TabsList className="bg-muted/50 p-1 rounded-lg w-full">
+                                <TabsTrigger value="dept-table" className="text-xs px-4">Dept Name</TabsTrigger>
+                                <TabsTrigger value="project-table" className="text-xs px-4">Project Name</TabsTrigger>
+                            </TabsList>
+                        </div>
+
+                        <TabsContent value="dept-table" className="flex-1 outline-none ">
+                            <DataTable
+                                data={departmentsData}
+                                columns={departmentColumns}
+                                searchFields={['department']}
+                                dataLoading={dataLoading}
+                                extraActions={
+                                    <Button className="bg-orange-600" onClick={() => { dForm.reset(); setEditingRecord(null); setOpenDialog('dept'); }}>
+                                        <Plus size={18} /> Add Dept
+                                    </Button>
+                                }
+                            />
+                        </TabsContent>
+
+                        <TabsContent value="project-table" className="flex-1 outline-none">
+                            <DataTable
+                                data={projectsData}
+                                columns={projectColumns}
+                                searchFields={['firm_name']}
+                                dataLoading={dataLoading}
+                                extraActions={
+                                    <Button className="bg-purple-600" onClick={() => { pForm.reset(); setEditingRecord(null); setOpenDialog('project'); }}>
+                                        <Plus size={18} /> Add Project
+                                    </Button>
+                                }
+                            />
+                        </TabsContent>
+                    </Tabs>
+                </TabsContent>
+                <TabsContent value="projects" className="flex-1 outline-none hidden"></TabsContent>
                 <TabsContent value="companies" className="flex-1 outline-none"><DataTable data={companiesData} columns={companyColumns} searchFields={['company_name']} dataLoading={dataLoading} extraActions={<Button className="bg-emerald-600" onClick={() => { cForm.reset(); setEditingRecord(null); setOpenDialog('company'); }}><Plus size={18} /> Add Company</Button>} /></TabsContent>
             </Tabs>
 
@@ -376,6 +508,34 @@ export default function MasterManagement() {
                                                     <FormControl><Input {...field} placeholder="e.g., Mr. Rajesh Kumar" /></FormControl>
                                                 </FormItem>
                                             )} />
+                                            <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save Vendor</Button>
+                                        </form>
+                                    </Form>
+                                )}
+                                {openDialog === 'item' && (
+                                    <Form {...iForm}>
+                                        <form className="grid gap-4" onSubmit={iForm.handleSubmit(v => onSubmit(v, 'item'))}>
+                                            <FormField control={iForm.control} name="item_name" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Item Name</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="" /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )} />
+                                            <FormField control={iForm.control} name="group_head" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Group Head</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="" /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )} />
+                                            <FormField control={iForm.control} name="uom" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>UOM</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="" /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )} />
                                             <div className="space-y-6 border rounded-xl p-4 sm:p-6 bg-muted/20 border-border/60">
                                                 <div className="space-y-4">
                                                     <div className="flex items-center justify-between">
@@ -386,8 +546,8 @@ export default function MasterManagement() {
                                                         {regFields.map((field, index) => (
                                                             <div key={field.id} className="flex gap-2 items-center group animate-in slide-in-from-left-2 duration-200">
                                                                 <div className="bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold h-5 w-5 rounded-full flex items-center justify-center shrink-0">{index + 1}</div>
-                                                                <FormField control={vForm.control} name={`regular_conditions.${index}.value` as any} render={({ field }) => (
-                                                                    <div className="flex-1 shrink-0"><Input {...field} placeholder="Enter condition..." className="h-9 text-sm" /></div>
+                                                                <FormField control={iForm.control} name={`regular_conditions.${index}.value` as any} render={({ field }) => (
+                                                                    <div className="flex-1 shrink-0"><Input {...field} placeholder="" className="h-9 text-sm" /></div>
                                                                 )} />
                                                                 <Button type="button" variant="ghost" size="icon" onClick={() => regRemove(index)} className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"><X size={14} /></Button>
                                                             </div>
@@ -407,8 +567,8 @@ export default function MasterManagement() {
                                                         {tpFields.map((field, index) => (
                                                             <div key={field.id} className="flex gap-2 items-center group animate-in slide-in-from-left-2 duration-200">
                                                                 <div className="bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold h-5 w-5 rounded-full flex items-center justify-center shrink-0">{index + 1}</div>
-                                                                <FormField control={vForm.control} name={`third_party_conditions.${index}.value` as any} render={({ field }) => (
-                                                                    <div className="flex-1 shrink-0"><Input {...field} placeholder="Enter condition..." className="h-9 text-sm" /></div>
+                                                                <FormField control={iForm.control} name={`third_party_conditions.${index}.value` as any} render={({ field }) => (
+                                                                    <div className="flex-1 shrink-0"><Input {...field} placeholder="" className="h-9 text-sm" /></div>
                                                                 )} />
                                                                 <Button type="button" variant="ghost" size="icon" onClick={() => tpRemove(index)} className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"><X size={14} /></Button>
                                                             </div>
@@ -417,35 +577,6 @@ export default function MasterManagement() {
                                                     </div>
                                                 </div>
                                             </div>
-
-                                            <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save Vendor</Button>
-                                        </form>
-                                    </Form>
-                                )}
-                                {openDialog === 'item' && (
-                                    <Form {...iForm}>
-                                        <form className="grid gap-4" onSubmit={iForm.handleSubmit(v => onSubmit(v, 'item'))}>
-                                            <FormField control={iForm.control} name="item_name" render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Item Name</FormLabel>
-                                                    <FormControl><Input {...field} placeholder="e.g., Cement OPC 43" /></FormControl>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )} />
-                                            <FormField control={iForm.control} name="group_head" render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Group Head</FormLabel>
-                                                    <FormControl><Input {...field} placeholder="e.g., Construction Material" /></FormControl>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )} />
-                                            <FormField control={iForm.control} name="uom" render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>UOM</FormLabel>
-                                                    <FormControl><Input {...field} placeholder="e.g., BAG / NOS / MT" /></FormControl>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )} />
                                             <FormField control={iForm.control} name="include_in_inventory" render={({ field }) => (
                                                 <FormItem className="flex flex-row items-start gap-3 rounded-xl border p-4">
                                                     <FormControl><Checkbox checked={field.value} onCheckedChange={(checked) => field.onChange(checked === true)} /></FormControl>
@@ -470,7 +601,7 @@ export default function MasterManagement() {
                                 )}
                                 {openDialog === 'dept' && (
                                     <Form {...dForm}>
-                                        <form className="grid gap-4" onSubmit={dForm.handleSubmit(v => onSubmit(v, 'dept'))}>
+                                        <form className="grid gap-4 m-5" onSubmit={dForm.handleSubmit(v => onSubmit(v, 'dept'))}>
                                             <FormField control={dForm.control} name="department" render={({ field }) => (
                                                 <FormItem>
                                                     <FormLabel>Department Name</FormLabel>
@@ -484,7 +615,7 @@ export default function MasterManagement() {
                                 )}
                                 {openDialog === 'project' && (
                                     <Form {...pForm}>
-                                        <form className="grid gap-4" onSubmit={pForm.handleSubmit(v => onSubmit(v, 'project'))}>
+                                        <form className="grid gap-4 p-5" onSubmit={pForm.handleSubmit(v => onSubmit(v, 'project'))}>
                                             <FormField control={pForm.control} name="firm_name" render={({ field }) => (
                                                 <FormItem>
                                                     <FormLabel>Project Name</FormLabel>
