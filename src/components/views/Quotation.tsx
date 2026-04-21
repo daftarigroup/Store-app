@@ -96,9 +96,8 @@ type QuotationForm = z.infer<typeof quotationSchema>;
 
 
 // Simple Badge component as replacement
-const Badge = ({ children, variant, className, onClick }: {
+const Badge = ({ children, className, onClick }: {
   children: React.ReactNode;
-  variant?: string;
   className?: string;
   onClick?: () => void;
 }) => (
@@ -668,7 +667,7 @@ export default function QuotationPage() {
                         {selectedSuppliers.length > 0 && (
                           <div className="flex flex-wrap gap-2 mt-2">
                             {selectedSuppliers.map((supplier, index) => (
-                              <Badge key={index} variant="secondary" className="flex items-center gap-1 cursor-pointer">
+                              <Badge key={index} className="flex items-center gap-1 cursor-pointer">
                                 {supplier}
                                 <button type="button" onClick={() => handleSupplierSelect(supplier)} className="ml-1">×</button>
                               </Badge>
