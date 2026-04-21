@@ -81,6 +81,9 @@ export interface StoreInRecord {
     hodStatus: string;
     hodRemark: string;
     paymentTerms: string;
+    challanNo: string;
+    challanImage: string;
+    receiverName: string;
 }
 
 export interface LocationOption {
@@ -179,9 +182,52 @@ export async function fetchStoreInRecords() {
             actual11: r.actual11 || '',
             billStatusNew: r.bill_status_new || '',
             billImageStatus: r.bill_image_status || '',
+            challanNo: r.challan_no || '',
+            challanImage: r.challan_image || '',
+            receiverName: r.receiver_name || '',
         }));
     } catch (error) {
         console.error('Error fetching store-in records:', error);
+        throw error;
+    }
+}
+
+/**
+ * Fetch all direct store-in records from the specialized table
+ */
+export async function fetchDirectRecords() {
+    try {
+        const { data, error } = await supabase
+            .from('store_in_direct')
+            .select('*')
+            .order('timestamp', { ascending: false });
+
+        if (error) throw error;
+
+        return (data || []).map((r: any) => ({
+            liftNumber: r.lift_number || '',
+            indentNo: r.indent_no || '',
+            billNo: r.bill_no || '',
+            vendorName: r.vendor_name || '',
+            productName: r.product_name || '',
+            qty: Number(r.qty) || 0,
+            billAmount: Number(r.bill_amount) || 0,
+            photoOfBill: r.photo_of_bill || '',
+            transportationInclude: r.transportation_include || '',
+            transporterName: r.transporter_name || '',
+            amount: Number(r.amount) || 0,
+            actual6: r.actual6 || '',
+            receivingStatus: r.receiving_status || '',
+            receivedQuantity: Number(r.received_quantity) || 0,
+            photoOfProduct: r.photo_of_product || '',
+            timestamp: r.timestamp || '',
+            receiverName: r.receiver_name || '',
+            firmNameMatch: r.firm_name_match || '',
+            vehicleNo: r.vehicle_no || '',
+            hodStatus: r.hod_status || 'Pending',
+        }));
+    } catch (error) {
+        console.error('Error fetching direct records:', error);
         throw error;
     }
 }
@@ -235,6 +281,8 @@ export async function updateStoreInReceiving(
         remark: string;
         location: string;
         priceAsPerPoCheck: string;
+        challanNo?: string;
+        challanImage?: string;
     }
 ) {
     try {
@@ -250,6 +298,8 @@ export async function updateStoreInReceiving(
                 remark: updateData.remark,
                 location: updateData.location,
                 bill_received2: updateData.priceAsPerPoCheck, // ✅ Using existing spare column
+                challan_no: updateData.challanNo,
+                challan_image: updateData.challanImage,
             })
             .eq('lift_number', liftNumber);
 
@@ -645,6 +695,73 @@ export async function uploadDebitNoteCopy(file: File, liftNumber: string): Promi
         return publicUrl;
     } catch (error) {
         console.error('Debit note copy upload error:', error);
+        throw error;
+    }
+}
+
+/**
+ * Upload challan image to Supabase Storage
+ * @param file - File to upload
+ * @param liftNumber - Lift number for file naming
+ */
+export async function uploadChallanImage(file: File, liftNumber: string): Promise<string> {
+    try {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${liftNumber.replace(/\//g, '-')}_challan_${Date.now()}.${fileExt}`;
+        const filePath = `challan-images/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+            .from('indent_attachment')
+            .upload(filePath, file);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+            .from('indent_attachment')
+            .getPublicUrl(filePath);
+
+        return publicUrl;
+    } catch (error) {
+        console.error('Challan image upload error:', error);
+        throw error;
+    }
+}
+/**
+ * Create a new direct store_in record in the specialized table
+ * @param record - Partial record to insert
+ */
+export async function createDirectRecord(record: Partial<StoreInRecord>) {
+    try {
+        const { data, error } = await supabase
+            .from('store_in_direct')
+            .insert([{
+                lift_number: record.liftNumber,
+                indent_no: record.indentNo,
+                bill_no: record.billNo,
+                vendor_name: record.vendorName,
+                product_name: record.productName,
+                qty: record.qty,
+                receiving_status: record.receivingStatus,
+                received_quantity: record.receivedQuantity,
+                photo_of_bill: record.photoOfBill,
+                photo_of_product: record.photoOfProduct,
+                transportation_include: record.transportationInclude,
+                transporter_name: record.transporterName,
+                amount: record.amount,
+                vehicle_no: record.vehicleNo,
+                bill_amount: record.billAmount,
+                receiver_name: record.receiverName,
+                firm_name_match: record.firmNameMatch,
+                timestamp: record.timestamp || new Date().toISOString(),
+                actual6: new Date().toISOString(),
+                hod_status: 'Pending',
+            }])
+            .select();
+
+        if (error) throw error;
+        return data;
+    } catch (error) {
+        console.error('Error creating direct record:', error);
         throw error;
     }
 }

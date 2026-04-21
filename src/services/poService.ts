@@ -42,6 +42,7 @@ export async function fetchIndents() {
                 quotationDate: r.approved_quotation_date || '',
                 approvedPaymentTerm: r.approved_payment_term || '',
                 approvedAdvancePercent: r.approved_advance_percent || '',
+                vendorType: r.vendor_type || 'Regular',
             };
         });
     } catch (error) {
@@ -66,6 +67,8 @@ export async function fetchPoMaster() {
         return (data || []).map((r: any) => ({
             timestamp: r.timestamp,
             partyName: r.party_name || '',
+            supplierAddress: r.supplier_address || '',
+            supplierGstin: r.supplier_gstin || '',
             poNumber: r.po_number || '',
             internalCode: r.internal_code || '',
             product: r.product || '',
@@ -161,7 +164,7 @@ export async function fetchMasterData() {
                 vendorName: r.vendor_name,
                 gstin: r.vendor_gstin || '',
                 address: r.vendor_address || '',
-                email: r.vendor_email || '',
+                vendorEmail: r.vendor_email || '',
             }));
 
         // Deduplicate vendors by name
@@ -193,15 +196,30 @@ export async function fetchMasterData() {
             }
         });
 
+        // Aggregate Items (Products)
+        const items = records
+            .filter(r => r.item_name)
+            .map(r => ({
+                itemName: r.item_name,
+                regularConditions: Array.isArray(r.regular_conditions)
+                    ? r.regular_conditions
+                    : (typeof r.regular_conditions === 'string' ? JSON.parse(r.regular_conditions || '[]') : []),
+                thirdPartyConditions: Array.isArray(r.third_party_conditions)
+                    ? r.third_party_conditions
+                    : (typeof r.third_party_conditions === 'string' ? JSON.parse(r.third_party_conditions || '[]') : []),
+            }));
+
         return {
             destinationAddress: firstWithCompany.destination_address || '',
             defaultTerms: Array.from(allDefaultTerms),
             vendors: uniqueVendors,
+            items,
             firmCompanyMap,
             companyName: firstWithCompany.company_name || '',
             companyPhone: firstWithCompany.company_phone || '',
             companyGstin: firstWithCompany.company_gstin || '',
             companyPan: firstWithCompany.company_pan || '',
+            companyEmail: firstWithCompany.company_email || '',
             companyAddress: firstWithCompany.company_address || '',
             billingAddress: firstWithCompany.billing_address || '',
             paymentTerms,
@@ -261,16 +279,6 @@ export async function insertPoRecords(poRecords: any[]) {
             term8: record.term8 || '',
             term9: record.term9 || '',
             term10: record.term10 || '',
-            term11: record.term11 || '',
-            term12: record.term12 || '',
-            term13: record.term13 || '',
-            term14: record.term14 || '',
-            term15: record.term15 || '',
-            term16: record.term16 || '',
-            term17: record.term17 || '',
-            term18: record.term18 || '',
-            term19: record.term19 || '',
-            term20: record.term20 || '',
             delivery_date: record.deliveryDate || '',
             payment_terms: record.paymentTerms || '',
             number_of_days: String(record.numberOfDays || 0),

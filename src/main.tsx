@@ -1,4 +1,9 @@
 import '@/index.css';
+import { Buffer } from 'buffer';
+if (typeof window !== 'undefined') {
+    window.Buffer = Buffer;
+}
+
 
 import React, { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -81,6 +86,7 @@ import PendingPo from './components/views/PendingPo';
 import PaymentStatus from './components/views/PaymentStatus';
 import HodStoreApproval from './components/views/HodStoreApproval';
 import MasterManagement from './components/views/MasterManagement';
+import QuotationPage from './components/views/Quotation';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
     const { loggedIn, loading } = useAuth();
@@ -121,6 +127,14 @@ const routes: RouteAttributes[] = [
         name: 'Dashboard',
         icon: <LayoutDashboard size={20} />,
         element: <Dashboard />,
+        notifications: () => 0,
+    },
+    {
+        path: 'quotation',
+        gateKey: 'createPo',
+        name: 'Quotation',
+        icon: <FilePlus2 size={20} />,
+        element: <QuotationPage />,
         notifications: () => 0,
     },
     {

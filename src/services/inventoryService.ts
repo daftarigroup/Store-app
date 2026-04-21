@@ -14,7 +14,11 @@ export interface InventoryRecord {
     indented: number;
     approved: number;
     purchaseQuantity: number;
+    purchaseReturn: number;
+    liftingQty: number;
+    inTransit: number;
     outQuantity: number;
+    issueReturn: number;
     current: number;
     totalPrice: number;
     status: string;
@@ -54,20 +58,29 @@ export async function fetchInventoryRecords(): Promise<InventoryRecord[]> {
 
         if (error) throw error;
 
-        return (data || []).map((r: any) => ({
-            itemName: r.item_name || '',
-            groupHead: r.group_head || '',
-            uom: r.uom || '',
-            opening: Number(r.opening) || 0,
-            rate: Number(r.individual_rate) || 0,
-            indented: Number(r.indented) || 0,
-            approved: Number(r.approved) || 0,
-            purchaseQuantity: Number(r.purchase_quantity) || 0,
-            outQuantity: Number(r.out_quantity) || 0,
-            current: Number(r.current) || 0,
-            totalPrice: Number(r.total_price) || 0,
-            status: r.color_code || '',
-        }));
+        return (data || []).map((r: any) => {
+            const purQty = Number(r.purchase_quantity) || 0;
+            const liftQty = Number(r.received_quantity) || 0;
+            
+            return {
+                itemName: r.item_name || '',
+                groupHead: r.group_head || '',
+                uom: r.uom || '',
+                opening: Number(r.opening) || 0,
+                rate: Number(r.individual_rate) || 0,
+                indented: Number(r.indented) || 0,
+                approved: Number(r.approved) || 0,
+                purchaseQuantity: purQty,
+                purchaseReturn: Number(r.return_quantity) || 0,
+                liftingQty: liftQty,
+                inTransit: Math.max(0, purQty - liftQty),
+                outQuantity: Number(r.out_quantity) || 0,
+                issueReturn: Number(r.request_quantity) || 0,
+                current: Number(r.current) || 0,
+                totalPrice: Number(r.total_price) || 0,
+                status: r.color_code || '',
+            };
+        });
     } catch (error) {
         console.error('Error fetching inventory records:', error);
         throw error;

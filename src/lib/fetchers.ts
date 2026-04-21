@@ -15,6 +15,7 @@ import { supabase } from '@/lib/supabase';
 export async function uploadFile({
     file,
     folderId,
+    subFolder,
     uploadType = 'upload',
     email,
     emailSubject,
@@ -22,6 +23,7 @@ export async function uploadFile({
 }: {
     file: File;
     folderId: string;
+    subFolder?: string; // Target folder within the bucket
     uploadType?: 'upload' | 'email';
     email?: string;
     emailSubject?: string;
@@ -33,10 +35,11 @@ export async function uploadFile({
     void emailSubject;
     void emailBody;
 
-    // Build a unique storage path: <timestamp>-<sanitised-filename>
+    // Build a unique storage path: [subFolder/]<timestamp>-<sanitised-filename>
     const timestamp = Date.now();
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const storagePath = `${timestamp}-${safeName}`;
+    const fileName = `${timestamp}-${safeName}`;
+    const storagePath = subFolder ? `${subFolder}/${fileName}` : fileName;
 
     // folderId is the Supabase bucket name
     const bucketName = folderId;

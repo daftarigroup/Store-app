@@ -28,10 +28,19 @@ import { supabase, supabaseEnabled } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import IndentPdf from '../element/IndentPdf';
 import { pdf } from '@react-pdf/renderer';
-import logo from '../../assets/logo.jpeg';
+import { calculateRealInventory } from '@/lib/inventoryUtils';
+const logo = "/logo.png";
 
 export default () => {
-    const { masterSheet: options, updateInventorySheet, updateAll } = useSheets();
+    const { 
+        masterSheet: options, 
+        inventorySheet,
+        storeInSheet,
+        issueSheet,
+        indentSheet,
+        updateInventorySheet, 
+        updateAll 
+    } = useSheets();
     const { user } = useAuth();
     const [searchTerm, setSearchTerm] = useState('');
     const [searchTermGroupHead, setSearchTermGroupHead] = useState('');
@@ -115,10 +124,25 @@ export default () => {
 
     const historyColumns: ColumnDef<IndentRecord>[] = [
         { accessorKey: 'indent_number', header: 'Indent No.' },
+        {
+            accessorKey: 'timestamp',
+            header: 'Date',
+            cell: ({ row }) => row.original.timestamp ? formatDate(new Date(row.original.timestamp)) : '-',
+        },
+        { accessorKey: 'firm_name_match', header: 'Project' },
+        { accessorKey: 'indenter_name', header: 'Indenter' },
+        { accessorKey: 'department', header: 'Department' },
+        { accessorKey: 'group_head', header: 'Group Head' },
         { accessorKey: 'product_name', header: 'Product' },
         { accessorKey: 'quantity', header: 'Qty' },
         { accessorKey: 'uom', header: 'UOM' },
-        { accessorKey: 'firm_name_match', header: 'Project' },
+        { accessorKey: 'area_of_use', header: 'Area of Use' },
+        {
+            accessorKey: 'expected_req_date',
+            header: 'Expected Date',
+            cell: ({ row }) => row.original.expected_req_date ? formatDate(new Date(row.original.expected_req_date)) : '-',
+        },
+        { accessorKey: 'specifications', header: 'Remarks' },
         {
             accessorKey: 'indent_status',
             header: 'Priority',
@@ -145,11 +169,6 @@ export default () => {
                     View PDF
                 </a>
             ) : <span className="text-muted-foreground text-[10px]">N/A</span>
-        },
-        {
-            accessorKey: 'timestamp',
-            header: 'Date',
-            cell: ({ row }) => row.original.timestamp ? formatDate(new Date(row.original.timestamp)) : '-',
         },
     ];
 
@@ -240,20 +259,35 @@ export default () => {
                 return;
             }
 
-            // First, fetch the current inventory record for this product
+            // Calculate the actual stock dynamically using the same logic as the Inventory page
+            const realInventory = calculateRealInventory(
+                inventorySheet || [],
+                indentSheet || [],
+                storeInSheet || [],
+                issueSheet || []
+            );
+
+            const thisItem = realInventory.find(i => 
+                i.itemName === productName && i.groupHead === groupHead
+            );
+
+            if (thisItem) {
+                console.log(`Dynamic stock for ${productName}: ${thisItem.current}`);
+                form.setValue(`products.${index}.minStockQty`, thisItem.current);
+            } else {
+                console.warn(`Item ${productName} not found in inventory master`);
+            }
+
+            // Sync the 'indented' count in the DB as per original logic
             const { data: inventoryData, error: fetchError } = await supabase
                 .from('inventory')
-                .select('indented, current, item_name, group_head')
+                .select('indented')
                 .eq('item_name', productName)
                 .eq('group_head', groupHead)
                 .maybeSingle();
 
-            console.log("inventoryData-->>  ", inventoryData);
-
-
             if (fetchError) {
-                console.error('Error fetching inventory:', fetchError);
-                toast.error('Failed to fetch inventory data');
+                console.error('Error fetching inventory for indented update:', fetchError);
                 return;
             }
 
@@ -274,11 +308,7 @@ export default () => {
                     console.error('Error updating inventory:', updateError);
                     toast.error('Failed to update inventory');
                 } else {
-                    console.log(`Inventory updated for ${productName}: indented increased from ${currentIndented} to ${newIndented}`);
-
-                    // Optionally update the minStockQty field in the form with current stock
-                    const currentStock = Number(inventoryData.current) || 0;
-                    form.setValue(`products.${index}.minStockQty`, currentStock);
+                    console.log(`Inventory updated for ${productName}: indented increased to ${newIndented}`);
                 }
             } else {
                 // If no inventory record exists, create one with indented = 1
@@ -446,7 +476,8 @@ export default () => {
             const { error } = await supabase.from('indent').insert(rows);
 
             if (error) throw error;
-
+            
+            fetchHistory(); // Refresh history tab
             toast.success(`Indent ${nextIndentNumber} created successfully!`);
 
             // Reset form
@@ -1118,7 +1149,7 @@ export default () => {
                         data={historyData}
                         columns={historyColumns}
                         dataLoading={historyLoading}
-                        searchFields={['indent_number', 'product_name', 'indenter_name', 'firm_name_match']}
+                        searchFields={['indent_number', 'product_name', 'indenter_name', 'firm_name_match', 'department', 'group_head', 'area_of_use', 'specifications']}
                     />
                 </TabsContent>
             </Tabs>

@@ -65,35 +65,34 @@ function generatePoNumber(poNumbers: string[]): string {
 }
 
 function incrementPoRevision(poNumber: string, allPOs: any[]): string {
-    // Extract the base prefix and find the highest number
-    const prefix = 'STORE-PO-25-26-';
+    // 1. Identify the base PO (remove suffix if exists)
+    // The base PO format is STORE-PO-25-26-N
+    // If it's STORE-PO-25-26-N-M, then the base is STORE-PO-25-26-N
+    const parts = poNumber.split('-');
+    // Standard prefix (STORE-PO-25-26-) has 4 hyphens, so the 5th part (index 4) is the base number N.
+    // If there's a 6th part (index 5), it's a revision suffix M.
+    const basePo = parts.slice(0, 5).join('-');
 
-    // For existing PO numbers, we need to find the highest number in the entire system
+    // 2. Find all existing PO numbers in the system
     const allPoNumbers = allPOs
         .filter((po: any) => po.poNumber && typeof po.poNumber === 'string' && po.poNumber.trim() !== '')
         .map((po: any) => po.poNumber.trim());
 
-    // Also include the current PO number we're revising
-    allPoNumbers.push(poNumber);
+    // 3. Find all POs that belong to this base number
+    const relatedPos = allPoNumbers.filter(num => num === basePo || num.startsWith(basePo + '-'));
 
-    // Extract numbers from all PO numbers with the same prefix
-    const existingNumbers = allPoNumbers
-        .filter(po => po.startsWith(prefix))
-        .map(po => {
-            const numberStr = po.replace(prefix, '').trim();
-            const num = parseInt(numberStr, 10);
-            return isNaN(num) ? 0 : num;
-        })
-        .filter(n => n > 0);
+    // 4. Extract existing revision suffixes to find the next one
+    const revisionNumbers = relatedPos.map(num => {
+        if (num === basePo) return 0;
+        const suffixPart = num.replace(basePo + '-', '');
+        const n = parseInt(suffixPart, 10);
+        return isNaN(n) ? 0 : n;
+    });
 
+    const maxRevision = revisionNumbers.length > 0 ? Math.max(...revisionNumbers) : 0;
+    const nextRevision = maxRevision + 1;
 
-    // Find highest number and add 1
-    const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
-    const nextNumber = maxNumber + 1;
-
-    const newPoNumber = `${prefix}${nextNumber}`;
-
-    return newPoNumber;
+    return `${basePo}-${nextRevision}`;
 }
 
 function filterUniquePoNumbers(data: any[]): any[] {
@@ -129,32 +128,38 @@ interface IndentSheetItem {
     quotationDate?: string;
     approvedPaymentTerm?: string;
     approvedAdvancePercent?: string;
+    vendorType?: string;
 }
 
 interface MasterDetails {
-    destinationAddress?: string;
-    defaultTerms?: string[];
-    vendors?: Array<{
-        vendorName?: string;
-        address?: string;
-        gstin?: string;
-        vendorEmail?: string;
-        email?: string;
+    destinationAddress: string;
+    defaultTerms: string[];
+    vendors: {
+        vendorName: string;
+        gstin: string;
+        address: string;
+        vendorEmail: string;
         personName?: string;
+        email?: string;
+    }[];
+    items: {
+        itemName: string;
+        regularConditions: string[];
+        thirdPartyConditions: string[];
+    }[];
+    firmCompanyMap: Record<string, {
+        companyName: string;
+        companyAddress: string;
+        destinationAddress: string;
     }>;
-    firmCompanyMap?: Record<string, {
-        companyName?: string;
-        companyAddress?: string;
-        destinationAddress?: string;
-    }>;
-    companyName?: string;
-    paymentTerms?: string[];
-    companyPhone?: string;
-    companyGstin?: string;
-    companyPan?: string;
-    companyEmail?: string;
-    companyAddress?: string;
-    billingAddress?: string;
+    companyName: string;
+    companyPhone: string;
+    companyGstin: string;
+    companyPan: string;
+    companyEmail: string;
+    companyAddress: string;
+    billingAddress: string;
+    paymentTerms: string[];
 }
 
 
@@ -181,14 +186,14 @@ const schema = z.object({
             quantity: z.coerce.number().optional(),
             unit: z.string().optional(),
             rate: z.coerce.number().optional(),
+            paymentTerm: z.string().optional(),
+            numberOfDays: z.coerce.number().optional(),
         })
     ),
     terms: z.array(z.string().nonempty()),
     deliveryDate: z.coerce.date(),
     deliveryDays: z.coerce.number().optional(),
     deliveryType: z.enum(['for', 'exfactory']).optional(),
-    paymentTerms: z.string().nonempty(),
-    numberOfDays: z.coerce.number().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -226,7 +231,26 @@ const CreatePO = () => {
 
                 setIndentSheet(indents);
                 setPoMasterSheet(poMaster);
-                setDetails(masterData);
+
+                if (!masterData || (!masterData.vendors?.length && !masterData.items?.length)) {
+                    setDetails({
+                        destinationAddress: '',
+                        defaultTerms: [],
+                        vendors: [],
+                        items: [],
+                        firmCompanyMap: {},
+                        companyName: '',
+                        companyPhone: '',
+                        companyGstin: '',
+                        companyPan: '',
+                        companyEmail: '',
+                        companyAddress: '',
+                        billingAddress: '',
+                        paymentTerms: [],
+                    } as MasterDetails);
+                } else {
+                    setDetails(masterData as MasterDetails);
+                }
             } catch (error) {
                 console.error('Error loading data:', error);
                 toast.error('Failed to load data');
@@ -254,22 +278,16 @@ const CreatePO = () => {
             companyEmail: '',
             ourEnqNo: '',
             enquiryDate: undefined as any,
-            description: '',
-            indents: [],
-            terms: (details as MasterDetails)?.defaultTerms || [],
             deliveryDate: new Date(),
             deliveryDays: undefined,
             deliveryType: undefined,
-            paymentTerms: undefined as any,
-            numberOfDays: undefined,
+            description: '',
+            indents: [],
+            terms: [],
         },
     });
 
-    useEffect(() => {
-        if (details) {
-            form.setValue('terms', (details as MasterDetails).defaultTerms || []);
-        }
-    }, [details, form]);
+
 
     const indents = form.watch('indents');
     const vendor = form.watch('supplierName');
@@ -347,11 +365,8 @@ const CreatePO = () => {
             }
         }
 
-        if (matchingIndents.length > 0) {
-            const first = matchingIndents[0];
-            form.setValue('paymentTerms', first.approvedPaymentTerm || '');
-            form.setValue('numberOfDays', Number(first.approvedAdvancePercent) || 0);
-        }
+        // Payment terms are now handled per item in the table
+        // No longer setting top-level paymentTerms and numberOfDays
 
         form.setValue(
             'indents',
@@ -376,9 +391,41 @@ const CreatePO = () => {
                     quantity: i.approvedQuantity || 0,
                     unit: i.uom || '',
                     rate: i.approvedRate || 0,
+                    paymentTerm: i.approvedPaymentTerm || '',
+                    numberOfDays: Number(i.approvedAdvancePercent) || 0,
                 };
             })
         );
+
+        // Dynamic Terms Population based on Product and Vendor Type
+        const newTerms: string[] = [];
+        const masterDetails = details as MasterDetails;
+
+        if (masterDetails && masterDetails.items) {
+            matchingIndents.forEach((indent: IndentSheetItem) => {
+                const productName = indent.productName;
+                const vType = indent.vendorType?.toLowerCase()?.trim() || 'regular';
+
+                // Search for product in master items
+                const masterItem = masterDetails.items.find(item =>
+                    item.itemName.toLowerCase().trim() === productName?.toLowerCase()?.trim()
+                );
+
+                if (masterItem) {
+                    const conditions = (vType === 'three party' || vType === 'three pary')
+                        ? masterItem.thirdPartyConditions
+                        : masterItem.regularConditions;
+
+                    conditions.forEach(cond => {
+                        if (cond && !newTerms.includes(cond)) {
+                            newTerms.push(cond);
+                        }
+                    });
+                }
+            });
+        }
+
+        form.setValue('terms', newTerms);
 
         setTimeout(() => form.trigger(['supplierAddress', 'gstin']), 100);
 
@@ -396,12 +443,10 @@ const CreatePO = () => {
                 companyEmail: '',
                 enquiryDate: undefined as any,
                 indents: [],
-                terms: (details as MasterDetails)?.defaultTerms || [],
+                terms: [],
                 deliveryDate: new Date(),
                 deliveryDays: undefined,
                 deliveryType: undefined,
-                paymentTerms: undefined as any,
-                numberOfDays: undefined,
                 description: '',
             });
         } else {
@@ -418,12 +463,10 @@ const CreatePO = () => {
                     ourEnqNo: '',
                     enquiryDate: undefined as any,
                     indents: [],
-                    terms: (details as MasterDetails)?.defaultTerms || [],
+                    terms: [],
                     deliveryDate: new Date(),
                     deliveryDays: undefined,
                     deliveryType: undefined,
-                    paymentTerms: undefined as any,
-                    numberOfDays: undefined,
                     description: '',
                 });
             } else {
@@ -437,12 +480,10 @@ const CreatePO = () => {
                     ourEnqNo: '',
                     enquiryDate: undefined as any,
                     indents: [],
-                    terms: (details as MasterDetails)?.defaultTerms || [],
+                    terms: [],
                     deliveryDate: new Date(),
                     deliveryDays: undefined,
                     deliveryType: undefined,
-                    paymentTerms: undefined as any,
-                    numberOfDays: undefined,
                     description: '',
                 });
             }
@@ -469,13 +510,9 @@ const CreatePO = () => {
                     form.setValue('gstin', vendor.gstin || '');
                     form.setValue('companyEmail', vendor.vendorEmail || '');
                 } else {
-                    const storedAddress = (firstPoItem as any)?.supplierAddress || '';
-                    const storedGstin = (firstPoItem as any)?.supplierGstin || '';
-                    const storedEmail = (firstPoItem as any)?.companyEmail || '';
-
-                    form.setValue('supplierAddress', storedAddress);
-                    form.setValue('gstin', storedGstin);
-                    form.setValue('companyEmail', storedEmail);
+                    form.setValue('supplierAddress', firstPoItem.supplierAddress || '');
+                    form.setValue('gstin', firstPoItem.supplierGstin || '');
+                    form.setValue('companyEmail', firstPoItem.companyEmail || '');
                 }
 
                 form.setValue('ourEnqNo', firstPoItem.enquiryNumber || '');
@@ -485,8 +522,6 @@ const CreatePO = () => {
                 form.setValue('deliveryDate', isNaN(delDate.getTime()) ? new Date() : delDate);
                 form.setValue('deliveryDays', firstPoItem.deliveryDays || 0);
                 form.setValue('deliveryType', (firstPoItem.deliveryType === 'for' || firstPoItem.deliveryType === 'exfactory') ? firstPoItem.deliveryType : undefined);
-                form.setValue('paymentTerms', firstPoItem.paymentTerms as any || undefined);
-                form.setValue('numberOfDays', firstPoItem.numberOfDays || 0);
 
                 const poIndents = poItems.map((poItem) => {
                     const originalIndent = indentSheet.find(i =>
@@ -504,6 +539,8 @@ const CreatePO = () => {
                         quantity: poItem.quantity || 0,
                         unit: poItem.unit || '',
                         rate: poItem.rate || 0,
+                        paymentTerm: poItem.paymentTerms || '',
+                        numberOfDays: poItem.numberOfDays || 0,
                     };
                 });
                 form.setValue('indents', poIndents);
@@ -528,7 +565,7 @@ const CreatePO = () => {
                     });
                 }
 
-                form.setValue('terms', terms.length > 0 ? terms : ((details as MasterDetails)?.defaultTerms || []));
+                form.setValue('terms', terms);
             }
         }
     }, [poNumber, mode, poMasterSheet, details, form]);
@@ -544,7 +581,7 @@ const CreatePO = () => {
     };
 
     const getLogoBase64 = async (): Promise<string> => {
-        return '/logo.jpeg';
+        return '/logo.png';
     };
 
     async function generatePreviewData(): Promise<POPdfProps> {
@@ -681,7 +718,7 @@ const CreatePO = () => {
                 }),
                 totalAmount: grandTotal,
                 terms: parsedTerms,
-                logo: logoBase64 || '/logo.jpeg',
+                logo: logoBase64 || '/logo.png',
             };
 
             const blob = await pdf(<POPdf {...pdfProps} />).toBlob();
@@ -719,6 +756,8 @@ const CreatePO = () => {
 
 
                 return {
+                    discountPercent: v.discount || 0,
+                    gstPercent: v.gst,
                     timestamp: values.poDate.toISOString(),
                     partyName: values.supplierName,
                     poNumber,
@@ -743,36 +782,24 @@ const CreatePO = () => {
                     quotationDate: '',
                     enquiryNumber: values.ourEnqNo || '',
                     enquiryDate: values.enquiryDate ? formatDateTime(values.enquiryDate) : '',
-                    term1: values.terms[0],
-                    term2: values.terms[1],
-                    term3: values.terms[2],
-                    term4: values.terms[3],
-                    term5: values.terms[4],
-                    term6: values.terms[5],
-                    term7: values.terms[6],
-                    term8: values.terms[7],
-                    term9: values.terms[8],
-                    term10: values.terms[9],
-                    term11: values.terms[10],
-                    term12: values.terms[11],
-                    term13: values.terms[12],
-                    term14: values.terms[13],
-                    term15: values.terms[14],
-                    term16: values.terms[15],
-                    term17: values.terms[16],
-                    term18: values.terms[17],
-                    term19: values.terms[18],
-                    term20: values.terms[19],
-                    discountPercent: v.discount || 0,
-                    gstPercent: v.gst,
+                    term1: values.terms[0] || '',
+                    term2: values.terms[1] || '',
+                    term3: values.terms[2] || '',
+                    term4: values.terms[3] || '',
+                    term5: values.terms[4] || '',
+                    term6: values.terms[5] || '',
+                    term7: values.terms[6] || '',
+                    term8: values.terms[7] || '',
+                    term9: values.terms[8] || '',
+                    term10: values.terms[9] || '',
                     deliveryDate: formatDateTime(values.deliveryDate),
-                    paymentTerms: values.paymentTerms,
-                    numberOfDays: values.numberOfDays || 0,
+                    paymentTerms: v.paymentTerm || '',
+                    numberOfDays: v.numberOfDays || 0,
                     deliveryDays: values.deliveryDays || 0,
                     deliveryType: values.deliveryType || '',
                     firmNameMatch: (indent as any)?.firmNameMatch ?? '',
-                    advancePercent: (values.paymentTerms.toLowerCase().includes('partly') && (values.paymentTerms.toLowerCase().includes('advance') || values.paymentTerms.toLowerCase().includes('pi'))) ? (values.numberOfDays || 0) : 0,
-                    advanceAmount: (values.paymentTerms.toLowerCase().includes('partly') && (values.paymentTerms.toLowerCase().includes('advance') || values.paymentTerms.toLowerCase().includes('pi'))) ? (calculateTotal(v.rate || 0, v.gst, v.discount || 0, v.quantity || 0) * (values.numberOfDays || 0)) / 100 : 0,
+                    advancePercent: (v.paymentTerm?.toLowerCase().includes('partly') && (v.paymentTerm?.toLowerCase().includes('advance') || v.paymentTerm?.toLowerCase().includes('pi'))) ? (v.numberOfDays || 0) : 0,
+                    advanceAmount: (v.paymentTerm?.toLowerCase().includes('partly') && (v.paymentTerm?.toLowerCase().includes('advance') || v.paymentTerm?.toLowerCase().includes('pi'))) ? (calculateTotal(v.rate || 0, v.gst, v.discount || 0, v.quantity || 0) * (v.numberOfDays || 0)) / 100 : 0,
                     termsObject: values.terms.reduce((acc, term, idx) => {
                         acc[`term${idx + 1}`] = term;
                         return acc;
@@ -1006,56 +1033,7 @@ const CreatePO = () => {
                                             </FormControl>
                                         </FormItem>
                                     )} />
-                                    <FormField control={form.control} name="paymentTerms" render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Payment Terms</FormLabel>
-                                            <Select onValueChange={field.onChange} value={field.value || ""}>
-                                                <FormControl>
-                                                    <SelectTrigger size="sm" className="h-9">
-                                                        <SelectValue placeholder="Select payment terms" />
-                                                    </SelectTrigger>
-                                                </FormControl>
-                                                <SelectContent>
-                                                    {details?.paymentTerms?.map((term, index) => (
-                                                        <SelectItem key={index} value={term}>
-                                                            {term}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </FormItem>
-                                    )} />
                                 </div>
-
-                                {form.watch('paymentTerms') && (form.watch('paymentTerms').toLowerCase().includes('delivery') || (form.watch('paymentTerms').toLowerCase().includes('partly') && (form.watch('paymentTerms').toLowerCase().includes('advance') || form.watch('paymentTerms').toLowerCase().includes('pi')))) && (
-                                    <div className="flex gap-4">
-                                        <FormField control={form.control} name="numberOfDays" render={({ field }) => (
-                                            <FormItem className="flex-1">
-                                                <FormLabel>
-                                                    {form.watch('paymentTerms').toLowerCase().includes('partly') ? 'Advance %' : 'Number of Days'}
-                                                </FormLabel>
-                                                <FormControl>
-                                                    <Input className="h-9" type="number" placeholder={form.watch('paymentTerms').toLowerCase().includes('partly') ? 'Enter advance %' : 'Enter number of days'} {...field} />
-                                                </FormControl>
-                                            </FormItem>
-                                        )} />
-                                        {form.watch('paymentTerms').toLowerCase().includes('partly') && (
-                                            <div className="flex-1">
-                                                <FormLabel>Advance Amount</FormLabel>
-                                                <div className="h-9 flex items-center px-3 border rounded-md bg-muted/50 font-semibold text-sm">
-                                                    ₹{((calculateGrandTotal(
-                                                        form.watch('indents').map((indent) => ({
-                                                            quantity: indent.quantity || 0,
-                                                            rate: indent.rate || 0,
-                                                            discountPercent: indent.discount || 0,
-                                                            gstPercent: indent.gst || 0,
-                                                        }))
-                                                    ) * (form.watch('numberOfDays') || 0)) / 100).toFixed(2)}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
                             </div>
 
                             <hr />
@@ -1163,6 +1141,7 @@ const CreatePO = () => {
                                                 <TableHead>Quotation No.</TableHead>
                                                 <TableHead>Product</TableHead>
                                                 <TableHead>Description</TableHead>
+                                                <TableHead>Payment Term</TableHead>
                                                 <TableHead>Qty</TableHead>
                                                 <TableHead>Unit</TableHead>
                                                 <TableHead>Rate</TableHead>
@@ -1192,6 +1171,15 @@ const CreatePO = () => {
                                                         </TableCell>
                                                         <TableCell>{formValue?.productName || 'No Product'}</TableCell>
                                                         <TableCell>{formValue?.specifications || <span className="text-muted-foreground italic">No description</span>}</TableCell>
+                                                        <TableCell>
+                                                            <FormField control={form.control} name={`indents.${index}.paymentTerm`} render={({ field }) => (
+                                                                <FormItem className="flex justify-center">
+                                                                    <FormControl>
+                                                                        <Input className="h-9 w-32 text-center bg-gray-50" value={field.value || ''} onChange={field.onChange} />
+                                                                    </FormControl>
+                                                                </FormItem>
+                                                            )} />
+                                                        </TableCell>
                                                         <TableCell>
                                                             <FormField control={form.control} name={`indents.${index}.quantity`} render={({ field }) => (
                                                                 <FormItem className="flex justify-center">

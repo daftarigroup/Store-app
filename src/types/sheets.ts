@@ -1,4 +1,4 @@
-export type Sheet = 'INDENT' | 'RECEIVED' | 'MASTER' | 'USER' | 'PO MASTER' | "INVENTORY" | "ISSUE" | "STORE IN" | "TALLY ENTRY" | "PC REPORT" | "Fullkitting" | "Payment History" | "Payments";
+export type Sheet = 'INDENT' | 'RECEIVED' | 'MASTER' | 'USER' | 'PO MASTER' | "INVENTORY" | "ISSUE" | "STORE IN" | "TALLY ENTRY" | "PC REPORT" | "Fullkitting" | "Payment History" | "Payments" | "QUOTATION HISTORY" | "MASTER_DATA";
 
 export type IndentSheet = {
     issuedStatus: any;
@@ -162,7 +162,11 @@ export type InventorySheet = {
     indented: number;
     approved: number;
     purchaseQuantity: number;
+    purchaseReturn: number;
+    liftingQty: number;
+    inTransit: number;
     outQuantity: number;
+    issueReturn: number;
     current: number;
     totalPrice: number;
     colorCode: string;
@@ -220,8 +224,14 @@ export type PoMasterSheet = {
     status?: string; // This is the most important field
     deliveryDate?: string;
     paymentTerms?: string;
+    numberOfDays?: number;
+    advancePercent?: number;
+    advanceAmount?: number;
+    termsObject?: Record<string, string>;
+    supplierAddress?: string;
+    supplierGstin?: string;
+    companyEmail?: string;
     rowIndex?: number;
-
 };
 
 export type Vendor = {
@@ -393,10 +403,13 @@ export type IssueSheet = {
     status: string;
     givenQty?: number;
     location?: string;
-    // Changed from givenQuantity to match "Given Qty" -> givenQty
-
-    // Remove fields that don't exist in the sheet:
-    // department, groupHead, specifications, etc.
+    constructorName?: string;
+    siteLocation?: string;
+    projectName?: string;
+    rejected_damage_qty?: string;
+    damage_remark?: string;
+    return_person_name?: string;
+    issue_person_name?: string;
 }
 
 
@@ -435,6 +448,7 @@ export type StoreInSheet = {
     quantityAsPerBill: number;
     priceAsPerPo: number;
     remark: string;
+    returnQuantity?: number;
     debitNoteCopy: string;
 
 
@@ -609,3 +623,20 @@ export type FullkittingSheet = {
     biltyImage?: string;
     firmNameMatch: string;
 };
+
+export type QuotationHistorySheet = {
+    timestamp: string;
+    quatationNo: string;
+    supplierName: string;
+    adreess: string;
+    gst: string;
+    indentNo: string;
+    product: string;
+    description: string;
+    qty: string;
+    unit: string;
+    pdfLink: string;
+    firm: string;
+};
+
+export type MasterDataRow = Record<string, any>;

@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 // ==================== INTERFACES ====================
 
 export interface IssueRecord {
+    id?: number;
     issue_no: string;
     issue_to: string;
     uom: string;
@@ -21,6 +22,15 @@ export interface IssueRecord {
     given_qty: number;
     timestamp?: string;
     location?: string;
+    constructor_name?: string;
+    site_location?: string;
+    project_name?: string;
+    rejected_damage_qty?: string;
+    damage_remark?: string;
+    return_person_name?: string;
+    issue_person_name?: string;
+    issue_slip?: string;
+    return_slip?: string;
 }
 
 // ==================== FETCH FUNCTIONS ====================
@@ -38,6 +48,7 @@ export async function fetchIssueRecords(): Promise<IssueRecord[]> {
         if (error) throw error;
 
         return (data || []).map((r: any) => ({
+            id: r.id,
             issue_no: r.issue_no || '',
             issue_to: r.issue_to || '',
             uom: r.uom || '',
@@ -51,6 +62,15 @@ export async function fetchIssueRecords(): Promise<IssueRecord[]> {
             given_qty: Number(r.given_qty) || 0,
             timestamp: r.timestamp || '',
             location: r.location || '',
+            constructor_name: r.constructor_name || '',
+            site_location: r.site_location || '',
+            project_name: r.project_name || '',
+            rejected_damage_qty: r.rejected_damage_qty || '',
+            damage_remark: r.damage_remark || '',
+            return_person_name: r.return_person_name || '',
+            issue_person_name: r.issue_person_name || '',
+            issue_slip: r.issue_slip || '',
+            return_slip: r.return_slip || '',
         }));
     } catch (error) {
         console.error('Error fetching issue records:', error);
@@ -91,6 +111,26 @@ export async function updateIssueApproval(
         throw error;
     }
 }
+
+/**
+ * Update a specific issue record by ID
+ * @param id - The primary ID of the record
+ * @param data - The data to update
+ */
+export async function updateIssueRecordById(id: number, data: Partial<IssueRecord>) {
+    try {
+        const { error } = await supabase
+            .from('issue')
+            .update(data)
+            .eq('id', id);
+
+        if (error) throw error;
+        return true;
+    } catch (error) {
+        console.error(`Error updating issue record with ID ${id}:`, error);
+        throw error;
+    }
+}
 /**
  * Create new issue records in Supabase
  * @param rows - Array of issue records to insert
@@ -110,6 +150,15 @@ export async function createIssueRecords(rows: Partial<IssueRecord>[]) {
             actual1: r.actual1,
             status: r.status || 'Pending',
             given_qty: r.given_qty || 0,
+            constructor_name: r.constructor_name || '',
+            site_location: r.site_location || '',
+            project_name: r.project_name || '',
+            rejected_damage_qty: r.rejected_damage_qty || '',
+            damage_remark: r.damage_remark || '',
+            return_person_name: r.return_person_name || '',
+            issue_person_name: r.issue_person_name || '',
+            issue_slip: r.issue_slip || '',
+            return_slip: r.return_slip || '',
         }));
 
         const { data, error } = await supabase

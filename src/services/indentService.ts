@@ -65,6 +65,8 @@ export interface IndentRecord {
     vendor3_rank?: string;
     indent_url?: string; // Added for PDF link
     expected_req_date?: string; // Added
+    group_head?: string; // Added
+    min_stock_qty?: number; // Added
 }
 
 // ==================== FETCH FUNCTIONS ====================
@@ -134,6 +136,8 @@ export async function fetchIndentRecords(): Promise<IndentRecord[]> {
             vendor3_rank: r.vendor3_rank || '',
             indent_url: r.indent_url || '', // Populated from DB
             expected_req_date: r.expected_req_date || '', // Added
+            group_head: r.group_head || '', // Added
+            min_stock_qty: Number(r.min_stock_qty) || 0, // Added
         }));
     } catch (error) {
         console.error('Error fetching indent records:', error);

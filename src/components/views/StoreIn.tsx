@@ -15,7 +15,7 @@ import {
     DialogTrigger,
     DialogClose,
 } from '../ui/dialog';
-import { Truck, Building, FileText, IndianRupee } from 'lucide-react';
+import { Truck, Building, FileText, IndianRupee, Plus } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel } from '../ui/form';
 import { PuffLoader as Loader } from 'react-spinners';
@@ -28,10 +28,15 @@ import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
 import { formatDate, formatDateTime, parseCustomDate } from '@/lib/utils';
 import { Pill } from '../ui/pill';
+import { fetchMasterOptions } from '@/services/masterService';
 import {
     fetchStoreInRecords,
+    fetchDirectRecords,
     updateStoreInReceiving,
     uploadProductPhoto,
+    uploadChallanImage,
+    uploadBillCopy,
+    createDirectRecord,
     createPaymentEntry,
     type StoreInRecord,
 } from '@/services/storeInService';
@@ -113,6 +118,29 @@ interface StoreInHistoryData {
     planned6Date: string;
 }
 
+interface DirectStoreInData {
+    liftNumber: string;
+    indentNo: string;
+    billNo: string;
+    vendorName: string;
+    productName: string;
+    qty: number;
+    billAmount: number;
+    photoOfBill: string;
+    transportationInclude: string;
+    transporterName: string;
+    amount: number;
+    actual6: string;
+    receivingStatus: string;
+    receivedQuantity: number;
+    photoOfProduct: string;
+    timestamp: string;
+    receiverName: string;
+    firmNameMatch: string;
+    vehicleNo: string;
+    hodStatus: string;
+}
+
 type RecieveItemsData = StoreInPendingData;
 type HistoryData = StoreInHistoryData;
 
@@ -191,6 +219,7 @@ export default () => {
 
     const [tableData, setTableData] = useState<StoreInPendingData[]>([]);
     const [historyData, setHistoryData] = useState<StoreInHistoryData[]>([]);
+    const [directData, setDirectData] = useState<DirectStoreInData[]>([]);
     const [selectedIndent, setSelectedIndent] = useState<StoreInPendingData | null>(null);
     const [openDialog, setOpenDialog] = useState(false);
     const [indentLoading, setIndentLoading] = useState(false);
@@ -198,13 +227,32 @@ export default () => {
     const [storeInRecords, setStoreInRecords] = useState<StoreInRecord[]>([]);
     const [activeItemIndex, setActiveItemIndex] = useState(0);
     const [completedItems, setCompletedItems] = useState<Set<number>>(new Set());
+    const [openDirectDialog, setOpenDirectDialog] = useState(false);
+    const [vendorOptions, setVendorOptions] = useState<{ label: string; value: string }[]>([]);
+    const [productOptions, setProductOptions] = useState<{ label: string; value: string }[]>([]);
 
     const fetchAllData = async () => {
         setIndentLoading(true);
         setReceivedLoading(true);
         try {
-            const storeIns = await fetchStoreInRecords();
+            const [storeIns, directIns, masterData] = await Promise.all([
+                fetchStoreInRecords(),
+                fetchDirectRecords(),
+                fetchMasterOptions()
+            ]);
             setStoreInRecords(storeIns);
+            setDirectData(directIns);
+
+            // Populate master options
+            if (masterData) {
+                setVendorOptions(masterData.vendorNames.map(name => ({ label: name, value: name })));
+                
+                // Extract all unique products from the products record
+                const allProducts = Array.from(new Set(Object.values(masterData.products).flat()))
+                    .sort()
+                    .map(name => ({ label: name, value: name }));
+                setProductOptions(allProducts);
+            }
         } catch (error) {
             console.error('Failed to fetch data:', error);
             toast.error('Failed to load data');
@@ -251,53 +299,56 @@ export default () => {
             user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch
         );
 
-        // Display every record where store check is complete (actual6 set)
-        const historyItems = filteredByFirm.filter((i) => i.actual6 !== '');
+        // Display standard procurement records (actual6 set, NO Direct prefix)
+        const historyItems = filteredByFirm.filter(i => i.actual6 !== '' && !i.liftNumber.startsWith('DIRECT-'));
 
-        setHistoryData(
-            historyItems.map((i) => ({
-                liftNumber: i.liftNumber || '',
-                indentNo: i.indentNo || '',
-                billNo: String(i.billNo) || '',
-                vendorName: i.vendorName || '',
-                productName: i.productName || '',
-                qty: i.qty || 0,
-                typeOfBill: i.typeOfBill || '',
-                billAmount: i.billAmount || 0,
-                paymentType: i.paymentType || '',
-                advanceAmountIfAny: Number(i.advanceAmountIfAny) || 0,
-                photoOfBill: i.photoOfBill || '',
-                transportationInclude: i.transportationInclude || '',
-                transporterName: i.transporterName || '',
-                amount: i.amount || 0,
-                billStatus: i.billStatus || '',
-                receivedQuantity: i.receivedQuantity || 0,
-                photoOfProduct: i.photoOfProduct || '',
-                unitOfMeasurement: i.unitOfMeasurement || '',
-                damageOrder: i.damageOrder || '',
-                quantityAsPerBill: i.quantityAsPerBill || '',
-                priceAsPerPoCheck: i.priceAsPerPoCheck || '',
-                priceAsPerPo: i.priceAsPerPo || 0,
-                remark: i.remark || '',
-                poDate: i.poDate || '',
-                poNumber: i.poNumber || '',
-                receiveStatus: i.receivingStatus || '',
-                vendor: i.vendorName || '',
-                product: i.productName || '',
-                orderQuantity: i.qty || 0,
-                receivedDate: i.timestamp ? formatDateTime(parseCustomDate(i.timestamp)) : '',
-                billNumber: i.billNumber || String(i.billNo) || '',
-                anyTransport: i.transportationInclude || '',
-                transportingAmount: i.amount || 0,
-                timestamp: i.timestamp ? formatDateTime(parseCustomDate(i.timestamp)) : '',
-                leadTimeToLiftMaterial: i.leadTimeToLiftMaterial || 0,
-                discountAmount: i.discountAmount || 0,
-                billReceived: i.billStatus || '',
-                billImage: i.photoOfBill || '',
-                firmNameMatch: i.firmNameMatch || '',
-                planned6Date: i.planned6 || '',
-            }))
-        );
+        setHistoryData(historyItems.map((i) => ({
+            liftNumber: i.liftNumber || '',
+            indentNo: i.indentNo || '',
+            billNo: String(i.billNo) || '',
+            vendorName: i.vendorName || '',
+            productName: i.productName || '',
+            qty: i.qty || 0,
+            typeOfBill: i.typeOfBill || '',
+            billAmount: i.billAmount || 0,
+            paymentType: i.paymentType || '',
+            advanceAmountIfAny: Number(i.advanceAmountIfAny) || 0,
+            photoOfBill: i.photoOfBill || '',
+            transportationInclude: i.transportationInclude || '',
+            transporterName: i.transporterName || '',
+            amount: i.amount || 0,
+            billStatus: i.billStatus || '',
+            receivedQuantity: i.receivedQuantity || 0,
+            photoOfProduct: i.photoOfProduct || '',
+            unitOfMeasurement: i.unitOfMeasurement || '',
+            damageOrder: i.damageOrder || '',
+            quantityAsPerBill: i.quantityAsPerBill || '',
+            priceAsPerPoCheck: i.priceAsPerPoCheck || '',
+            priceAsPerPo: i.priceAsPerPo || 0,
+            remark: i.remark || '',
+            poDate: i.poDate || '',
+            poNumber: i.poNumber || '',
+            receiveStatus: i.receivingStatus || '',
+            vendor: i.vendorName || '',
+            product: i.productName || '',
+            orderQuantity: i.qty || 0,
+            receivedDate: i.timestamp ? formatDateTime(parseCustomDate(i.timestamp)) : '',
+            billNumber: i.billNumber || String(i.billNo) || '',
+            anyTransport: i.transportationInclude || '',
+            transportingAmount: i.amount || 0,
+            timestamp: i.timestamp ? formatDateTime(parseCustomDate(i.timestamp)) : '',
+            leadTimeToLiftMaterial: i.leadTimeToLiftMaterial || 0,
+            discountAmount: i.discountAmount || 0,
+            billReceived: i.billStatus || '',
+            billImage: i.photoOfBill || '',
+            firmNameMatch: i.firmNameMatch || '',
+            planned6Date: i.planned6 || '',
+            challanNo: i.challanNo || '',
+            challanImage: i.challanImage || '',
+            receiverName: i.receiverName || '',
+        })));
+        
+        // Note: directData is now set directly in fetchAllData from the new table
     }, [storeInRecords, user.firmNameMatch]);
 
     const textWrapCell = ({ getValue }: { getValue: () => any }) => {
@@ -490,6 +541,8 @@ export default () => {
 
     const schema = z.object({
         status: z.enum(['Received', 'Not Received']),
+        challanNo: z.string().optional(),
+        challanImage: z.instanceof(File).optional(),
         photoOfProduct: z.instanceof(File, {
             message: "Photo of product is required"
         }),
@@ -513,6 +566,8 @@ export default () => {
         resolver: zodResolver(schema),
         defaultValues: {
             status: 'Received',
+            challanNo: '',
+            challanImage: undefined,
             photoOfProduct: undefined,
             damageOrder: undefined,
             quantityAsPerBill: undefined,
@@ -564,6 +619,7 @@ export default () => {
         if (!selectedIndent) return;
         try {
             let photoUrl = '';
+            let challanImageUrl = '';
 
             // 1. Upload photo once for all items
             if (values.photoOfProduct) {
@@ -573,9 +629,16 @@ export default () => {
                 );
             }
 
+            // 2. Upload challan image if needed
+            if (values.status === 'Not Received' && values.challanImage) {
+                // Using first lift number as identifier for challan
+                const liftId = values.items[0]?.liftNumber || 'unknown';
+                challanImageUrl = await uploadChallanImage(values.challanImage, liftId);
+            }
+
             const currentDateTime = new Date().toISOString();
 
-            // 2. Update all items in parallel
+            // 3. Update all items in parallel
             const updatePromises = values.items.map(item =>
                 updateStoreInReceiving(item.liftNumber, {
                     actual6: currentDateTime,
@@ -587,6 +650,8 @@ export default () => {
                     priceAsPerPoCheck: values.priceAsPerPoCheck || '',
                     remark: values.remark || '',
                     location: values.location || '',
+                    challanNo: values.challanNo || '',
+                    challanImage: challanImageUrl || '',
                 })
             );
 
@@ -602,6 +667,100 @@ export default () => {
         }
     }
 
+    const directSchemaBase = z.object({
+        receiverName: z.string().min(1, 'Receiver name is required'),
+        vendorName: z.string().min(1, 'Vendor name is required'),
+        billNo: z.string().optional(),
+        billAmount: z.coerce.number().optional(),
+        productName: z.string().min(1, 'Product name is required'),
+        receivingQty: z.coerce.number().optional(),
+        status: z.enum(['Received', 'Not Received'], { required_error: 'Please select a status' }),
+        billImage: z.instanceof(File).optional(),
+        productImage: z.instanceof(File, { message: 'Product image is required' }),
+        anyTransport: z.enum(['Yes', 'No']),
+        transportAmount: z.coerce.number().optional(),
+        transporterName: z.string().optional(),
+        vehicleNo: z.string().optional(),
+    });
+
+    const directSchema = directSchemaBase.superRefine((val, ctx) => {
+        if (val.status === 'Received') {
+            if (!val.billNo || val.billNo.trim() === '') {
+                ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Bill number is required', path: ['billNo'] });
+            }
+            if (!val.billAmount || val.billAmount <= 0) {
+                ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Bill amount is required', path: ['billAmount'] });
+            }
+            if (!val.receivingQty || val.receivingQty <= 0) {
+                ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Quantity is required', path: ['receivingQty'] });
+            }
+            if (!val.billImage) {
+                ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Bill image is required', path: ['billImage'] });
+            }
+        }
+    });
+
+    type DirectFormValues = z.infer<typeof directSchemaBase>;
+
+    const directForm = useForm<DirectFormValues>({
+        resolver: zodResolver(directSchema),
+        defaultValues: {
+            status: undefined,
+            anyTransport: 'No',
+            billNo: '',
+            billAmount: 0,
+            receivingQty: 0,
+        },
+    });
+
+    const watchAnyTransport = directForm.watch('anyTransport');
+    const watchDirectStatus = directForm.watch('status');
+
+    async function onDirectSubmit(values: DirectFormValues) {
+        try {
+            const timestamp = Date.now();
+            const liftId = `DIRECT-${timestamp}`;
+            const indentId = `DIRECT-${timestamp}`;
+
+            // 1. Upload Images
+            const photoUrl = await uploadProductPhoto(values.productImage, indentId);
+            let billUrl = '';
+            if (values.billImage) {
+                billUrl = await uploadBillCopy(values.billImage, liftId);
+            }
+
+            // 2. Create Record
+            await createDirectRecord({
+                liftNumber: liftId,
+                indentNo: indentId,
+                vendorName: values.vendorName,
+                productName: values.productName,
+                qty: values.receivingQty || 0,
+                receivedQuantity: values.receivingQty || 0,
+                receivingStatus: values.status,
+                billNo: values.billNo || '',
+                billAmount: values.billAmount || 0,
+                photoOfProduct: photoUrl,
+                photoOfBill: billUrl,
+                receiverName: values.receiverName,
+                transportationInclude: values.anyTransport,
+                transporterName: values.transporterName || '',
+                amount: values.transportAmount || 0,
+                vehicleNo: values.vehicleNo || '',
+                firmNameMatch: user.firmNameMatch === 'all' ? 'Default' : user.firmNameMatch,
+                timestamp: new Date().toISOString(),
+            });
+
+            toast.success('Direct entry saved successfully!');
+            setOpenDirectDialog(false);
+            directForm.reset();
+            await fetchAllData();
+        } catch (error) {
+            console.error('Direct submission error:', error);
+            toast.error('Failed to save direct entry');
+        }
+    }
+
     function onError(e: any) {
         console.log(e);
         if (e.qty) {
@@ -614,13 +773,254 @@ export default () => {
     return (
         <div>
             <Dialog open={openDialog} onOpenChange={setOpenDialog}>
-                <Tabs defaultValue="pending">
+                <Tabs defaultValue="pending" className="w-full">
                     <Heading
                         heading="Store Check for Receive Items"
                         subtext="Receive items from purchase orders"
                         tabs
                         pendingCount={tableData.length}
                         historyCount={historyData.length}
+                        directCount={directData.length}
+                        directValue="direct"
+                        action={
+                            <Dialog open={openDirectDialog} onOpenChange={setOpenDirectDialog}>
+                                <DialogTrigger asChild>
+                                    <Button variant="default" className="gap-2 shadow-sm">
+                                        <Plus className="h-4 w-4" />
+                                        Direct Form
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+                                    <DialogHeader>
+                                        <DialogTitle>Direct Material Entry</DialogTitle>
+                                        <DialogDescription>Enter material details manually without an existing PO/Indent</DialogDescription>
+                                    </DialogHeader>
+                                    <Form {...directForm}>
+                                        <form onSubmit={directForm.handleSubmit(onDirectSubmit)} className="space-y-4 pt-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <FormField
+                                                    control={directForm.control}
+                                                    name="receiverName"
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel>Receiver Name</FormLabel>
+                                                            <FormControl>
+                                                                <Input {...field} placeholder="Name of person receiving" />
+                                                            </FormControl>
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                                <FormField
+                                                    control={directForm.control}
+                                                    name="vendorName"
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel>Vendor Name</FormLabel>
+                                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                                <FormControl>
+                                                                    <SelectTrigger className="w-full">
+                                                                        <SelectValue placeholder="Select vendor" />
+                                                                    </SelectTrigger>
+                                                                </FormControl>
+                                                                <SelectContent>
+                                                                    {vendorOptions.map((opt) => (
+                                                                        <SelectItem key={opt.value} value={opt.value}>
+                                                                            {opt.label}
+                                                                        </SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                                <FormField
+                                                    control={directForm.control}
+                                                    name="productName"
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel>Product Name</FormLabel>
+                                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                                <FormControl>
+                                                                    <SelectTrigger className="w-full">
+                                                                        <SelectValue placeholder="Select product" />
+                                                                    </SelectTrigger>
+                                                                </FormControl>
+                                                                <SelectContent>
+                                                                    {productOptions.map((opt) => (
+                                                                        <SelectItem key={opt.value} value={opt.value}>
+                                                                            {opt.label}
+                                                                        </SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                                <FormField
+                                                    control={directForm.control}
+                                                    name="status"
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel>Bill Status</FormLabel>
+                                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                                <FormControl>
+                                                                    <SelectTrigger className="w-full">
+                                                                        <SelectValue placeholder="Select status" />
+                                                                    </SelectTrigger>
+                                                                </FormControl>
+                                                                <SelectContent>
+                                                                    <SelectItem value="Received">Received</SelectItem>
+                                                                    <SelectItem value="Not Received">Not Received</SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                                
+                                                {watchDirectStatus === 'Received' && (
+                                                    <>
+                                                        <FormField
+                                                            control={directForm.control}
+                                                            name="billNo"
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>Bill No</FormLabel>
+                                                                    <FormControl>
+                                                                        <Input {...field} placeholder="Enter bill number" />
+                                                                    </FormControl>
+                                                                </FormItem>
+                                                            )}
+                                                        />
+                                                        <FormField
+                                                            control={directForm.control}
+                                                            name="billAmount"
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>Bill Amount</FormLabel>
+                                                                    <FormControl>
+                                                                        <Input type="number" {...field} placeholder="Enter amount" />
+                                                                    </FormControl>
+                                                                </FormItem>
+                                                            )}
+                                                        />
+                                                        <FormField
+                                                            control={directForm.control}
+                                                            name="receivingQty"
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>Receiving Qty</FormLabel>
+                                                                    <FormControl>
+                                                                        <Input type="number" {...field} placeholder="Enter quantity" />
+                                                                    </FormControl>
+                                                                </FormItem>
+                                                            )}
+                                                        />
+                                                    </>
+                                                )}
+
+                                                <FormField
+                                                    control={directForm.control}
+                                                    name="anyTransport"
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel>Transporting Type</FormLabel>
+                                                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                                <FormControl>
+                                                                    <SelectTrigger className="w-full">
+                                                                        <SelectValue placeholder="Include Transport?" />
+                                                                    </SelectTrigger>
+                                                                </FormControl>
+                                                                <SelectContent>
+                                                                    <SelectItem value="No">No</SelectItem>
+                                                                    <SelectItem value="Yes">Yes</SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                            </div>
+
+                                            {watchAnyTransport === 'Yes' && (
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-muted/30 rounded-lg border border-dashed">
+                                                    <FormField
+                                                        control={directForm.control}
+                                                        name="transportAmount"
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>Freight Amount</FormLabel>
+                                                                <FormControl>
+                                                                    <Input type="number" {...field} placeholder="Amt" />
+                                                                </FormControl>
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                    <FormField
+                                                        control={directForm.control}
+                                                        name="transporterName"
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>Transporter Name</FormLabel>
+                                                                <FormControl>
+                                                                    <Input {...field} placeholder="Name" />
+                                                                </FormControl>
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                    <FormField
+                                                        control={directForm.control}
+                                                        name="vehicleNo"
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>Vehicle No</FormLabel>
+                                                                <FormControl>
+                                                                    <Input {...field} placeholder="No" />
+                                                                </FormControl>
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                </div>
+                                            )}
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                {watchDirectStatus === 'Received' && (
+                                                    <FormField
+                                                        control={directForm.control}
+                                                        name="billImage"
+                                                        render={({ field: { value, onChange, ...fieldProps } }) => (
+                                                            <FormItem>
+                                                                <FormLabel>Bill Image</FormLabel>
+                                                                <FormControl>
+                                                                    <Input type="file" accept="image/*" onChange={(e) => onChange(e.target.files?.[0])} {...fieldProps} />
+                                                                </FormControl>
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                )}
+                                                <FormField
+                                                    control={directForm.control}
+                                                    name="productImage"
+                                                    render={({ field: { value, onChange, ...fieldProps } }) => (
+                                                        <FormItem>
+                                                            <FormLabel>Product Image</FormLabel>
+                                                            <FormControl>
+                                                                <Input type="file" accept="image/*" onChange={(e) => onChange(e.target.files?.[0])} {...fieldProps} />
+                                                            </FormControl>
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                            </div>
+
+                                            <DialogFooter className="pt-4">
+                                                <Button type="submit" disabled={directForm.formState.isSubmitting} className="w-full md:w-auto">
+                                                    {directForm.formState.isSubmitting ? <Loader className="animate-spin h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+                                                    Submit Direct Entry
+                                                </Button>
+                                            </DialogFooter>
+                                        </form>
+                                    </Form>
+                                </DialogContent>
+                            </Dialog>
+                        }
                     >
                         <Truck size={50} className="text-primary" />
                     </Heading>
@@ -638,6 +1038,51 @@ export default () => {
                             data={historyData}
                             columns={historyColumns}
                             searchFields={['productName', 'billNo', 'indentNo', 'vendorName', 'poNumber']}
+                            dataLoading={receivedLoading}
+                        />
+                    </TabsContent>
+                    <TabsContent value="direct">
+                        <DataTable
+                            data={directData}
+                            columns={[
+                                { accessorKey: 'indentNo', header: 'Indent No' },
+                                { accessorKey: 'receiverName', header: 'Receiver' },
+                                { accessorKey: 'vendorName', header: 'Vendor' },
+                                { accessorKey: 'productName', header: 'Product' },
+                                { accessorKey: 'billNo', header: 'Bill No' },
+                                { 
+                                    accessorKey: 'billAmount', 
+                                    header: 'Bill Amount',
+                                    cell: ({ getValue }) => `₹${(getValue() as number || 0).toLocaleString('en-IN')}`
+                                },
+                                { accessorKey: 'qty', header: 'Qty' },
+                                { accessorKey: 'receivingStatus', header: 'Rec. Status' },
+                                {
+                                    accessorKey: 'photoOfBill',
+                                    header: 'Bill Photo',
+                                    cell: ({ row }) => {
+                                        const photo = (row.original as DirectStoreInData).photoOfBill;
+                                        return photo ? (
+                                            <a href={photo} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">View</a>
+                                        ) : '-';
+                                    }
+                                },
+                                {
+                                    accessorKey: 'photoOfProduct',
+                                    header: 'Product Photo',
+                                    cell: ({ row }) => {
+                                        const photo = (row.original as DirectStoreInData).photoOfProduct;
+                                        return photo ? (
+                                            <a href={photo} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">View</a>
+                                        ) : '-';
+                                    }
+                                },
+                                { accessorKey: 'transportationInclude', header: 'Trans. Include' },
+                                { accessorKey: 'transporterName', header: 'Transporter' },
+                                { accessorKey: 'amount', header: 'Freight Amount' },
+                                { accessorKey: 'vehicleNo', header: 'Vehicle No' },
+                            ] as ColumnDef<DirectStoreInData>[]}
+                            searchFields={['productName', 'billNo', 'vendorName', 'receiverName']}
                             dataLoading={receivedLoading}
                         />
                     </TabsContent>
@@ -756,7 +1201,7 @@ export default () => {
                                         name="status"
                                         render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel>Receiving Status</FormLabel>
+                                                <FormLabel>Bill Status</FormLabel>
                                                 <FormControl>
                                                     <Select
                                                         onValueChange={field.onChange}
@@ -787,16 +1232,55 @@ export default () => {
                                             </FormItem>
                                         )}
                                     />
+
+                                    {form.watch('status') === 'Not Received' && (
+                                        <>
+                                            <FormField
+                                                control={form.control}
+                                                name="challanNo"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Challan Number</FormLabel>
+                                                        <FormControl>
+                                                            <Input {...field} placeholder="Enter challan number" />
+                                                        </FormControl>
+                                                    </FormItem>
+                                                )}
+                                            />
+                                            <FormField
+                                                control={form.control}
+                                                name="challanImage"
+                                                render={({ field: { value, onChange, ...fieldProps } }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Challan Image</FormLabel>
+                                                        <FormControl>
+                                                            <Input
+                                                                type="file"
+                                                                accept="image/*"
+                                                                onChange={(e) => {
+                                                                    const file = e.target.files?.[0];
+                                                                    if (file) onChange(file);
+                                                                }}
+                                                                {...fieldProps}
+                                                            />
+                                                        </FormControl>
+                                                    </FormItem>
+                                                )}
+                                            />
+                                        </>
+                                    )}
                                 </div>
 
-                                <FormField
-                                    control={form.control}
-                                    name="photoOfProduct"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Photo of Product</FormLabel>
-                                            <span className="text-destructive">*</span>
-                                            <FormControl>
+                                    <FormField
+                                        control={form.control}
+                                        name="photoOfProduct"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <div className="flex items-center gap-1">
+                                                    <FormLabel className="m-0">Photo of Product</FormLabel>
+                                                    <span className="text-destructive font-bold">*</span>
+                                                </div>
+                                                <FormControl>
                                                 <Input
                                                     type="file"
                                                     onChange={(e) =>

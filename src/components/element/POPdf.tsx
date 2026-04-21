@@ -209,7 +209,11 @@ const styles = StyleSheet.create({
     signText: {
         fontSize: 10,
         fontFamily: 'Helvetica-Bold',
-        marginBottom: 30,
+        marginBottom: 15,
+    },
+    supplierStampName: {
+        fontSize: 9,
+        fontFamily: 'Helvetica-Bold',
     },
     stampText: {
         fontSize: 9,
@@ -459,6 +463,7 @@ export default function PoojaPOFormat(props: POPdfProps) {
                         </View>
                         <View style={styles.signatureRight}>
                             <Text style={styles.signText}>Authorized Signatory</Text>
+                            <Text style={styles.supplierStampName}>{supplierName}</Text>
                             <View style={styles.lineContainer}>
                                 <View style={styles.stampLine} />
                                 <Text style={styles.stampText}>(Seal & Stamp)</Text>

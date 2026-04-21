@@ -60,12 +60,22 @@ export default function IssueData() {
         fetchData();
     }, [user.firmNameMatch]);
 
+    const returnData = useMemo(() => {
+        return allData.filter(i => i.rejected_damage_qty && i.rejected_damage_qty !== '0' && i.rejected_damage_qty !== '');
+    }, [allData]);
+
     const pendingData = useMemo(() => {
-        return allData.filter(i => i.planned1 && !i.actual1);
+        return allData.filter(i => 
+            i.planned1 && !i.actual1 && 
+            !(i.rejected_damage_qty && i.rejected_damage_qty !== '0' && i.rejected_damage_qty !== '')
+        );
     }, [allData]);
 
     const historyData = useMemo(() => {
-        return allData.filter(i => i.planned1 && i.actual1);
+        return allData.filter(i => 
+            i.planned1 && i.actual1 && 
+            !(i.rejected_damage_qty && i.rejected_damage_qty !== '0' && i.rejected_damage_qty !== '')
+        );
     }, [allData]);
 
     const handleDownload = (data: any[]) => {
@@ -126,10 +136,22 @@ export default function IssueData() {
         { accessorKey: 'quantity', header: 'Quantity' },
         { accessorKey: 'department', header: 'Department' },
         { accessorKey: 'location', header: 'Location' },
+        { accessorKey: 'constructor_name', header: 'Contractor Name' },
+        { accessorKey: 'site_location', header: 'Site Location' },
+        { accessorKey: 'project_name', header: 'Project Name' },
         {
             accessorKey: 'planned1',
             header: 'Planned Date',
             cell: ({ row }) => row.original.planned1 ? formatDate(new Date(row.original.planned1)) : '-',
+        },
+        {
+            accessorKey: 'issue_slip',
+            header: 'Issue Slip',
+            cell: ({ row }) => row.original.issue_slip ? (
+                <a href={row.original.issue_slip} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">
+                    View
+                </a>
+            ) : '-'
         },
     ];
 
@@ -142,6 +164,9 @@ export default function IssueData() {
         { accessorKey: 'quantity', header: 'Quantity' },
         { accessorKey: 'department', header: 'Department' },
         { accessorKey: 'location', header: 'Location' },
+        { accessorKey: 'constructor_name', header: 'Contractor Name' },
+        { accessorKey: 'site_location', header: 'Site Location' },
+        { accessorKey: 'project_name', header: 'Project Name' },
         { accessorKey: 'status', header: 'Status' },
         { accessorKey: 'given_qty', header: 'Given Qty' },
         {
@@ -153,6 +178,54 @@ export default function IssueData() {
             accessorKey: 'actual1',
             header: 'Actual Date',
             cell: ({ row }) => (row.original.actual1 ? formatDate(new Date(row.original.actual1)) : '-'),
+        },
+        {
+            accessorKey: 'issue_slip',
+            header: 'Issue Slip',
+            cell: ({ row }) => row.original.issue_slip ? (
+                <a href={row.original.issue_slip} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">
+                    View
+                </a>
+            ) : '-'
+        },
+    ];
+
+    const returnColumns: ColumnDef<IssueRecord>[] = [
+        { accessorKey: 'issue_no', header: 'Issue No' },
+        { accessorKey: 'issue_to', header: 'Issue to' },
+        { accessorKey: 'group_head', header: 'Group Head' },
+        { accessorKey: 'product_name', header: 'Product Name' },
+        { accessorKey: 'quantity', header: 'Issue Qty' },
+        { accessorKey: 'rejected_damage_qty', header: 'Reject/Damage Qty' },
+        { accessorKey: 'damage_remark', header: 'Damage Remark' },
+        { accessorKey: 'return_person_name', header: 'Return Person' },
+        { accessorKey: 'issue_person_name', header: 'Issue Person' },
+        { accessorKey: 'department', header: 'Department' },
+        { accessorKey: 'constructor_name', header: 'Contractor' },
+        { accessorKey: 'site_location', header: 'Site' },
+        { accessorKey: 'project_name', header: 'Project' },
+        {
+            accessorKey: 'actual1',
+            header: 'Return Date',
+            cell: ({ row }) => (row.original.actual1 ? formatDate(new Date(row.original.actual1)) : '-'),
+        },
+        {
+            accessorKey: 'issue_slip',
+            header: 'Issue Slip',
+            cell: ({ row }) => row.original.issue_slip ? (
+                <a href={row.original.issue_slip} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">
+                    View
+                </a>
+            ) : '-'
+        },
+        {
+            accessorKey: 'return_slip',
+            header: 'Return Slip',
+            cell: ({ row }) => row.original.return_slip ? (
+                <a href={row.original.return_slip} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">
+                    View
+                </a>
+            ) : '-'
         },
     ];
 
@@ -213,7 +286,9 @@ export default function IssueData() {
                         subtext="Update Issue Data"
                         tabs
                         pendingCount={pendingData.length}
+                        returnCount={returnData.length}
                         historyCount={historyData.length}
+                        returnValue="return"
                     >
                         <ClipboardCheck size={50} className="text-primary" />
                     </Heading>
@@ -222,7 +297,7 @@ export default function IssueData() {
                         <DataTable
                             data={pendingData}
                             columns={columns}
-                            searchFields={['product_name', 'department', 'issue_no', 'issue_to']}
+                            searchFields={['product_name', 'department', 'issue_no', 'issue_to', 'constructor_name', 'site_location', 'project_name']}
                             dataLoading={dataLoading}
                             extraActions={
                                 <Button
@@ -246,12 +321,40 @@ export default function IssueData() {
                             }
                         />
                     </TabsContent>
+                    <TabsContent value="return">
+                        <DataTable
+                            data={returnData}
+                            columns={returnColumns}
+                            searchFields={['product_name', 'department', 'issue_no', 'issue_to', 'constructor_name', 'site_location', 'project_name', 'return_person_name']}
+                            dataLoading={dataLoading}
+                            // extraActions={
+                            //     <Button
+                            //         variant="default"
+                            //         onClick={() => handleDownload(returnData)}
+                            //         className="bg-gradient-to-r from-orange-500 to-red-600 border-none rounded-lg font-bold shadow-md flex items-center gap-2 px-4"
+                            //     >
+                            //         <DownloadOutlined />
+                            //         Download Returns
+                            //     </Button>
+                            // }
+                        />
+                    </TabsContent>
                     <TabsContent value="history">
                         <DataTable
                             data={historyData}
                             columns={historyColumns}
-                            searchFields={['product_name', 'department', 'issue_no', 'issue_to']}
+                            searchFields={['product_name', 'department', 'issue_no', 'issue_to', 'constructor_name', 'site_location', 'project_name']}
                             dataLoading={dataLoading}
+                            extraActions={
+                                <Button
+                                    variant="default"
+                                    onClick={() => handleDownload(historyData)}
+                                    className="bg-gradient-to-r from-blue-500 to-indigo-600 border-none rounded-lg font-bold shadow-md flex items-center gap-2 px-4"
+                                >
+                                    <DownloadOutlined />
+                                    Download History
+                                </Button>
+                            }
                         />
                     </TabsContent>
                 </Tabs>

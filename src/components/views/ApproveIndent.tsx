@@ -38,7 +38,7 @@ import {
 } from '@/services/indentService';
 import IndentPdf from '../element/IndentPdf';
 import { pdf } from '@react-pdf/renderer';
-import logo from '../../assets/logo.jpeg';
+const logo = "/logo.png";
 import { supabase } from '@/lib/supabase';
 
 export default function ApproveIndent() {
