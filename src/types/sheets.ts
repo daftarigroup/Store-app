@@ -167,6 +167,7 @@ export type InventorySheet = {
     inTransit: number;
     outQuantity: number;
     issueReturn: number;
+    stockTransfer: number;
     current: number;
     totalPrice: number;
     colorCode: string;

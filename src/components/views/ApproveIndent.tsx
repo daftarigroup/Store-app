@@ -17,7 +17,7 @@ import { Button } from '../ui/button';
 import { z } from 'zod';
 import { useForm, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Form, FormControl, FormField, FormItem, FormLabel } from '../ui/form';
+import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '../ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { toast } from 'sonner';
 import { PuffLoader as Loader } from 'react-spinners';
@@ -612,6 +612,14 @@ export default function ApproveIndent() {
                     message: "Approved quantity must be greater than 0",
                 });
             }
+
+            if (data.approvedQuantity && selectedIndent && data.approvedQuantity > selectedIndent.quantity) {
+                ctx.addIssue({
+                    path: ['approvedQuantity'],
+                    code: z.ZodIssueCode.custom,
+                    message: `Approved quantity cannot exceed requested quantity (${selectedIndent.quantity})`,
+                });
+            }
         }
     });
 
@@ -691,6 +699,12 @@ export default function ApproveIndent() {
             for (const indent of selectedIndents) {
                 const qtyToApprove = editedQuantities[indent.id] ?? indent.quantity;
                 const status = editedStatuses[indent.id] ?? 'Regular';
+
+                if (status !== 'Reject' && qtyToApprove > indent.quantity) {
+                    toast.error(`Indent ${indent.indent_number}: Approved quantity (${qtyToApprove}) cannot exceed requested quantity (${indent.quantity})`);
+                    setBulkSubmitting(false);
+                    return;
+                }
                 await updateIndentApproval(indent.id, {
                     actual1: currentDateTime,
                     vendor_type: status,
@@ -835,6 +849,7 @@ export default function ApproveIndent() {
                                                 <FormControl>
                                                     <Input {...field} type="number" placeholder="Enter quantity to approve" />
                                                 </FormControl>
+                                                <FormMessage />
                                             </FormItem>
                                         )}
                                     />

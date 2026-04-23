@@ -19,6 +19,7 @@ export interface InventoryRecord {
     inTransit: number;
     outQuantity: number;
     issueReturn: number;
+    stockTransfer: number;
     current: number;
     totalPrice: number;
     status: string;
@@ -75,7 +76,8 @@ export async function fetchInventoryRecords(): Promise<InventoryRecord[]> {
                 liftingQty: liftQty,
                 inTransit: Math.max(0, purQty - liftQty),
                 outQuantity: Number(r.out_quantity) || 0,
-                issueReturn: Number(r.request_quantity) || 0,
+                issueReturn: Number(r.issue_return) || 0,
+                stockTransfer: Number(r.stock_transfer) || 0,
                 current: Number(r.current) || 0,
                 totalPrice: Number(r.total_price) || 0,
                 status: r.color_code || '',

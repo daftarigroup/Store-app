@@ -642,6 +642,34 @@ export async function uploadBillCopy(file: File, liftNumber: string): Promise<st
 }
 
 /**
+ * Upload payment confirmation image to Supabase Storage
+ * @param file - File to upload
+ * @param uniqueNo - Unique number for file naming
+ */
+export async function uploadPaymentImage(file: File, uniqueNo: string): Promise<string> {
+    try {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${uniqueNo.replace(/\//g, '-')}_payment_${Date.now()}.${fileExt}`;
+        const filePath = `Payment Images/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+            .from('bill_image_status')
+            .upload(filePath, file);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+            .from('bill_image_status')
+            .getPublicUrl(filePath);
+
+        return publicUrl;
+    } catch (error) {
+        console.error('Payment image upload error:', error);
+        throw error;
+    }
+}
+
+/**
  * Update store-in record for Stage 8: Return Material To Party
  * @param liftNumber - Lift number to identify the record
  * @param updateData - Data to update
@@ -755,6 +783,9 @@ export async function createDirectRecord(record: Partial<StoreInRecord>) {
                 timestamp: record.timestamp || new Date().toISOString(),
                 actual6: new Date().toISOString(),
                 hod_status: 'Pending',
+                hod_planned: new Date().toISOString(),
+                challan_no: record.challanNo,
+                challan_image: record.challanImage,
             }])
             .select();
 

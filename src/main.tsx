@@ -481,116 +481,116 @@ const routes: RouteAttributes[] = [
             }).length;
         },
     },
-    {
-        path: 'Payment-Status',
-        name: 'Process for Payment / Debit Note',
-        icon: <RefreshCw size={20} />,
-        element: <PaymentStatus />,
-        notifications: (sheetsData: any[]) => {
-            try {
-                // ✅ IMPORTANT: Expect [poMasterSheet, paymentsSheet, user, storeInSheet] from Sidebar
-                const [poMasterSheet = [], paymentsSheet = [], user = null, storeInSheet = []] = sheetsData;
+    // {
+    //     path: 'Payment-Status',
+    //     name: 'Process for Payment / Debit Note',
+    //     icon: <RefreshCw size={20} />,
+    //     element: <PaymentStatus />,
+    //     notifications: (sheetsData: any[]) => {
+    //         try {
+    //             // ✅ IMPORTANT: Expect [poMasterSheet, paymentsSheet, user, storeInSheet] from Sidebar
+    //             const [poMasterSheet = [], paymentsSheet = [], user = null, storeInSheet = []] = sheetsData;
 
-                if (!Array.isArray(poMasterSheet)) return 0;
+    //             if (!Array.isArray(poMasterSheet)) return 0;
 
-                // 1. Identify received PO numbers from storeInSheet
-                const receivedPos = new Set(
-                    (storeInSheet || [])
-                        .filter((s: any) => s.actual6 && s.actual6.toString().trim() !== '')
-                        .map((s: any) => s.poNumber || s.po_number)
-                        .filter(Boolean)
-                );
+    //             // 1. Identify received PO numbers from storeInSheet
+    //             const receivedPos = new Set(
+    //                 (storeInSheet || [])
+    //                     .filter((s: any) => s.actual6 && s.actual6.toString().trim() !== '')
+    //                     .map((s: any) => s.poNumber || s.po_number)
+    //                     .filter(Boolean)
+    //             );
 
-                // 2. Calculate payment totals per PO from payments table
-                const paymentsByPo: { [key: string]: number } = {};
-                (paymentsSheet || []).forEach((p: any) => {
-                    const key = p.poNumber || p.po_number || '';
-                    if (key) {
-                        paymentsByPo[key] = (paymentsByPo[key] || 0) + Number(p.payAmount || p.pay_amount || 0);
-                    }
-                });
+    //             // 2. Calculate payment totals per PO from payments table
+    //             const paymentsByPo: { [key: string]: number } = {};
+    //             (paymentsSheet || []).forEach((p: any) => {
+    //                 const key = p.poNumber || p.po_number || '';
+    //                 if (key) {
+    //                     paymentsByPo[key] = (paymentsByPo[key] || 0) + Number(p.payAmount || p.pay_amount || 0);
+    //                 }
+    //             });
 
-                // 3. Collect unique bills by Party + Bill No
-                const uniqueBills = new Set<string>();
+    //             // 3. Collect unique bills by Party + Bill No
+    //             const uniqueBills = new Set<string>();
 
-                // Process PO-based items
-                poMasterSheet.forEach((record: any) => {
-                    const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
-                    const recordFirm = (record.firmNameMatch || record.firm_name_match || '').trim().toLowerCase();
-                    const firmMatch = userFirm === "all" || recordFirm === userFirm;
-                    if (!firmMatch) return;
+    //             // Process PO-based items
+    //             poMasterSheet.forEach((record: any) => {
+    //                 const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
+    //                 const recordFirm = (record.firmNameMatch || record.firm_name_match || '').trim().toLowerCase();
+    //                 const firmMatch = userFirm === "all" || recordFirm === userFirm;
+    //                 if (!firmMatch) return;
 
-                    const poNum = record.poNumber || '';
-                    const isReceived = receivedPos.has(poNum);
-                    const paymentTerms = (record.paymentTerms || record.payment_terms || '').toString().trim().toLowerCase();
-                    const isPI = paymentTerms.includes("partly pi") || paymentTerms.includes("partly advance");
+    //                 const poNum = record.poNumber || '';
+    //                 const isReceived = receivedPos.has(poNum);
+    //                 const paymentTerms = (record.paymentTerms || record.payment_terms || '').toString().trim().toLowerCase();
+    //                 const isPI = paymentTerms.includes("partly pi") || paymentTerms.includes("partly advance");
 
-                    // Link with StoreIn for HOD and Bill checks
-                    const linkedStoreIn = (storeInSheet || []).find((s: any) =>
-                        (s.poNumber || s.po_number || '') === (record.poNumber || record.po_number || '')
-                    );
+    //                 // Link with StoreIn for HOD and Bill checks
+    //                 const linkedStoreIn = (storeInSheet || []).find((s: any) =>
+    //                     (s.poNumber || s.po_number || '') === (record.poNumber || record.po_number || '')
+    //                 );
 
-                    if (linkedStoreIn) {
-                        if (linkedStoreIn.typeOfBill && linkedStoreIn.typeOfBill.toLowerCase() !== 'independent') return;
-                        if ((linkedStoreIn.hodStatus || linkedStoreIn.hod_status) !== 'Approved') return;
-                    }
+    //                 if (linkedStoreIn) {
+    //                     if (linkedStoreIn.typeOfBill && linkedStoreIn.typeOfBill.toLowerCase() !== 'independent') return;
+    //                     if ((linkedStoreIn.hodStatus || linkedStoreIn.hod_status) !== 'Approved') return;
+    //                 }
 
-                    if (!isReceived && !isPI) return;
+    //                 if (!isReceived && !isPI) return;
 
-                    const totalPo = Number(record.totalPoAmount || 0);
-                    const totalPaid = paymentsByPo[poNum] || 0;
-                    const outstanding = totalPo - totalPaid;
-                    const status = (record.status || '').toString().trim().toLowerCase();
-                    const isPending = status === 'pending' || status === '';
+    //                 const totalPo = Number(record.totalPoAmount || 0);
+    //                 const totalPaid = paymentsByPo[poNum] || 0;
+    //                 const outstanding = totalPo - totalPaid;
+    //                 const status = (record.status || '').toString().trim().toLowerCase();
+    //                 const isPending = status === 'pending' || status === '';
 
-                    if (outstanding > 0 && isPending) {
-                        // ✅ Count ONLY if it matches the 'Advance Terms' logical filter
-                        const pt = (record.paymentTerms || record.payment_terms || '').toLowerCase();
-                        if (pt.includes('advance') || pt.includes('pi')) {
-                            const billNo = linkedStoreIn?.billNo || linkedStoreIn?.bill_no || 'NoBill';
-                            const uniqueKey = `${record.partyName || record.party_name || 'NoVendor'}-${billNo}`;
-                            uniqueBills.add(uniqueKey);
-                        }
-                    }
-                });
+    //                 if (outstanding > 0 && isPending) {
+    //                     // ✅ Count ONLY if it matches the 'Advance Terms' logical filter
+    //                     const pt = (record.paymentTerms || record.payment_terms || '').toLowerCase();
+    //                     if (pt.includes('advance') || pt.includes('pi')) {
+    //                         const billNo = linkedStoreIn?.billNo || linkedStoreIn?.bill_no || 'NoBill';
+    //                         const uniqueKey = `${record.partyName || record.party_name || 'NoVendor'}-${billNo}`;
+    //                         uniqueBills.add(uniqueKey);
+    //                     }
+    //                 }
+    //             });
 
-                // Process Payment-based items
-                (paymentsSheet || []).forEach((payment: any) => {
-                    const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
-                    const paymentFirm = (payment.firmNameMatch || payment.firm_name || payment.firm_name_match || '').trim().toLowerCase();
-                    const firmMatch = userFirm === "all" || paymentFirm === userFirm;
-                    if (!firmMatch) return;
+    //             // Process Payment-based items
+    //             (paymentsSheet || []).forEach((payment: any) => {
+    //                 const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
+    //                 const paymentFirm = (payment.firmNameMatch || payment.firm_name || payment.firm_name_match || '').trim().toLowerCase();
+    //                 const firmMatch = userFirm === "all" || paymentFirm === userFirm;
+    //                 if (!firmMatch) return;
 
-                    const status = String(payment.status || '').toLowerCase();
-                    const isPending = status === 'pending';
-                    const notScheduled = !payment.planned || String(payment.planned || '').trim() === '';
+    //                 const status = String(payment.status || '').toLowerCase();
+    //                 const isPending = status === 'pending';
+    //                 const notScheduled = !payment.planned || String(payment.planned || '').trim() === '';
 
-                    if (isPending && notScheduled) {
-                        // ✅ Count ONLY if it matches 'Advance Terms'
-                        const pt = (payment.paymentTerms || payment.payment_terms || '').toLowerCase();
-                        if (pt.includes('advance') || pt.includes('pi')) {
-                            const linkedStoreIn = (storeInSheet || []).find((s: any) =>
-                                (s.indentNo || s.indentNumber) === (payment.internalCode || payment.internal_code)
-                            );
-                            if (linkedStoreIn) {
-                                if (linkedStoreIn.typeOfBill && linkedStoreIn.typeOfBill.toLowerCase() !== 'independent') return;
-                                if ((linkedStoreIn.hodStatus || linkedStoreIn.hod_status) !== 'Approved') return;
-                            }
+    //                 if (isPending && notScheduled) {
+    //                     // ✅ Count ONLY if it matches 'Advance Terms'
+    //                     const pt = (payment.paymentTerms || payment.payment_terms || '').toLowerCase();
+    //                     if (pt.includes('advance') || pt.includes('pi')) {
+    //                         const linkedStoreIn = (storeInSheet || []).find((s: any) =>
+    //                             (s.indentNo || s.indentNumber) === (payment.internalCode || payment.internal_code)
+    //                         );
+    //                         if (linkedStoreIn) {
+    //                             if (linkedStoreIn.typeOfBill && linkedStoreIn.typeOfBill.toLowerCase() !== 'independent') return;
+    //                             if ((linkedStoreIn.hodStatus || linkedStoreIn.hod_status) !== 'Approved') return;
+    //                         }
 
-                            const billNo = payment.billNo || payment.bill_no || linkedStoreIn?.billNo || linkedStoreIn?.bill_no || 'NoBill';
-                            const uniqueKey = `${payment.partyName || payment.party_name || 'NoVendor'}-${billNo}`;
-                            uniqueBills.add(uniqueKey);
-                        }
-                    }
-                });
+    //                         const billNo = payment.billNo || payment.bill_no || linkedStoreIn?.billNo || linkedStoreIn?.bill_no || 'NoBill';
+    //                         const uniqueKey = `${payment.partyName || payment.party_name || 'NoVendor'}-${billNo}`;
+    //                         uniqueBills.add(uniqueKey);
+    //                     }
+    //                 }
+    //             });
 
-                return uniqueBills.size;
-            } catch (error) {
-                console.error('Error calculating Payment-Status notifications:', error);
-                return 0;
-            }
-        }
-    },
+    //             return uniqueBills.size;
+    //         } catch (error) {
+    //             console.error('Error calculating Payment-Status notifications:', error);
+    //             return 0;
+    //         }
+    //     }
+    // },
 
 
     {
@@ -624,15 +624,13 @@ const routes: RouteAttributes[] = [
                     return false;
                 }
 
-                const planned = String(payment?.planned || '').trim();
                 const actual = String(payment?.actual || '').trim();
                 const status1 = String(payment?.status1 || '').toLowerCase();
 
-                const hasPlanned = planned !== '';
                 const noActual = actual === '';
                 const isNotHodPending = status1 !== 'hod_approval_pending';
 
-                return hasPlanned && noActual && isNotHodPending;
+                return noActual && isNotHodPending;
             });
 
             // Filter to keep ONLY the latest record per Indent and Product

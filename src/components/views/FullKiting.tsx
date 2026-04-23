@@ -227,8 +227,21 @@ export default function FullKiting() {
                 biltyImage: biltyImageUrl,
             });
 
+            // ✅ Create a payment entry for freight so it shows up in Make Payment
+            await createPaymentEntry({
+                indent_number: selectedIndent.indentNumber,
+                vendor_name: selectedIndent.transporterName || 'Unknown Transporter',
+                po_number: selectedIndent.indentNumber, // Use indent number as PO for freight if PO not available
+                bill_amount: Number(values.amount),
+                photo_of_bill: biltyImageUrl,
+                product_name: `Freight for ${selectedIndent.productName}`,
+                firm_name_match: selectedIndent.firmNameMatch,
+                payment_form: 'freight',
+                payment_terms: 'Advance', // Set as Advance so it bypasses some filters if needed
+                remark: `Freight for Indent ${selectedIndent.indentNumber} - ${selectedIndent.productName}`,
+            }, biltyImageUrl);
 
-            toast.success(`Updated fullkitting for ${selectedIndent.indentNumber}`);
+            toast.success(`Updated fullkitting and created payment entry for ${selectedIndent.indentNumber}`);
             setOpenDialog(false);
             fetchData();
         } catch (error) {

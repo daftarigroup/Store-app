@@ -6,10 +6,12 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
     fetchStoreInRecords,
+    fetchDirectRecords,
     updateStoreInHodApproval,
     createPaymentEntry,
     type StoreInRecord,
 } from '@/services/storeInService';
+import { supabase } from '@/lib/supabase';
 import { createTallyEntryRecord } from '@/services/tallyEntryService';
 import { useSheets } from '@/context/SheetsContext';
 
@@ -172,9 +174,9 @@ export default () => {
         try {
             const currentDateTime = new Date().toISOString();
 
-            // Trigger stage 7 if rejected by HOD OR if store reports issues
             const triggerStage7 = values.status === 'Rejected';
 
+            // Update standard store_in table
             await updateStoreInHodApproval(selectedItem.liftNumber, {
                 actualHod: currentDateTime,
                 hodStatus: values.status,
@@ -254,7 +256,7 @@ export default () => {
         { accessorKey: 'indentNo', header: 'Indent No.' },
         { accessorKey: 'productName', header: 'Product' },
         { accessorKey: 'vendorName', header: 'Vendor' },
-        { accessorKey: 'qty', header: 'Order Qty' },
+        { accessorKey: 'qty', header: 'Lift Qty' },
         { accessorKey: 'receivedQuantity', header: 'Rec. Qty' },
         {
             accessorKey: 'damageOrder',

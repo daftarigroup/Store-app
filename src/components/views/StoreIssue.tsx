@@ -374,9 +374,20 @@ export default () => {
                                     render={({ field }) => (
                                         <FormItem>
                                             <FormLabel>Project Name <span className="text-destructive">*</span></FormLabel>
-                                            <FormControl>
-                                                <Input placeholder="Enter project name" {...field} />
-                                            </FormControl>
+                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                <FormControl>
+                                                    <SelectTrigger className="w-full h-10">
+                                                        <SelectValue placeholder="Select project" />
+                                                    </SelectTrigger>
+                                                </FormControl>
+                                                <SelectContent>
+                                                    {(options?.firms || []).map((firm, i) => (
+                                                        <SelectItem key={i} value={firm}>
+                                                            {firm}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
                                         </FormItem>
                                     )}
                                 />
@@ -616,11 +627,13 @@ export default () => {
                                             </SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                            {issueData.map((issue) => (
-                                                <SelectItem key={issue.id} value={String(issue.id)}>
-                                                    {issue.issue_no} - {issue.product_name}
-                                                </SelectItem>
-                                            ))}
+                                            {issueData
+                                                .filter(i => !(i.rejected_damage_qty && i.rejected_damage_qty !== '0' && i.rejected_damage_qty !== ''))
+                                                .map((issue) => (
+                                                    <SelectItem key={issue.id} value={String(issue.id)}>
+                                                        {issue.issue_no} - {issue.product_name}
+                                                    </SelectItem>
+                                                ))}
                                         </SelectContent>
                                     </Select>
                                 </FormItem>
@@ -654,9 +667,20 @@ export default () => {
                                     render={({ field }) => (
                                         <FormItem>
                                             <FormLabel>Project Name</FormLabel>
-                                            <FormControl>
-                                                <Input {...field} />
-                                            </FormControl>
+                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                <FormControl>
+                                                    <SelectTrigger className="w-full h-10">
+                                                        <SelectValue placeholder="Select project" />
+                                                    </SelectTrigger>
+                                                </FormControl>
+                                                <SelectContent>
+                                                    {(options?.firms || []).map((firm, i) => (
+                                                        <SelectItem key={i} value={firm}>
+                                                            {firm}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
                                         </FormItem>
                                     )}
                                 />

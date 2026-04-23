@@ -81,6 +81,13 @@ const itemSchema = z.object({
 });
 const departmentSchema = z.object({ department: z.string().min(1, 'Required') });
 const projectSchema = z.object({ firm_name: z.string().min(1, 'Required') });
+const ghUomSchema = z.object({
+    group_head: z.string().optional(),
+    uom: z.string().optional()
+}).refine(data => data.group_head || data.uom, {
+    message: "At least one field is required",
+    path: ["group_head"]
+});
 const companySchema = z.object({ company_name: z.string().min(1, 'Required'), company_gstin: z.string().optional(), company_pan: z.string().optional(), company_email: z.string().email().or(z.literal('')), company_phone: z.string().optional(), company_address: z.string().optional(), billing_address: z.string().optional(), destination_address: z.string().optional() });
 
 const ConditionsCell = ({ val }: { val: any }) => {
@@ -130,7 +137,7 @@ const ConditionsCell = ({ val }: { val: any }) => {
 };
 
 export default function MasterManagement() {
-    const { updateInventorySheet } = useSheets();
+    const { updateInventorySheet, masterSheet, updateAll } = useSheets();
     const [allRecords, setAllRecords] = useState<any[]>([]);
     const [dataLoading, setDataLoading] = useState(true);
     const [editingRecord, setEditingRecord] = useState<any>(null);
@@ -154,6 +161,7 @@ export default function MasterManagement() {
     const iForm = useForm<z.infer<typeof itemSchema>>({ resolver: zodResolver(itemSchema) as any, defaultValues: { item_name: '', group_head: '', uom: '', include_in_inventory: false, inventory_quantity: 0, regular_conditions: [{ value: '' }], third_party_conditions: [{ value: '' }] } });
     const dForm = useForm<z.infer<typeof departmentSchema>>({ resolver: zodResolver(departmentSchema), defaultValues: { department: '' } });
     const pForm = useForm<z.infer<typeof projectSchema>>({ resolver: zodResolver(projectSchema), defaultValues: { firm_name: '' } });
+    const ghUomForm = useForm<z.infer<typeof ghUomSchema>>({ resolver: zodResolver(ghUomSchema), defaultValues: { group_head: '', uom: '' } });
     const cForm = useForm<z.infer<typeof companySchema>>({ resolver: zodResolver(companySchema), defaultValues: { company_name: '', company_gstin: '', company_pan: '', company_email: '', company_phone: '', company_address: '', billing_address: '', destination_address: '' } });
 
     const { fields: regFields, append: regAppend, remove: regRemove } = useFieldArray({ control: iForm.control, name: "regular_conditions" });
@@ -204,22 +212,24 @@ export default function MasterManagement() {
             if (openDialog === 'item') iForm.reset({ ...normalized, include_in_inventory: false, inventory_quantity: 0 });
             if (openDialog === 'dept') dForm.reset(normalized);
             if (openDialog === 'project') pForm.reset(normalized);
+            if (openDialog === 'ghuom') ghUomForm.reset(normalized);
             if (openDialog === 'company') cForm.reset(normalized);
         } else if (openDialog) {
             if (openDialog === 'vendor') vForm.reset({ vendor_name: '', vendor_gstin: '', vendor_address: '', vendor_email: '', responsible_person: '', location: '', phone: '' });
             if (openDialog === 'item') iForm.reset({ item_name: '', group_head: '', uom: '', include_in_inventory: false, inventory_quantity: 0, regular_conditions: [{ value: '' }], third_party_conditions: [{ value: '' }] });
             if (openDialog === 'dept') dForm.reset({ department: '' });
             if (openDialog === 'project') pForm.reset({ firm_name: '' });
+            if (openDialog === 'ghuom') ghUomForm.reset({ group_head: '', uom: '' });
             if (openDialog === 'company') cForm.reset({ company_name: '', company_gstin: '', company_pan: '', company_email: '', company_phone: '', company_address: '', billing_address: '', destination_address: '' });
         }
     }, [editingRecord, openDialog]);
 
     async function loadData() { setDataLoading(true); try { setAllRecords(await fetchMasterRecords()); } finally { setDataLoading(false); } }
 
-    const handleDelete = async (record: any) => {
-        if (confirm('Permanently delete this record?')) {
+    const handleDeleteGHUom = async (record: any) => {
+        if (confirm(`Remove this record?`)) {
             const res = await deleteMasterData(record.id);
-            if (res.success) { toast.success('Deleted'); loadData(); } else toast.error('Delete failed');
+            if (res.success) { toast.success('Deleted'); loadData(); updateAll(); } else toast.error('Delete failed');
         }
     };
 
@@ -228,14 +238,21 @@ export default function MasterManagement() {
             const targets = allRecords.filter(r => r.department === deptName);
             const ops = targets.map(t => (!t.item_name && !t.vendor_name && !t.company_name) ? deleteMasterData(t.id) : updateMasterData(t.id, { department: null }));
             await Promise.all(ops);
-            toast.success('Department removed'); loadData();
+            toast.success('Department removed'); loadData(); updateAll();
+        }
+    };
+
+    const handleDelete = async (record: any) => {
+        if (confirm('Permanently delete this record?')) {
+            const res = await deleteMasterData(record.id);
+            if (res.success) { toast.success('Deleted'); loadData(); updateAll(); } else toast.error('Delete failed');
         }
     };
 
     const getActions = (row: any, type: string) => (
         <div className="flex items-center gap-1 justify-end pr-4">
             <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" onClick={() => { setEditingRecord(row); setOpenDialog(type); }}><Pencil size={14} /></Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(row)}><Trash size={14} /></Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => (type === 'ghuom' ? handleDeleteGHUom(row) : handleDelete(row))}><Trash size={14} /></Button>
         </div>
     );
 
@@ -247,6 +264,7 @@ export default function MasterManagement() {
             if (res.success) {
                 toast.success(`Department "${searchTermDept}" added successfully!`);
                 await loadData();
+                updateAll();
                 formInstance.setValue(fieldName, searchTermDept.trim());
                 setSearchTermDept('');
             } else {
@@ -259,6 +277,13 @@ export default function MasterManagement() {
             setIsAddingDept(false);
         }
     };
+
+
+    const ghUomColumns: ColumnDef<any>[] = [
+        { accessorKey: 'group_head', header: 'Group Head', cell: ({ row }) => <div className="flex items-center gap-2 font-medium"><LayoutGrid size={16} className="text-blue-500" />{row.original.group_head || '--'}</div> },
+        { accessorKey: 'uom', header: 'UOM', cell: ({ row }) => <div className="flex items-center gap-2 font-medium"><Package size={16} className="text-emerald-500" />{row.original.uom || '--'}</div> },
+        { id: 'actions', cell: ({ row }) => getActions(row.original, 'ghuom') }
+    ];
 
     const vendorColumns: ColumnDef<any>[] = [
         { accessorKey: 'vendor_name', header: 'Vendor Name', cell: ({ row }) => <div className="flex items-center gap-2 font-medium"><Building2 size={16} className="text-primary" />{row.original.vendor_name}</div> },
@@ -338,7 +363,9 @@ export default function MasterManagement() {
             ? {
                 firm_name: values.firm_name,
             }
-            : itemPayload;
+            : type === 'ghuom'
+                ? { group_head: values.group_head || null, uom: values.uom || null }
+                : itemPayload;
 
         if (editingRecord) {
             if (type === 'dept') {
@@ -349,6 +376,16 @@ export default function MasterManagement() {
             } else if (type === 'project') {
                 const targets = allRecords.filter(r => r.firm_name === editingRecord.firm_name);
                 const updates = targets.map(t => updateMasterData(t.id, { firm_name: values.firm_name }));
+                const results = await Promise.all(updates);
+                res = { success: results.every(r => r.success) };
+            } else if (type === 'gh') {
+                const targets = allRecords.filter(r => r.group_head === editingRecord.group_head);
+                const updates = targets.map(t => updateMasterData(t.id, { group_head: values.group_head }));
+                const results = await Promise.all(updates);
+                res = { success: results.every(r => r.success) };
+            } else if (type === 'uom') {
+                const targets = allRecords.filter(r => r.uom === editingRecord.uom);
+                const updates = targets.map(t => updateMasterData(t.id, { uom: values.uom }));
                 const results = await Promise.all(updates);
                 res = { success: results.every(r => r.success) };
             } else {
@@ -372,7 +409,7 @@ export default function MasterManagement() {
                 updateInventorySheet();
             }
         }
-        if (res.success) { toast.success('Saved'); setOpenDialog(null); setEditingRecord(null); loadData(); }
+        if (res.success) { toast.success('Saved'); setOpenDialog(null); setEditingRecord(null); loadData(); updateAll(); }
     };
 
     const vendorsData = allRecords.filter(r => r.vendor_name);
@@ -385,6 +422,7 @@ export default function MasterManagement() {
         const original = allRecords.find(r => r.firm_name === name);
         return { firm_name: name, id: original?.id };
     });
+    const ghUomData = allRecords.filter(r => (r.group_head || r.uom) && !r.item_name && !r.vendor_name && !r.company_name);
     const companiesData = allRecords.filter(r => r.company_name);
 
     return (
@@ -396,6 +434,7 @@ export default function MasterManagement() {
                     <TabsTrigger value="vendors" className="gap-1 sm:gap-2 px-3 sm:px-6 text-xs sm:text-sm"><Building2 size={14} className="sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Vendors</span></TabsTrigger>
                     <TabsTrigger value="items" className="gap-1 sm:gap-2 px-3 sm:px-6 text-xs sm:text-sm"><Boxes size={14} className="sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Items</span></TabsTrigger>
                     <TabsTrigger value="departments" className="gap-1 sm:gap-2 px-3 sm:px-6 text-xs sm:text-sm"><LayoutGrid size={14} className="sm:w-4 sm:h-4" /> <span className="hidden md:inline">Depts</span><span className="md:hidden">D</span></TabsTrigger>
+                    <TabsTrigger value="group-heads" className="gap-1 sm:gap-2 px-3 sm:px-6 text-xs sm:text-sm"><LayoutGrid size={14} className="sm:w-4 sm:h-4" /> <span className="hidden md:inline">Group Head</span><span className="md:hidden">GH/U</span></TabsTrigger>
                     <TabsTrigger value="companies" className="gap-1 sm:gap-2 px-3 sm:px-6 text-xs sm:text-sm"><Building size={14} className="sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Companies</span></TabsTrigger>
                 </TabsList>
 
@@ -439,6 +478,19 @@ export default function MasterManagement() {
                         </TabsContent>
                     </Tabs>
                 </TabsContent>
+                <TabsContent value="group-heads" className="flex-1 outline-none">
+                    <DataTable
+                        data={ghUomData}
+                        columns={ghUomColumns}
+                        searchFields={['group_head', 'uom']}
+                        dataLoading={dataLoading}
+                        extraActions={
+                            <Button className="bg-blue-600" onClick={() => { ghUomForm.reset(); setEditingRecord(null); setOpenDialog('ghuom'); }}>
+                                <Plus size={18} /> Add Category/Unit
+                            </Button>
+                        }
+                    />
+                </TabsContent>
                 <TabsContent value="projects" className="flex-1 outline-none hidden"></TabsContent>
                 <TabsContent value="companies" className="flex-1 outline-none"><DataTable data={companiesData} columns={companyColumns} searchFields={['company_name']} dataLoading={dataLoading} extraActions={<Button className="bg-emerald-600" onClick={() => { cForm.reset(); setEditingRecord(null); setOpenDialog('company'); }}><Plus size={18} /> Add Company</Button>} /></TabsContent>
             </Tabs>
@@ -458,7 +510,7 @@ export default function MasterManagement() {
                     <div className={cn("h-2 w-full bg-gradient-to-r", openDialog === 'vendor' ? "from-indigo-600 to-cyan-600" : openDialog === 'item' ? "from-blue-600 to-indigo-600" : openDialog === 'dept' ? "from-orange-400 to-red-500" : "from-emerald-500 to-teal-600")} />
                     <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
                         <div className="sticky top-0 z-20 px-4 sm:px-6 pt-4 sm:pt-6 pb-2 flex-shrink-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border/40 shadow-sm">
-                            <DialogHeader><DialogTitle className="text-lg sm:text-xl font-bold">{editingRecord ? 'Edit' : 'Add'} {openDialog?.toUpperCase()}</DialogTitle></DialogHeader>
+                            <DialogHeader><DialogTitle className="text-lg sm:text-xl font-bold">{editingRecord ? 'Edit' : 'Add'} {openDialog === 'ghuom' ? 'Group Head & UOM' : openDialog?.toUpperCase()}</DialogTitle></DialogHeader>
                         </div>
                         <ScrollArea className="flex-1 min-h-0 scroll-smooth overflow-y-auto" type="always">
                             <div className="space-y-4 sm:space-y-6 px-4 sm:px-6 pb-24 sm:pb-24">
@@ -522,20 +574,44 @@ export default function MasterManagement() {
                                                     <FormMessage />
                                                 </FormItem>
                                             )} />
-                                            <FormField control={iForm.control} name="group_head" render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Group Head</FormLabel>
-                                                    <FormControl><Input {...field} placeholder="" /></FormControl>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )} />
-                                            <FormField control={iForm.control} name="uom" render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>UOM</FormLabel>
-                                                    <FormControl><Input {...field} placeholder="" /></FormControl>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )} />
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <FormField control={iForm.control} name="group_head" render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Group Head</FormLabel>
+                                                        <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                                                            <FormControl>
+                                                                <SelectTrigger className="w-full">
+                                                                    <SelectValue placeholder="Select Group Head" />
+                                                                </SelectTrigger>
+                                                            </FormControl>
+                                                            <SelectContent>
+                                                                {masterSheet?.allGroupHeads?.map((gh) => (
+                                                                    <SelectItem key={gh} value={gh}>{gh}</SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )} />
+                                                <FormField control={iForm.control} name="uom" render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>UOM</FormLabel>
+                                                        <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                                                            <FormControl>
+                                                                <SelectTrigger className="w-full">
+                                                                    <SelectValue placeholder="Select UOM" />
+                                                                </SelectTrigger>
+                                                            </FormControl>
+                                                            <SelectContent>
+                                                                {masterSheet?.uoms?.map((uom) => (
+                                                                    <SelectItem key={uom} value={uom}>{uom}</SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )} />
+                                            </div>
                                             <div className="space-y-6 border rounded-xl p-4 sm:p-6 bg-muted/20 border-border/60">
                                                 <div className="space-y-4">
                                                     <div className="flex items-center justify-between">
@@ -596,6 +672,29 @@ export default function MasterManagement() {
                                                 )} />
                                             )}
                                             <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save Item</Button>
+                                        </form>
+                                    </Form>
+                                )}
+                                {openDialog === 'ghuom' && (
+                                    <Form {...ghUomForm}>
+                                        <form className="grid gap-4 m-5" onSubmit={ghUomForm.handleSubmit(v => onSubmit(v, 'ghuom'))}>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                <FormField control={ghUomForm.control} name="group_head" render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Group Head</FormLabel>
+                                                        <FormControl><Input {...field} placeholder="e.g., Electrical" /></FormControl>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )} />
+                                                <FormField control={ghUomForm.control} name="uom" render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>UOM Name</FormLabel>
+                                                        <FormControl><Input {...field} placeholder="e.g., NOS" /></FormControl>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )} />
+                                            </div>
+                                            <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save Record</Button>
                                         </form>
                                     </Form>
                                 )}

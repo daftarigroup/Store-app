@@ -17,7 +17,7 @@ import { Button } from '../ui/button';
 import { z } from 'zod';
 import { useForm, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Form, FormControl, FormField, FormItem, FormLabel } from '../ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '../ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { toast } from 'sonner';
 import { PuffLoader as Loader } from 'react-spinners';
@@ -27,6 +27,10 @@ import Heading from '../element/Heading';
 import { Input } from '../ui/input';
 import { formatDate } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
+import { pdf } from '@react-pdf/renderer';
+import IssuePdf from '../element/IssuePdf';
+import { supabase } from '@/lib/supabase';
+const logo = "/logo.png";
 import {
     fetchIssueRecords,
     updateIssueApproval,
@@ -40,6 +44,65 @@ export default function IssueData() {
     const [selectedIssue, setSelectedIssue] = useState<IssueRecord | null>(null);
     const [openDialog, setOpenDialog] = useState(false);
     const [downloading, setDownloading] = useState(false);
+
+    const fetchLogoAsBase64 = async (url: string): Promise<string> => {
+        try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.readAsDataURL(blob);
+            });
+        } catch (error) {
+            console.error('Error fetching logo:', error);
+            return '';
+        }
+    };
+
+    const processPdfSlip = async (type: 'issue' | 'return', issueNumber: string, data: any) => {
+        try {
+            const logoBase64 = await fetchLogoAsBase64(logo);
+
+            const blob = await pdf(
+                <IssuePdf
+                    type={type}
+                    issueNumber={issueNumber}
+                    date={new Date().toLocaleDateString()}
+                    constructorName={data.constructorName}
+                    siteLocation={data.siteLocation}
+                    projectName={data.projectName}
+                    remarks={data.remarks}
+                    issuePersonName={data.issuePersonName}
+                    returnPersonName={data.returnPersonName}
+                    damageRemark={data.damageRemark}
+                    rejectedDamageQty={data.rejectedDamageQty}
+                    products={data.products}
+                    logo={logoBase64}
+                />
+            ).toBlob();
+
+            const fileName = `${issueNumber}_${type}_${Date.now()}.pdf`;
+            const filePath = `indent-pdfs/${fileName}`;
+            const pdfFile = new File([blob], fileName, { type: 'application/pdf' });
+
+            const { error: uploadError } = await supabase.storage
+                .from('indent_attachment')
+                .upload(filePath, pdfFile);
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('indent_attachment')
+                .getPublicUrl(filePath);
+
+            return publicUrl;
+        } catch (error) {
+            console.error(`Error processing ${type} PDF:`, error);
+            toast.error(`Failed to generate ${type} slip PDF`);
+            return '';
+        }
+    };
 
     const fetchData = async () => {
         setDataLoading(true);
@@ -242,6 +305,14 @@ export default function IssueData() {
                 message: 'Given quantity is required when status is Yes',
             });
         }
+
+        if (data.status === 'Yes' && data.givenQty && selectedIssue && data.givenQty > selectedIssue.quantity) {
+            ctx.addIssue({
+                path: ['givenQty'],
+                code: z.ZodIssueCode.custom,
+                message: `Given quantity cannot exceed requested quantity (${selectedIssue.quantity})`,
+            });
+        }
     });
 
     const form = useForm<z.infer<typeof schema>>({
@@ -249,16 +320,47 @@ export default function IssueData() {
         defaultValues: { givenQty: undefined, status: undefined },
     });
 
+    useEffect(() => {
+        if (selectedIssue) {
+            form.reset({
+                status: 'Yes',
+                givenQty: selectedIssue.quantity
+            });
+        }
+    }, [selectedIssue, form]);
+
     async function onSubmit(values: z.infer<typeof schema>) {
         try {
             if (!selectedIssue) return;
 
             const currentDateTime = new Date().toISOString();
 
+            // Generate Updated PDF
+            const pdfData = {
+                constructorName: selectedIssue.constructor_name || '',
+                siteLocation: selectedIssue.site_location || '',
+                projectName: selectedIssue.project_name || '',
+                remarks: selectedIssue.issue_to || '',
+                issuePersonName: selectedIssue.issue_person_name || '',
+                returnPersonName: selectedIssue.return_person_name || '',
+                damageRemark: selectedIssue.damage_remark || '',
+                rejectedDamageQty: selectedIssue.rejected_damage_qty ? Number(selectedIssue.rejected_damage_qty) : 0,
+                products: [{
+                    productName: selectedIssue.product_name,
+                    groupHead: selectedIssue.group_head,
+                    department: selectedIssue.department,
+                    quantity: values.status === 'Yes' ? (values.givenQty || selectedIssue.quantity) : selectedIssue.quantity,
+                    uom: selectedIssue.uom
+                }]
+            };
+
+            const issuePdfUrl = await processPdfSlip('issue', selectedIssue.issue_no, pdfData);
+
             await updateIssueApproval(selectedIssue.issue_no, {
                 actual1: currentDateTime,
                 status: values.status,
                 given_qty: values.status === 'Yes' ? values.givenQty : null,
+                issue_slip: issuePdfUrl
             });
 
             toast.success(`Updated approval status of ${selectedIssue.issue_no}`);
@@ -415,6 +517,7 @@ export default function IssueData() {
                                                             }
                                                         />
                                                     </FormControl>
+                                                    <FormMessage />
                                                 </FormItem>
                                             )}
                                         />

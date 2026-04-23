@@ -639,8 +639,9 @@ export default () => {
             const currentDateTime = new Date().toISOString();
 
             // 3. Update all items in parallel
-            const updatePromises = values.items.map(item =>
-                updateStoreInReceiving(item.liftNumber, {
+            const updatePromises = values.items.map(async item => {
+                // Update original store_in record to remove from processing
+                await updateStoreInReceiving(item.liftNumber, {
                     actual6: currentDateTime,
                     receivingStatus: values.status,
                     receivedQuantity: item.receivedQty,
@@ -652,8 +653,29 @@ export default () => {
                     location: values.location || '',
                     challanNo: values.challanNo || '',
                     challanImage: challanImageUrl || '',
-                })
-            );
+                });
+
+                // If Not Received, also create a record in the direct table
+                if (values.status === 'Not Received') {
+                    await createDirectRecord({
+                        liftNumber: `DIRECT-${item.liftNumber}`,
+                        indentNo: item.indentNo,
+                        vendorName: selectedIndent.vendorName,
+                        productName: item.productName,
+                        qty: item.qty,
+                        receivedQuantity: item.receivedQty,
+                        receivingStatus: values.status,
+                        billNo: values.challanNo || 'NOT-RECEIVED',
+                        billAmount: 0,
+                        photoOfProduct: photoUrl,
+                        photoOfBill: challanImageUrl,
+                        receiverName: user?.name || 'Store User',
+                        transportationInclude: 'No',
+                        firmNameMatch: selectedIndent.firmNameMatch,
+                        timestamp: currentDateTime,
+                    });
+                }
+            });
 
             await Promise.all(updatePromises);
 
@@ -681,6 +703,8 @@ export default () => {
         transportAmount: z.coerce.number().optional(),
         transporterName: z.string().optional(),
         vehicleNo: z.string().optional(),
+        challanNo: z.string().optional(),
+        challanImage: z.instanceof(File).optional(),
     });
 
     const directSchema = directSchemaBase.superRefine((val, ctx) => {
@@ -710,6 +734,8 @@ export default () => {
             billNo: '',
             billAmount: 0,
             receivingQty: 0,
+            challanNo: '',
+            challanImage: undefined,
         },
     });
 
@@ -727,6 +753,11 @@ export default () => {
             let billUrl = '';
             if (values.billImage) {
                 billUrl = await uploadBillCopy(values.billImage, liftId);
+            }
+            
+            let challanUrl = '';
+            if (values.challanImage) {
+                challanUrl = await uploadChallanImage(values.challanImage, liftId);
             }
 
             // 2. Create Record
@@ -749,7 +780,24 @@ export default () => {
                 vehicleNo: values.vehicleNo || '',
                 firmNameMatch: user.firmNameMatch === 'all' ? 'Default' : user.firmNameMatch,
                 timestamp: new Date().toISOString(),
+                challanNo: values.challanNo,
+                challanImage: challanUrl,
             });
+
+            // 3. Create Payment Entry for Make Payment if Received
+            if (values.status === 'Received') {
+                await createPaymentEntry({
+                    indent_number: indentId,
+                    vendor_name: values.vendorName,
+                    po_number: liftId,
+                    bill_amount: values.billAmount || 0,
+                    photo_of_bill: billUrl,
+                    product_name: values.productName,
+                    firm_name_match: user.firmNameMatch === 'all' ? 'Default' : user.firmNameMatch,
+                    payment_terms: 'Advance', // Default to advance to show up in Make Payment
+                    prefix: 'DIRECT'
+                });
+            }
 
             toast.success('Direct entry saved successfully!');
             setOpenDirectDialog(false);
@@ -911,6 +959,35 @@ export default () => {
                                                                     <FormLabel>Receiving Qty</FormLabel>
                                                                     <FormControl>
                                                                         <Input type="number" {...field} placeholder="Enter quantity" />
+                                                                    </FormControl>
+                                                                </FormItem>
+                                                            )}
+                                                        />
+                                                    </>
+                                                )}
+
+                                                {watchDirectStatus === 'Not Received' && (
+                                                    <>
+                                                        <FormField
+                                                            control={directForm.control}
+                                                            name="challanNo"
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>Challan Number</FormLabel>
+                                                                    <FormControl>
+                                                                        <Input {...field} placeholder="Enter challan number" />
+                                                                    </FormControl>
+                                                                </FormItem>
+                                                            )}
+                                                        />
+                                                        <FormField
+                                                            control={directForm.control}
+                                                            name="challanImage"
+                                                            render={({ field: { value, onChange, ...fieldProps } }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>Challan Image</FormLabel>
+                                                                    <FormControl>
+                                                                        <Input type="file" accept="image/*" onChange={(e) => onChange(e.target.files?.[0])} {...fieldProps} />
                                                                     </FormControl>
                                                                 </FormItem>
                                                             )}
@@ -1233,42 +1310,6 @@ export default () => {
                                         )}
                                     />
 
-                                    {form.watch('status') === 'Not Received' && (
-                                        <>
-                                            <FormField
-                                                control={form.control}
-                                                name="challanNo"
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>Challan Number</FormLabel>
-                                                        <FormControl>
-                                                            <Input {...field} placeholder="Enter challan number" />
-                                                        </FormControl>
-                                                    </FormItem>
-                                                )}
-                                            />
-                                            <FormField
-                                                control={form.control}
-                                                name="challanImage"
-                                                render={({ field: { value, onChange, ...fieldProps } }) => (
-                                                    <FormItem>
-                                                        <FormLabel>Challan Image</FormLabel>
-                                                        <FormControl>
-                                                            <Input
-                                                                type="file"
-                                                                accept="image/*"
-                                                                onChange={(e) => {
-                                                                    const file = e.target.files?.[0];
-                                                                    if (file) onChange(file);
-                                                                }}
-                                                                {...fieldProps}
-                                                            />
-                                                        </FormControl>
-                                                    </FormItem>
-                                                )}
-                                            />
-                                        </>
-                                    )}
                                 </div>
 
                                     <FormField
@@ -1390,7 +1431,7 @@ export default () => {
                                         <Button variant="outline">Close</Button>
                                     </DialogClose>
 
-                                    <Button type="submit" disabled={form.formState.isSubmitting || form.watch('status') === 'Not Received'}>
+                                    <Button type="submit" disabled={form.formState.isSubmitting}>
                                         {form.formState.isSubmitting && (
                                             <Loader
                                                 size={20}

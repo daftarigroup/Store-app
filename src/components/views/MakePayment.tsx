@@ -22,6 +22,8 @@ import {
 import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { Input } from "../ui/input";
+import { uploadPaymentImage } from '@/services/storeInService';
 
 interface PaymentsRecord {
     rowIndex?: number;
@@ -162,6 +164,8 @@ export default function MakePayment() {
     const [selectedPaymentItem, setSelectedPaymentItem] = useState<DisplayPayment | null>(null);
     const [paymentModalStatus, setPaymentModalStatus] = useState('Paid');
     const [paymentModalRemark, setPaymentModalRemark] = useState('');
+    const [paymentModalAmount, setPaymentModalAmount] = useState<number | string>('');
+    const [paymentModalFile, setPaymentModalFile] = useState<File | null>(null);
 
     const [stats, setStats] = useState({
         total: 0,
@@ -275,8 +279,6 @@ export default function MakePayment() {
                 // Filter Pending: Has planned date and status is not 'Completed'
                 const pendingBasic = mappedPayments
                     .filter((sheet: PaymentsRecord) => {
-                        const plannedValue = String(sheet?.planned || '').trim();
-                        const hasPlanned = plannedValue !== '';
                         const status = String(sheet?.status || '').toLowerCase();
                         const isCompleted = status === 'completed';
 
@@ -296,7 +298,7 @@ export default function MakePayment() {
                             return false;
                         }
 
-                        return hasPlanned && !isCompleted;
+                        return !isCompleted;
                     });
 
                 // Filter to show only the latest record for each Indent Number and Product
@@ -595,7 +597,13 @@ export default function MakePayment() {
         const currentDateOnly = isoNow.split('T')[0];
 
         try {
-            // Prepare IDs and update payments table in Supabase
+            // 0. Upload Payment Confirmation Image if exists
+            let attachmentUrl = selectedPaymentItem.file || selectedPaymentItem.pdf || '';
+            if (paymentModalFile) {
+                attachmentUrl = await uploadPaymentImage(paymentModalFile, selectedPaymentItem.uniqueNo);
+            }
+
+            // 1. Update payments table in Supabase
             const ids = selectedPaymentItem.rowIds || [selectedPaymentItem.rowIndex];
             
             // Update payments rows
@@ -603,9 +611,10 @@ export default function MakePayment() {
                 .from('payments')
                 .update({
                     actual: currentDateOnly,
-                    status: 'Completed',
+                    status: paymentModalStatus === 'Complete' ? 'Completed' : paymentModalStatus,
                     status1: 'ok',
-                    payment_done: true
+                    payment_done: paymentModalStatus === 'Complete',
+                    pay_amount: paymentModalAmount
                 })
                 .in('id', ids);
 
@@ -632,9 +641,9 @@ export default function MakePayment() {
                 unique_number: selectedPaymentItem.uniqueNo,
                 fms_name: selectedPaymentItem.firmNameMatch,
                 pay_to: selectedPaymentItem.partyName,
-                amount_to_be_paid: String(selectedPaymentItem.payAmount),
+                amount_to_be_paid: String(paymentModalAmount),
                 remarks: paymentModalRemark || `Payment completed for ${selectedPaymentItem.uniqueNo}`,
-                any_attachments: selectedPaymentItem.file || selectedPaymentItem.pdf || '',
+                any_attachments: attachmentUrl,
                 timestamp1: isoNow,
                 planned: selectedPaymentItem.planned || '',
                 payment_terms: selectedPaymentItem.paymentTerms || '',
@@ -676,6 +685,7 @@ export default function MakePayment() {
 
             // Refresh data
             setIsPaymentModalOpen(false);
+            setPaymentModalFile(null);
             setTimeout(() => updateAll(), 800);
             
             // If the user wants to open the external form, we can do it here or via button in modal
@@ -729,7 +739,9 @@ export default function MakePayment() {
                                 onClick={() => {
                                     setSelectedPaymentItem(item);
                                     setPaymentModalRemark(item.remark || '');
-                                    setPaymentModalStatus('Paid');
+                                    setPaymentModalStatus('Complete');
+                                    setPaymentModalAmount('');
+                                    setPaymentModalFile(null);
                                     setIsPaymentModalOpen(true);
                                 }}
                                 className="bg-green-600 hover:bg-green-700 shadow-sm"
@@ -810,7 +822,7 @@ export default function MakePayment() {
         },
         {
             accessorKey: 'totalPoAmount',
-            header: 'Total PO Amount',
+            header: 'Total Amount',
             cell: ({ row }) => (
                 <span className="font-bold text-purple-600">₹{row.original.totalPoAmount?.toLocaleString('en-IN')}</span>
             )
@@ -826,12 +838,17 @@ export default function MakePayment() {
         },
         {
             accessorKey: 'outstandingAmount',
-            header: 'Outstanding',
-            cell: ({ row }) => (
-                <span className="font-semibold text-red-600">
-                    ₹{row.original.outstandingAmount?.toLocaleString('en-IN')}
-                </span>
-            )
+            header: 'Pending',
+            cell: ({ row }) => {
+                const total = Number(row.original.totalPoAmount) || 0;
+                const paid = Number(row.original.payAmount) || 0;
+                const pending = total - paid;
+                return (
+                    <span className="font-semibold text-red-600">
+                        ₹{pending.toLocaleString('en-IN')}
+                    </span>
+                );
+            }
         },
         {
             accessorKey: 'status',
@@ -1412,13 +1429,35 @@ export default function MakePayment() {
                                 <span className="text-[10px] font-bold text-purple-600 uppercase">Payment No.</span>
                                 <span className="font-semibold text-gray-800">{selectedPaymentItem?.uniqueNo}</span>
                             </div>
+                            <div className="flex flex-col gap-1.5 p-3 bg-amber-50 rounded-lg border border-amber-100">
+                                <span className="text-[10px] font-bold text-amber-600 uppercase">Total Amount</span>
+                                <span className="font-bold text-gray-800">₹{selectedPaymentItem?.totalPoAmount.toLocaleString('en-IN')}</span>
+                            </div>
                             <div className="flex flex-col gap-1.5 p-3 bg-green-50 rounded-lg border border-green-100">
-                                <span className="text-[10px] font-bold text-green-600 uppercase">Amount</span>
+                                <span className="text-[10px] font-bold text-green-600 uppercase">Paid Amount</span>
                                 <span className="font-bold text-gray-800">₹{selectedPaymentItem?.payAmount.toLocaleString('en-IN')}</span>
+                            </div>
+                            <div className="flex flex-col gap-1.5 p-3 bg-red-50 rounded-lg border border-red-100">
+                                <span className="text-[10px] font-bold text-red-600 uppercase">Pending Amount</span>
+                                <span className="font-bold text-gray-800">
+                                    ₹{((Number(selectedPaymentItem?.totalPoAmount) || 0) - (Number(selectedPaymentItem?.payAmount) || 0)).toLocaleString('en-IN')}
+                                </span>
                             </div>
                         </div>
 
                         <div className="space-y-4">
+                            <div className="grid gap-2">
+                                <Label htmlFor="amount" className="text-sm font-semibold">Payment Amount (₹)</Label>
+                                <Input
+                                    id="amount"
+                                    type="number"
+                                    value={paymentModalAmount}
+                                    onChange={(e) => setPaymentModalAmount(e.target.value)}
+                                    className="font-bold text-gray-800"
+                                    placeholder="Enter amount"
+                                />
+                            </div>
+
                             <div className="grid gap-2">
                                 <Label htmlFor="status" className="text-sm font-semibold">Payment Status</Label>
                                 <Select value={paymentModalStatus} onValueChange={setPaymentModalStatus}>
@@ -1426,12 +1465,24 @@ export default function MakePayment() {
                                         <SelectValue placeholder="Select status" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="Paid">Paid / Completed</SelectItem>
-                                        <SelectItem value="Processing">Processing</SelectItem>
-                                        <SelectItem value="Partially Paid">Partially Paid</SelectItem>
-                                        <SelectItem value="Hold">On Hold</SelectItem>
+                                        <SelectItem value="Complete">Complete</SelectItem>
+                                        <SelectItem value="Pending">Pending</SelectItem>
+                                        <SelectItem value="On Hold">On Hold</SelectItem>
                                     </SelectContent>
                                 </Select>
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="attachment" className="text-sm font-semibold">Attachment (Proof of Payment)</Label>
+                                <Input
+                                    id="attachment"
+                                    type="file"
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) setPaymentModalFile(file);
+                                    }}
+                                    className="cursor-pointer"
+                                />
                             </div>
 
                             <div className="grid gap-2">
@@ -1446,7 +1497,7 @@ export default function MakePayment() {
                             </div>
                         </div>
 
-                        {selectedPaymentItem?.paymentForm && (
+                        {/* {selectedPaymentItem?.paymentForm && (
                             <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg flex items-center justify-between">
                                 <div className="flex flex-col">
                                     <span className="text-xs font-semibold text-blue-700">External Payment Link</span>
@@ -1462,7 +1513,7 @@ export default function MakePayment() {
                                     Open Form
                                 </Button>
                             </div>
-                        )}
+                        )} */}
                     </div>
 
                     <DialogFooter className="gap-2 sm:gap-0">

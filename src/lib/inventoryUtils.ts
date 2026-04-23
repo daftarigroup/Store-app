@@ -8,35 +8,83 @@ export function calculateRealInventory(
     inventoryMaster: InventorySheet[],
     indents: IndentSheet[],
     storeIns: StoreInSheet[],
-    issues: IssueSheet[]
+    issues: IssueSheet[],
+    transfers: any[] = [],
+    currentProject: string = 'All'
 ): InventorySheet[] {
     // 1. Group transactions by product name for efficient lookup
     const indentSummary = groupAndSum(indents, 'productName', ['quantity', 'approvedQuantity']);
-    const storeInSummary = groupAndSum(storeIns, 'productName', ['qty', 'receivedQuantity', 'returnQuantity']);
+    const storeInDetailed = storeIns.reduce((acc, s) => {
+        const key = s.productName;
+        if (!acc[key]) {
+            acc[key] = { liftingQty: 0, stockTransfer: 0, purchaseQuantity: 0, purchaseReturn: 0 };
+        }
+        
+        const qty = Number(s.receivedQuantity) || 0;
+        const totalQty = Number(s.qty) || 0;
+        const retQty = Number(s.returnQuantity) || 0;
+
+        if (s.receivingStatus === 'Transfer') {
+            acc[key].stockTransfer += qty;
+        } else {
+            acc[key].liftingQty += qty;
+            acc[key].purchaseQuantity += totalQty;
+            acc[key].purchaseReturn += retQty;
+        }
+        return acc;
+    }, {} as Record<string, any>);
+    
     const issueSummary = groupAndSum(issues, 'productName', ['givenQty', 'rejectedDamageQty']);
+
+    const transferSummary = (transfers || []).reduce((acc, t) => {
+        const key = t.productName;
+        if (!acc[key]) acc[key] = { in: 0, out: 0, totalVolume: 0 };
+        
+        const qty = Number(t.quantity) || 0;
+        acc[key].totalVolume += qty;
+
+        if (currentProject !== 'All') {
+            if (t.toProject === currentProject) acc[key].in += qty;
+            if (t.fromProject === currentProject) acc[key].out += qty;
+        }
+        return acc;
+    }, {} as Record<string, { in: number; out: number; totalVolume: number }>);
 
     return inventoryMaster.map(item => {
         const key = item.itemName;
         
         const iSum = indentSummary[key] || { quantity: 0, approvedQuantity: 0 };
-        const sSum = storeInSummary[key] || { qty: 0, receivedQuantity: 0, returnQuantity: 0 };
+        const sDet = storeInDetailed[key] || { liftingQty: 0, stockTransfer: 0, purchaseQuantity: 0, purchaseReturn: 0 };
         const oSum = issueSummary[key] || { givenQty: 0, rejectedDamageQty: 0 };
 
         // Core metrics
         const indented = iSum.quantity;
         const approved = iSum.approvedQuantity;
-        const purchaseQuantity = sSum.qty;
-        const liftingQty = sSum.receivedQuantity;
-        const purchaseReturn = sSum.returnQuantity || item.purchaseReturn || 0; // Fallback to master if no trans
+        const purchaseQuantity = sDet.purchaseQuantity;
+        const liftingQty = sDet.liftingQty;
+        const purchaseReturn = sDet.purchaseReturn || item.purchaseReturn || 0;
         const outQuantity = oSum.givenQty;
         const issueReturn = oSum.rejectedDamageQty || item.issueReturn || 0;
+
+        // Stock Transfer: Old way (from storeIn) + New way (from dedicated table)
+        const tSum = transferSummary[key] || { in: 0, out: 0, totalVolume: 0 };
+        let stockTransfer = (sDet.stockTransfer || 0) + (item.stockTransfer || 0);
+        
+        if (currentProject === 'All') {
+            stockTransfer += tSum.totalVolume;
+        } else {
+            stockTransfer += (tSum.in - tSum.out);
+        }
 
         // Derived metrics
         const inTransit = Math.max(0, purchaseQuantity - liftingQty);
         
         // Final Current Quantity Calculation:
-        // Current = Opening + Lifting - PurchaseReturn - (Issued - IssueReturn)
-        const current = (item.opening || 0) + liftingQty - purchaseReturn - (outQuantity - issueReturn);
+        // Current = Opening + Lifting + NetStockTransfer - PurchaseReturn - (Issued - IssueReturn)
+        // Note: For 'All' mode, NetStockTransfer should effectively be 0 for the balance, 
+        // but we show volume in the column.
+        const netTransferForBalance = currentProject === 'All' ? 0 : (tSum.in - tSum.out);
+        const current = (item.opening || 0) + liftingQty + (sDet.stockTransfer || 0) + netTransferForBalance + (item.stockTransfer || 0) - purchaseReturn - (outQuantity - issueReturn);
 
         return {
             ...item,
@@ -48,6 +96,7 @@ export function calculateRealInventory(
             inTransit,
             outQuantity,
             issueReturn,
+            stockTransfer,
             current,
             totalPrice: current * (item.individualRate || 0),
             colorCode: current < 5 ? 'red' : 'green'

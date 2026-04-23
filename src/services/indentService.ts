@@ -24,6 +24,7 @@ export interface IndentRecord {
     no_day: number;
     planned1: string;
     actual1: string;
+    firm_name: string;
     firm_name_match: string;
     approved_quantity: number;
     timestamp: string;
@@ -100,6 +101,7 @@ export async function fetchIndentRecords(): Promise<IndentRecord[]> {
             no_day: Number(r.no_day) || 0,
             planned1: r.planned1 || '',
             actual1: r.actual1 || '',
+            firm_name: r.firm_name || '',
             firm_name_match: r.firm_name || r.firm_name_match || '',
             approved_quantity: Number(r.approved_quantity) || 0,
             timestamp: r.timestamp || '',

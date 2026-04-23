@@ -358,12 +358,27 @@ export default function GetPurchase() {
             cell: ({ getValue }) => <div>{(getValue() as string) || '-'}</div>,
         },
         {
+            accessorKey: 'quantity',
+            header: 'PO Qty',
+            cell: ({ getValue }) => <div className="font-medium">{(getValue() as number) || 0}</div>,
+        },
+        {
+            accessorKey: 'receivedQty',
+            header: 'Lifting Qty',
+            cell: ({ getValue }) => <div className="font-semibold text-primary">{(getValue() as number) || 0}</div>,
+        },
+        {
+            accessorKey: 'pendingPoQty',
+            header: 'Pending Qty',
+            cell: ({ getValue }) => <div className="font-bold text-orange-600">{(getValue() as number) || 0}</div>,
+        },
+        {
             accessorKey: 'expectedDate',
             header: 'Expected Date',
             cell: ({ getValue }) => <div className="text-gray-900">{(getValue() as string) || '-'}</div>,
         },
         {
-            accessorKey: 'plannedDate', // ✅ ADD THIS COLUMN
+            accessorKey: 'plannedDate',
             header: 'Planned Date',
             cell: ({ getValue }) => {
                 const plannedDate = getValue() as string;
@@ -375,21 +390,6 @@ export default function GetPurchase() {
                     </div>
                 );
             },
-        },
-        {
-            accessorKey: 'pendingLiftQty',
-            header: 'Pending Lift Qty',
-            cell: ({ getValue }) => <div>{(getValue() as number) || 0}</div>,
-        },
-        {
-            accessorKey: 'receivedQty',
-            header: 'Received Qty',
-            cell: ({ getValue }) => <div>{(getValue() as number) || 0}</div>,
-        },
-        {
-            accessorKey: 'pendingPoQty',
-            header: 'Pending PO Qty',
-            cell: ({ getValue }) => <div>{(getValue() as number) || 0}</div>,
         },
     ];
 
@@ -451,13 +451,13 @@ export default function GetPurchase() {
         },
         {
             accessorKey: 'liftedQty',
-            header: 'Lifted Qty',
+            header: 'Lifting Qty',
             cell: ({ getValue }) => <div className="font-semibold text-primary">{(getValue() as number) || 0}</div>,
         },
         {
             accessorKey: 'pendingLiftQty',
-            header: 'Remaining Qty',
-            cell: ({ getValue }) => <div className="font-medium">{(getValue() as number) || 0}</div>,
+            header: 'Pending Qty',
+            cell: ({ getValue }) => <div className="font-medium text-orange-600">{(getValue() as number) || 0}</div>,
         },
     ];
 

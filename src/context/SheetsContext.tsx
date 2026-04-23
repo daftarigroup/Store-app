@@ -33,6 +33,7 @@ import {
 import {
     fetchMasterOptions
 } from '@/services/masterService';
+import { fetchStockTransferRecords } from '@/services/stockTransferService';
 
 import type {
     IndentSheet,
@@ -57,7 +58,9 @@ interface SheetsState {
     updatePoMasterSheet: () => void;
     updateIndentSheet: () => void;
     updateInventorySheet: () => void;
-    updateAll: () => void;
+    updateAll: (silent?: boolean) => void;
+    stockTransferSheet: any[];
+    updateStockTransferSheet: () => void;
 
     updateIssueSheet: () => void;
     issueSheet: IssueSheet[];
@@ -118,6 +121,7 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
     const [tallyEntryLoading, setTallyEntryLoading] = useState(true);
 
     const [issueSheet, setIssueSheet] = useState<IssueSheet[]>([]);
+    const [stockTransferSheet, setStockTransferSheet] = useState<any[]>([]);
     const [issueLoading, setIssueLoading] = useState(true);
 
     const [indentLoading, setIndentLoading] = useState(true);
@@ -149,8 +153,8 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
 
     const sheets = storeSheet;
 
-    function updateStoreInSheet() {
-        setStoreInLoading(true);
+    function updateStoreInSheet(silent = false) {
+        if (!silent) setStoreInLoading(true);
         fetchStoreInRecords()
             .then((res) => {
                 // Map to StoreInSheet format
@@ -169,8 +173,8 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
             });
     }
 
-    function updateIssueSheet() {
-        setIssueLoading(true);
+    function updateIssueSheet(silent = false) {
+        if (!silent) setIssueLoading(true);
         fetchIssueRecords()
             .then((res) => {
                 const mapped = res.map(r => ({
@@ -186,6 +190,10 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                     location: r.location,
                     status: r.status,
                     givenQty: r.given_qty,
+                    projectName: r.project_name,
+                    rejected_damage_qty: r.rejected_damage_qty,
+                    return_person_name: r.return_person_name,
+                    issue_person_name: r.issue_person_name,
                 }));
                 setIssueSheet(mapped as unknown as IssueSheet[]);
                 setIssueLoading(false);
@@ -196,8 +204,8 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
             });
     }
 
-    function updateIndentSheet() {
-        setIndentLoading(true);
+    function updateIndentSheet(silent = false) {
+        if (!silent) setIndentLoading(true);
         fetchIndentRecords()
             .then((res) => {
                 const mapped = res.map(r => ({
@@ -215,6 +223,7 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                     indentType: r.indent_type,
                     planned1: r.planned1,
                     actual1: r.actual1,
+                    firmName: r.firm_name,
                     firmNameMatch: r.firm_name_match,
                     approvedQuantity: r.approved_quantity,
                     timestamp: r.timestamp,
@@ -244,8 +253,8 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
             });
     }
 
-    function updateReceivedSheet() {
-        setReceivedLoading(true);
+    function updateReceivedSheet(silent = false) {
+        if (!silent) setReceivedLoading(true);
         // Using StoreIn service for received items as they are related
         fetchStoreInRecords()
             .then((res) => {
@@ -274,8 +283,8 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
             });
     }
 
-    function updatePoMasterSheet() {
-        setPoMasterLoading(true);
+    function updatePoMasterSheet(silent = false) {
+        if (!silent) setPoMasterLoading(true);
         fetchPoMaster()
             .then((res) => {
                 setPoMasterSheet(res as unknown as PoMasterSheet[]);
@@ -287,8 +296,8 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
             });
     }
 
-    function updateInventorySheet() {
-        setInventoryLoading(true);
+    function updateInventorySheet(silent = false) {
+        if (!silent) setInventoryLoading(true);
         fetchInventoryRecords()
             .then((res) => {
                 setInventorySheet(res as unknown as InventorySheet[]);
@@ -310,8 +319,8 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
             });
     }
 
-    function updateFullkittingSheet() {
-        setFullkittingLoading(true);
+    function updateFullkittingSheet(silent = false) {
+        if (!silent) setFullkittingLoading(true);
         fetchFullkittingRecords()
             .then((res) => {
                 const mapped = res.map(r => ({
@@ -327,8 +336,8 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
             });
     }
 
-    function updatePaymentsSheet() {
-        setPaymentsLoading(true);
+    function updatePaymentsSheet(silent = false) {
+        if (!silent) setPaymentsLoading(true);
         fetchPayments()
             .then((res) => {
                 setPaymentsSheet(res as unknown as PaymentsSheet[]);
@@ -340,8 +349,8 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
             });
     }
 
-    function updatePaymentHistorySheet() {
-        setPaymentHistoryLoading(true);
+    function updatePaymentHistorySheet(silent = false) {
+        if (!silent) setPaymentHistoryLoading(true);
         fetchPaymentHistory()
             .then((res) => {
                 setPaymentHistorySheet(res as unknown as PaymentHistory[]);
@@ -353,24 +362,38 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
             });
     }
 
-    function updateAll() {
-        setAllLoading(true);
+    function updateStockTransferSheet(silent = false) {
+        if (!silent) setIssueLoading(true); // Reuse loading or add new one? I'll reuse for now to avoid too much boilerplate
+        fetchStockTransferRecords()
+            .then((res) => {
+                setStockTransferSheet(res);
+                setIssueLoading(false);
+            })
+            .catch((err) => {
+                console.error(err);
+                setIssueLoading(false);
+            });
+    }
+
+    function updateAll(silent = false) {
+        if (!silent) setAllLoading(true);
         updateMasterSheet();
-        updateReceivedSheet();
-        updateIndentSheet();
-        updatePoMasterSheet();
-        updateInventorySheet();
+        updateReceivedSheet(silent);
+        updateIndentSheet(silent);
+        updatePoMasterSheet(silent);
+        updateInventorySheet(silent);
 
-        updateStoreInSheet();
-        updateIssueSheet();
-        updateTallyEntrySheet();
+        updateStoreInSheet(silent);
+        updateIssueSheet(silent);
+        updateTallyEntrySheet(silent);
         updatePcReportSheet();
-        updateFullkittingSheet();
+        updateFullkittingSheet(silent);
 
-        updatePaymentHistorySheet();
-        updatePaymentsSheet();
+        updatePaymentHistorySheet(silent);
+        updatePaymentsSheet(silent);
+        updateStockTransferSheet(silent);
 
-        setAllLoading(false);
+        if (!silent) setAllLoading(false);
     }
 
     useEffect(() => {
@@ -380,8 +403,8 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
 
             // ✅ AUTO-REFRESH EVERY 30 SECONDS
             const intervalId = setInterval(() => {
-                console.log('🔄 Auto-refreshing data...');
-                updateAll();
+                console.log('🔄 Auto-refreshing data (silent)...');
+                updateAll(true);
             }, 30000);
 
             return () => clearInterval(intervalId);
@@ -391,8 +414,8 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
         }
     }, []);
 
-    function updateTallyEntrySheet() {
-        setTallyEntryLoading(true);
+    function updateTallyEntrySheet(silent = false) {
+        if (!silent) setTallyEntryLoading(true);
         console.log('🔄 Fetching Tally Entry records...');
         fetchTallyEntryRecords()
             .then((res) => {
@@ -515,6 +538,8 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                 paymentsSheet,
                 paymentsLoading,
                 updatePaymentsSheet,
+                stockTransferSheet,
+                updateStockTransferSheet
             }}
         >
             {children}

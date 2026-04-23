@@ -91,6 +91,7 @@ export async function updateIssueApproval(
         actual1: string;
         status: string;
         given_qty?: number | null;
+        issue_slip?: string;
     }
 ) {
     try {
@@ -100,6 +101,7 @@ export async function updateIssueApproval(
                 actual1: updateData.actual1,
                 status: updateData.status,
                 given_qty: updateData.given_qty,
+                issue_slip: updateData.issue_slip,
             })
             .eq('issue_no', issue_no);
 
