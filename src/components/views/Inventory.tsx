@@ -350,7 +350,7 @@ export default () => {
         },
         {
             accessorKey: 'stockTransferGiven',
-            header: 'S.T. From',
+            header: 'S.T. To',
             cell: ({ row }) => (
                 <div className="flex flex-col items-center gap-0.5">
                     <ClickableCell value={row.original.stockTransferGiven} label="Stock Transfer Given" row={row} />
@@ -364,7 +364,7 @@ export default () => {
         },
         {
             accessorKey: 'stockTransferReceiving',
-            header: 'S.T. To',
+            header: 'S.T. From',
             cell: ({ row }) => (
                 <div className="flex flex-col items-center gap-0.5">
                     <ClickableCell value={row.original.stockTransferReceiving} label="Stock Transfer Receiving" row={row} />
