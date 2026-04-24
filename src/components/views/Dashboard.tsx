@@ -65,9 +65,11 @@ export default function Dashboard() {
     const [filteredVendors, setFilteredVendors] = useState<string[]>([]);
     const [filteredProducts, setFilteredProducts] = useState<string[]>([]);
     const [filteredDepartments, setFilteredDepartments] = useState<string[]>([]);
+    const [filteredProjects, setFilteredProjects] = useState<string[]>([]);
     const [allVendors, setAllVendors] = useState<string[]>([]);
     const [allProducts, setAllProducts] = useState<string[]>([]);
     const [allDepartments, setAllDepartments] = useState<string[]>([]);
+    const [allProjects, setAllProjects] = useState<string[]>([]);
     const [masterColumn, setMasterColumn] = useState('');
     const [masterValue, setMasterValue] = useState('');
     const [isInserting, setIsInserting] = useState(false);
@@ -89,6 +91,7 @@ export default function Dashboard() {
                 setIssues(issueData);
                 setAllVendors(mData.vendorNames);
                 setAllDepartments(mData.departments);
+                setAllProjects(mData.firms);
                 setPoMasterData(poData);
 
                 // Initial total PO calculations
@@ -148,6 +151,9 @@ export default function Dashboard() {
             if (filteredDepartments.length > 0 && item.department) {
                 valid = valid && filteredDepartments.includes(item.department);
             }
+            if (filteredProjects.length > 0 && item.firm_name_match) {
+                valid = valid && filteredProjects.includes(item.firm_name_match);
+            }
 
             return valid;
         };
@@ -182,6 +188,9 @@ export default function Dashboard() {
             if (filteredProducts.length > 0 && item.productName) {
                 valid = valid && filteredProducts.includes(item.productName);
             }
+            if (filteredProjects.length > 0 && item.firmNameMatch) {
+                valid = valid && filteredProjects.includes(item.firmNameMatch);
+            }
             return valid;
         };
 
@@ -211,6 +220,9 @@ export default function Dashboard() {
             // Issue record might not have vendor name in the same way, but has product name
             if (filteredProducts.length > 0 && item.product_name) {
                 valid = valid && filteredProducts.includes(item.product_name);
+            }
+            if (filteredProjects.length > 0 && item.project_name) {
+                valid = valid && filteredProjects.includes(item.project_name);
             }
             return valid;
         }
@@ -249,7 +261,14 @@ export default function Dashboard() {
 
         // Use PO Master for volume if available, or stay with Store In if preferred. 
         // Let's use PO totals for "Volume".
-        poMasterData.forEach((item) => {
+        const filteredPoData = poMasterData.filter(item => {
+            if (filteredProjects.length > 0 && item.firmNameMatch) {
+                return filteredProjects.includes(item.firmNameMatch);
+            }
+            return true;
+        });
+
+        filteredPoData.forEach((item) => {
             const vendorName = String(item.partyName || '');
             if (vendorName) {
                 if (!vendorMap[vendorName]) {
@@ -259,6 +278,10 @@ export default function Dashboard() {
                 vendorMap[vendorName].quantity += Number(item.totalPoAmount || 0);
             }
         });
+
+        // Update Total PO Value based on filter
+        const currentPoTotal = filteredPoData.reduce((sum, p) => sum + (Number(p.totalPoAmount) || 0), 0);
+        setPoTotal(currentPoTotal);
 
         const topVendors = Object.entries(vendorMap)
             .map(([name, data]) => ({
@@ -305,7 +328,7 @@ export default function Dashboard() {
         };
         setStatusData(Object.entries(statusMap).map(([name, value]) => ({ name, value })));
 
-    }, [startDate, endDate, filteredProducts, filteredVendors, indents, storeIns, issues, isLoading]);
+    }, [startDate, endDate, filteredProducts, filteredVendors, filteredDepartments, filteredProjects, indents, storeIns, issues, isLoading, poMasterData]);
 
     const chartConfig = {
         quantity: {
@@ -321,7 +344,7 @@ export default function Dashboard() {
             </Heading>
 
             <div className="grid gap-3 m-3">
-                <div className="gap-3 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5">
+                <div className="gap-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
                     <Popover>
                         <PopoverTrigger asChild>
                             <Button
@@ -376,6 +399,13 @@ export default function Dashboard() {
                         value={filteredDepartments}
                         onChange={setFilteredDepartments}
                         placeholder="Select Departments"
+                    />
+                    <ComboBox
+                        multiple
+                        options={allProjects.map((v) => ({ label: v, value: v }))}
+                        value={filteredProjects}
+                        onChange={setFilteredProjects}
+                        placeholder="Select Projects"
                     />
                 </div>
 

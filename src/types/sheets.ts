@@ -168,9 +168,14 @@ export type InventorySheet = {
     outQuantity: number;
     issueReturn: number;
     stockTransfer: number;
+    stockTransferGiven: number;
+    stockTransferReceiving: number;
+    fromProject: string;
+    toProject: string;
     current: number;
     totalPrice: number;
     colorCode: string;
+    status: string;
 };
 
 

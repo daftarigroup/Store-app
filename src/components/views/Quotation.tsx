@@ -268,10 +268,8 @@ export default function QuotationPage() {
       const isPartOfCurrentQuotation = mode === 'revise' && selectedQuotationNo &&
         allHistory.some(h => h.quatationNo === selectedQuotationNo && h.indentNo === item.indentNumber);
 
-      // Eligible if Approved AND (Not yet in any quotation OR part of the current revision)
-      // AND also NOT yet in Vendor Rate Update/Approval stages (unless revising)
+      // Eligible if Approved AND (Not yet in Vendor Rate Update/Approval stages OR part of the current revision)
       return isApproved &&
-        (!hasQuotationInHistory || isPartOfCurrentQuotation) &&
         (!isAlreadyInNextStage || isPartOfCurrentQuotation);
     }).reverse();
 

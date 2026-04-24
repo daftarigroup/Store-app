@@ -31,7 +31,7 @@ import { PuffLoader as Loader } from 'react-spinners';
 import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Input } from '../ui/input';
-import { UserCheck, X, Package2, FileCheck, CheckCircle2, XCircle, AlertCircle, Gavel, CheckSquare } from 'lucide-react';
+import { UserCheck, X, Package2, FileCheck, CheckCircle2, XCircle, AlertCircle, Gavel, CheckSquare, Truck } from 'lucide-react';
 import { Tabs, TabsContent } from '../ui/tabs';
 import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
@@ -60,6 +60,16 @@ interface HodPendingData {
     transportationInclude: string;
     billNo?: string;
     paymentTerms: string;
+    uom: string;
+    vehicleNo: string;
+    driverName: string;
+    driverMobileNo: string;
+    receiverName: string;
+    challanNo: string;
+    challanImage: string;
+    billRemark: string;
+    transporterName: string;
+    freightAmount: number;
 }
 
 interface HodHistoryData {
@@ -147,6 +157,16 @@ export default () => {
                     transportationInclude: i.transportationInclude || '',
                     billNo: i.billNo || '',
                     paymentTerms: i.paymentTerms || '',
+                    uom: i.unitOfMeasurement || '',
+                    vehicleNo: i.vehicleNo || '',
+                    driverName: i.driverName || '',
+                    driverMobileNo: i.driverMobileNo || '',
+                    receiverName: i.receiverName || '',
+                    challanNo: i.challanNo || '',
+                    challanImage: i.challanImage || '',
+                    billRemark: i.billRemark || '',
+                    transporterName: i.transporterName || '',
+                    freightAmount: Number(i.amount) || 0,
                 }))
         );
 
@@ -254,10 +274,13 @@ export default () => {
         },
         { accessorKey: 'liftNumber', header: 'Lift No.' },
         { accessorKey: 'indentNo', header: 'Indent No.' },
+        { accessorKey: 'billNo', header: 'Bill No.' },
         { accessorKey: 'productName', header: 'Product' },
         { accessorKey: 'vendorName', header: 'Vendor' },
         { accessorKey: 'qty', header: 'Lift Qty' },
         { accessorKey: 'receivedQuantity', header: 'Rec. Qty' },
+        { accessorKey: 'vehicleNo', header: 'Vehicle No.' },
+        { accessorKey: 'receiverName', header: 'Receiver' },
         {
             accessorKey: 'damageOrder',
             header: 'Physical Good?',
@@ -340,18 +363,80 @@ export default () => {
                                             <div className="space-y-1">
                                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Product Name</p>
                                                 <p className="text-xs font-bold text-slate-900 line-clamp-1" title={selectedItem.productName}>{selectedItem.productName}</p>
+                                                <p className="text-[9px] text-slate-500 font-medium">{selectedItem.uom}</p>
                                             </div>
                                             <div className="space-y-1">
                                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Vendor Name</p>
                                                 <p className="text-xs font-bold text-slate-900 line-clamp-1" title={selectedItem.vendorName}>{selectedItem.vendorName}</p>
                                             </div>
                                             <div className="space-y-1 text-right">
-                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">PO Number</p>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">PO & Bill No.</p>
                                                 <p className="text-xs font-black text-primary">{selectedItem.poNumber}</p>
+                                                <p className="text-[10px] font-bold text-slate-600">{selectedItem.billNo || 'No Bill'}</p>
                                             </div>
                                             <div className="space-y-1 text-right">
                                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Bill Amount</p>
                                                 <p className="text-sm font-black text-emerald-600">₹{selectedItem.billAmount.toLocaleString()}</p>
+                                                {selectedItem.freightAmount > 0 && (
+                                                    <p className="text-[9px] text-amber-600 font-bold">Freight: ₹{selectedItem.freightAmount.toLocaleString()}</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Backstage Details Section */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="bg-blue-50/50 rounded-xl border border-blue-100 p-3">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <Truck className="w-3 h-3 text-blue-500" />
+                                                <h4 className="text-[9px] font-extrabold uppercase tracking-widest text-blue-600">Transport Details</h4>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-[9px] font-bold text-slate-400">Vehicle No.</span>
+                                                    <span className="text-[10px] font-black text-slate-700">{selectedItem.vehicleNo || '-'}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-[9px] font-bold text-slate-400">Driver</span>
+                                                    <span className="text-[10px] font-black text-slate-700">{selectedItem.driverName || '-'}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-[9px] font-bold text-slate-400">Driver Mob.</span>
+                                                    <span className="text-[10px] font-black text-slate-700">{selectedItem.driverMobileNo || '-'}</span>
+                                                </div>
+                                                {selectedItem.transporterName && (
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-[9px] font-bold text-slate-400">Transporter</span>
+                                                        <span className="text-[10px] font-black text-slate-700">{selectedItem.transporterName}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-indigo-50/50 rounded-xl border border-indigo-100 p-3">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <UserCheck className="w-3 h-3 text-indigo-500" />
+                                                <h4 className="text-[9px] font-extrabold uppercase tracking-widest text-indigo-600">Receiving Info</h4>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-[9px] font-bold text-slate-400">Receiver</span>
+                                                    <span className="text-[10px] font-black text-slate-700">{selectedItem.receiverName || '-'}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-[9px] font-bold text-slate-400">Challan No.</span>
+                                                    <span className="text-[10px] font-black text-slate-700">{selectedItem.challanNo || '-'}</span>
+                                                </div>
+                                                {selectedItem.challanImage && (
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-[9px] font-bold text-slate-400">Challan</span>
+                                                        <a href={selectedItem.challanImage} target="_blank" rel="noopener noreferrer" className="text-[9px] font-black text-blue-600 underline">View Image</a>
+                                                    </div>
+                                                )}
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-[9px] font-bold text-slate-400">Bill Remark</span>
+                                                    <span className="text-[9px] font-medium text-slate-600 italic line-clamp-1" title={selectedItem.billRemark}>{selectedItem.billRemark || '-'}</span>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>

@@ -38,7 +38,6 @@ interface DetailRow {
     refNo: string;
     quantity: number;
     party: string;
-    uom: string;
     projectName: string;
 }
 
@@ -62,24 +61,30 @@ export default () => {
 
     const filteredIndents = useMemo(() => {
         if (selectedProject === 'All') return indentSheet || [];
-        return (indentSheet || []).filter((i: any) => i.firmName === selectedProject);
+        const sel = selectedProject.trim().toLowerCase();
+        return (indentSheet || []).filter((i: any) => (i.firmName || '').trim().toLowerCase() === sel);
     }, [indentSheet, selectedProject]);
 
     const filteredStoreIns = useMemo(() => {
         if (selectedProject === 'All') return storeInSheet || [];
-        return (storeInSheet || []).filter((s: any) => s.firmNameMatch === selectedProject);
+        const sel = selectedProject.trim().toLowerCase();
+        return (storeInSheet || []).filter((s: any) => (s.firmNameMatch || '').trim().toLowerCase() === sel);
     }, [storeInSheet, selectedProject]);
 
     const filteredIssues = useMemo(() => {
         if (selectedProject === 'All') return issueSheet || [];
-        return (issueSheet || []).filter((is: any) => is.projectName === selectedProject);
+        const sel = selectedProject.trim().toLowerCase();
+        return (issueSheet || []).filter((is: any) => (is.projectName || '').trim().toLowerCase() === sel);
     }, [issueSheet, selectedProject]);
 
     const filteredTransfers = useMemo(() => {
         if (!stockTransferSheet) return [];
         if (selectedProject === 'All') return stockTransferSheet;
-        // All transfers where this project is either source or destination
-        return stockTransferSheet.filter((t: any) => t.toProject === selectedProject || t.fromProject === selectedProject);
+        const sel = selectedProject.trim().toLowerCase();
+        return stockTransferSheet.filter((t: any) => 
+            (t.fromProject || '').trim().toLowerCase() === sel || 
+            (t.toProject || '').trim().toLowerCase() === sel
+        );
     }, [stockTransferSheet, selectedProject]);
 
     const tableData = useMemo(() => {
@@ -104,9 +109,11 @@ export default () => {
             (item.outQuantity || 0) > 0 ||
             (item.inTransit || 0) > 0 ||
             (item.purchaseReturn || 0) > 0 ||
-            (item.issueReturn || 0) > 0
+            (item.issueReturn || 0) > 0 ||
+            (item.stockTransferReceiving || 0) > 0 ||
+            (item.stockTransferGiven || 0) > 0
         );
-    }, [inventorySheet, filteredIndents, filteredStoreIns, filteredIssues, selectedProject]);
+    }, [inventorySheet, filteredIndents, filteredStoreIns, filteredIssues, filteredTransfers, selectedProject]);
 
     const isLoading = inventoryLoading || indentLoading || storeInLoading || issueLoading;
 
@@ -114,7 +121,6 @@ export default () => {
         date: true,
         refNo: true,
         party: true,
-        uom: true,
         quantity: true,
         projectName: true,
     });
@@ -140,6 +146,9 @@ export default () => {
         let rows: DetailRow[] = [];
         let title = `${type} History: ${itemName}`;
 
+        // Get the UOM from inventorySheet as a reliable fallback
+        const productUom = inventorySheet?.find(i => i.itemName === itemName)?.uom || 'N/A';
+
         switch (type) {
             case 'Indented':
                 rows = filteredIndents
@@ -149,7 +158,6 @@ export default () => {
                         refNo: i.indentNumber,
                         quantity: Number(i.quantity || 0),
                         party: i.indenterName || 'N/A',
-                        uom: i.uom || 'N/A',
                         projectName: i.firmName || 'N/A'
                     }));
                 break;
@@ -161,7 +169,6 @@ export default () => {
                         refNo: i.indentNumber,
                         quantity: Number(i.approvedQuantity || 0),
                         party: i.indenterName || 'N/A',
-                        uom: i.uom || 'N/A',
                         projectName: i.firmName || 'N/A'
                     }));
                 break;
@@ -173,7 +180,6 @@ export default () => {
                         refNo: s.billNo || s.liftNumber,
                         quantity: Number(s.receivedQuantity || 0),
                         party: s.vendorName || 'N/A',
-                        uom: s.unitOfMeasurement || 'N/A',
                         projectName: s.firmNameMatch || 'N/A'
                     }));
                 break;
@@ -185,7 +191,6 @@ export default () => {
                         refNo: s.billNo || s.liftNumber,
                         quantity: Number(s.qty || 0) - Number(s.receivedQuantity || 0),
                         party: s.vendorName || 'N/A',
-                        uom: s.unitOfMeasurement || 'N/A',
                         projectName: s.firmNameMatch || 'N/A'
                     }));
                 break;
@@ -197,7 +202,6 @@ export default () => {
                         refNo: is.issueNo,
                         quantity: Number(is.givenQty || 0),
                         party: is.issueTo || 'N/A',
-                        uom: is.uom || 'N/A',
                         projectName: is.project_name || 'N/A'
                     }));
                 break;
@@ -209,7 +213,6 @@ export default () => {
                         refNo: is.issueNo,
                         quantity: Number(is.rejected_damage_qty || 0),
                         party: is.return_person_name || 'N/A',
-                        uom: is.uom || 'N/A',
                         projectName: is.project_name || 'N/A'
                     }));
                 break;
@@ -221,26 +224,48 @@ export default () => {
                         refNo: s.billNo || s.liftNumber,
                         quantity: Number(s.returnQuantity || 0),
                         party: s.vendorName || 'N/A',
-                        uom: s.unitOfMeasurement || 'N/A',
                         projectName: s.firmNameMatch || 'N/A'
                     }));
                 break;
-            case 'Stock Transfer':
-                rows = filteredTransfers
-                    .filter((t: any) => t.productName === itemName)
+            case 'Stock Transfer Receiving':
+                // Combine transfers from both dedicated table and old store_in 'Transfer' status
+                const legacyTransfers = filteredStoreIns
+                    .filter((s: any) => s.productName === itemName && s.receivingStatus === 'Transfer')
+                    .map((s: any) => ({
+                        date: s.timestamp,
+                        refNo: s.billNo || s.liftNumber,
+                        quantity: Number(s.receivedQuantity || 0),
+                        party: s.vendorName || 'N/A',
+                        projectName: s.firmNameMatch || 'N/A'
+                    }));
+
+                const newTransfersReceiving = filteredTransfers
+                    .filter((t: any) => t.productName === itemName && (selectedProject === 'All' || (t.toProject || '').trim().toLowerCase() === selectedProject.trim().toLowerCase()))
                     .map((t: any) => ({
                         date: t.timestamp,
                         refNo: t.transferNo,
                         quantity: Number(t.quantity || 0),
-                        party: `From: ${t.fromProject}`,
-                        uom: t.uom || 'N/A',
+                        party: t.fromProject,
+                        projectName: t.toProject || 'N/A'
+                    }));
+
+                rows = [...legacyTransfers, ...newTransfersReceiving];
+                break;
+            case 'Stock Transfer Given':
+                rows = filteredTransfers
+                    .filter((t: any) => t.productName === itemName && (selectedProject === 'All' || (t.fromProject || '').trim().toLowerCase() === selectedProject.trim().toLowerCase()))
+                    .map((t: any) => ({
+                        date: t.timestamp,
+                        refNo: t.transferNo,
+                        quantity: Number(t.quantity || 0),
+                        party: t.fromProject,
                         projectName: t.toProject || 'N/A'
                     }));
                 break;
         }
 
         setDetailDialog({ open: true, title, rows: rows.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) });
-    }, [filteredIndents, filteredStoreIns, filteredIssues, filteredTransfers]);
+    }, [filteredIndents, filteredStoreIns, filteredIssues, filteredTransfers, inventorySheet, selectedProject]);
 
     const ClickableCell = useMemo(() => ({ value, label, row }: { value: number; label: string; row: any }) => (
         <button
@@ -275,8 +300,8 @@ export default () => {
             accessorKey: 'status',
             header: 'Status',
             cell: ({ row }) => {
-                const code = row.original.status.toLowerCase();
-                if (row.original.current === 0) {
+                const code = (row.original.status || '').toLowerCase();
+                if ((row.original.current || 0) === 0) {
                     return <Pill variant="reject">Out of Stock</Pill>;
                 }
                 if (code === 'red') {
@@ -324,9 +349,32 @@ export default () => {
             cell: ({ row }) => <ClickableCell value={row.original.outQuantity} label="Issued" row={row} />
         },
         {
-            accessorKey: 'stockTransfer',
-            header: 'Stock Transfer',
-            cell: ({ row }) => <ClickableCell value={row.original.stockTransfer} label="Stock Transfer" row={row} />
+            accessorKey: 'stockTransferGiven',
+            header: 'S.T. From',
+            cell: ({ row }) => (
+                <div className="flex flex-col items-center gap-0.5">
+                    <ClickableCell value={row.original.stockTransferGiven} label="Stock Transfer Given" row={row} />
+                    {row.original.toProject && (
+                        <span className="text-[10px] leading-tight text-muted-foreground truncate max-w-[100px]" title={row.original.toProject}>
+                            To: {row.original.toProject}
+                        </span>
+                    )}
+                </div>
+            )
+        },
+        {
+            accessorKey: 'stockTransferReceiving',
+            header: 'S.T. To',
+            cell: ({ row }) => (
+                <div className="flex flex-col items-center gap-0.5">
+                    <ClickableCell value={row.original.stockTransferReceiving} label="Stock Transfer Receiving" row={row} />
+                    {row.original.fromProject && (
+                        <span className="text-[10px] leading-tight text-muted-foreground truncate max-w-[100px]" title={row.original.fromProject}>
+                            From: {row.original.fromProject}
+                        </span>
+                    )}
+                </div>
+            )
         },
         { accessorKey: 'current', header: 'Quantity' },
         {
@@ -416,12 +464,7 @@ export default () => {
                                 >
                                     Party/Person
                                 </DropdownMenuCheckboxItem>
-                                <DropdownMenuCheckboxItem
-                                    checked={visibleCols.uom}
-                                    onCheckedChange={(checked) => setVisibleCols(v => ({ ...v, uom: !!checked }))}
-                                >
-                                    UOM
-                                </DropdownMenuCheckboxItem>
+
                                 <DropdownMenuCheckboxItem
                                     checked={visibleCols.quantity}
                                     onCheckedChange={(checked) => setVisibleCols(v => ({ ...v, quantity: !!checked }))}
@@ -443,9 +486,12 @@ export default () => {
                                 <TableRow>
                                     {visibleCols.date && <TableHead>Date</TableHead>}
                                     {visibleCols.refNo && <TableHead>Reference</TableHead>}
-                                    {visibleCols.party && <TableHead>Party/Person</TableHead>}
-                                    {visibleCols.projectName && <TableHead>Project</TableHead>}
-                                    {visibleCols.uom && <TableHead>UOM</TableHead>}
+                                    {visibleCols.party && (
+                                        <TableHead>{detailDialog.title.includes('Stock Transfer') ? 'From' : 'Party/Person'}</TableHead>
+                                    )}
+                                    {visibleCols.projectName && (
+                                        <TableHead>{detailDialog.title.includes('Stock Transfer') ? 'To' : 'Project'}</TableHead>
+                                    )}
                                     {visibleCols.quantity && <TableHead className="text-right">Qty</TableHead>}
                                 </TableRow>
                             </TableHeader>
@@ -461,7 +507,6 @@ export default () => {
                                             {visibleCols.refNo && <TableCell className="font-mono text-sm whitespace-nowrap">{row.refNo}</TableCell>}
                                             {visibleCols.party && <TableCell className="whitespace-nowrap">{row.party}</TableCell>}
                                             {visibleCols.projectName && <TableCell className="whitespace-nowrap">{row.projectName}</TableCell>}
-                                            {visibleCols.uom && <TableCell className="whitespace-nowrap">{row.uom}</TableCell>}
                                             {visibleCols.quantity && <TableCell className="text-right font-bold">{row.quantity}</TableCell>}
                                         </TableRow>
                                     ))

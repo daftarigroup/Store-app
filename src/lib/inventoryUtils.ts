@@ -15,7 +15,7 @@ export function calculateRealInventory(
     // 1. Group transactions by product name for efficient lookup
     const indentSummary = groupAndSum(indents, 'productName', ['quantity', 'approvedQuantity']);
     const storeInDetailed = storeIns.reduce((acc, s) => {
-        const key = s.productName;
+        const key = (s.productName || '').trim();
         if (!acc[key]) {
             acc[key] = { liftingQty: 0, stockTransfer: 0, purchaseQuantity: 0, purchaseReturn: 0 };
         }
@@ -34,24 +34,66 @@ export function calculateRealInventory(
         return acc;
     }, {} as Record<string, any>);
     
-    const issueSummary = groupAndSum(issues, 'productName', ['givenQty', 'rejectedDamageQty']);
+    const issueSummary = issues.reduce((acc, is) => {
+        const key = (is.productName || '').trim();
+        if (!acc[key]) {
+            acc[key] = { givenQty: 0, rejectedDamageQty: 0 };
+        }
+        acc[key].givenQty += Number(is.givenQty) || 0;
+        acc[key].rejectedDamageQty += Number(is.rejected_damage_qty) || 0;
+        return acc;
+    }, {} as Record<string, { givenQty: number; rejectedDamageQty: number }>);
 
     const transferSummary = (transfers || []).reduce((acc, t) => {
-        const key = t.productName;
-        if (!acc[key]) acc[key] = { in: 0, out: 0, totalVolume: 0 };
+        const key = (t.productName || '').trim();
+        if (!acc[key]) acc[key] = { in: 0, out: 0, totalVolume: 0, sources: new Set<string>(), destinations: new Set<string>() };
         
         const qty = Number(t.quantity) || 0;
         acc[key].totalVolume += qty;
 
-        if (currentProject !== 'All') {
-            if (t.toProject === currentProject) acc[key].in += qty;
-            if (t.fromProject === currentProject) acc[key].out += qty;
+        const curProjLower = currentProject.trim().toLowerCase();
+        const toProjLower = (t.toProject || '').trim().toLowerCase();
+        const fromProjLower = (t.fromProject || '').trim().toLowerCase();
+
+        if (currentProject === 'All') {
+            if (t.fromProject) acc[key].sources.add(t.fromProject);
+            if (t.toProject) acc[key].destinations.add(t.toProject);
+        } else {
+            if (toProjLower === curProjLower) {
+                acc[key].in += qty;
+                if (t.fromProject) acc[key].sources.add(t.fromProject);
+            }
+            if (fromProjLower === curProjLower) {
+                acc[key].out += qty;
+                if (t.toProject) acc[key].destinations.add(t.toProject);
+            }
         }
         return acc;
-    }, {} as Record<string, { in: number; out: number; totalVolume: number }>);
+    }, {} as Record<string, { in: number; out: number; totalVolume: number; sources: Set<string>; destinations: Set<string> }>);
 
-    return inventoryMaster.map(item => {
-        const key = item.itemName;
+    // 1. Collect ALL unique item names from all sources to ensure we don't miss anything (e.g. transfers of new items)
+    const allItemNames = new Set([
+        ...inventoryMaster.map(i => (i.itemName || '').trim()),
+        ...Object.keys(indentSummary),
+        ...Object.keys(storeInDetailed),
+        ...Object.keys(issueSummary),
+        ...Object.keys(transferSummary)
+    ]);
+
+    return Array.from(allItemNames).map(itemName => {
+        // Find existing master record or create a skeleton
+        const item = inventoryMaster.find(i => (i.itemName || '').trim() === itemName) || {
+            itemName,
+            groupHead: '',
+            uom: '',
+            opening: 0,
+            individualRate: 0,
+            purchaseReturn: 0,
+            issueReturn: 0,
+            stockTransfer: 0
+        } as InventorySheet;
+
+        const key = itemName;
         
         const iSum = indentSummary[key] || { quantity: 0, approvedQuantity: 0 };
         const sDet = storeInDetailed[key] || { liftingQty: 0, stockTransfer: 0, purchaseQuantity: 0, purchaseReturn: 0 };
@@ -67,9 +109,17 @@ export function calculateRealInventory(
         const issueReturn = oSum.rejectedDamageQty || item.issueReturn || 0;
 
         // Stock Transfer: Old way (from storeIn) + New way (from dedicated table)
-        const tSum = transferSummary[key] || { in: 0, out: 0, totalVolume: 0 };
+        const tSum = transferSummary[key] || { in: 0, out: 0, totalVolume: 0, sources: new Set(), destinations: new Set() };
         let stockTransfer = (sDet.stockTransfer || 0) + (item.stockTransfer || 0);
         
+        const stockTransferReceiving = (sDet.stockTransfer || 0) + (item.stockTransfer || 0) + (currentProject === 'All' ? tSum.totalVolume : tSum.in);
+        const stockTransferGiven = currentProject === 'All' ? tSum.totalVolume : tSum.out;
+
+        const sourcesArr = Array.from(tSum.sources);
+        const destinationsArr = Array.from(tSum.destinations);
+        const fromProject = sourcesArr.length > 0 ? (sourcesArr.length > 1 ? `${sourcesArr[0]} (+${sourcesArr.length - 1})` : sourcesArr[0]) : '';
+        const toProject = destinationsArr.length > 0 ? (destinationsArr.length > 1 ? `${destinationsArr[0]} (+${destinationsArr.length - 1})` : destinationsArr[0]) : '';
+
         if (currentProject === 'All') {
             stockTransfer += tSum.totalVolume;
         } else {
@@ -81,10 +131,15 @@ export function calculateRealInventory(
         
         // Final Current Quantity Calculation:
         // Current = Opening + Lifting + NetStockTransfer - PurchaseReturn - (Issued - IssueReturn)
-        // Note: For 'All' mode, NetStockTransfer should effectively be 0 for the balance, 
-        // but we show volume in the column.
         const netTransferForBalance = currentProject === 'All' ? 0 : (tSum.in - tSum.out);
         const current = (item.opening || 0) + liftingQty + (sDet.stockTransfer || 0) + netTransferForBalance + (item.stockTransfer || 0) - purchaseReturn - (outQuantity - issueReturn);
+
+        // Filter: If we are in a specific project view and there's absolutely no activity or stock for this item, skip it
+        // This prevents the "All" list from being cluttered with items that have 0 everything.
+        if (currentProject !== 'All' && 
+            current === 0 && indented === 0 && liftingQty === 0 && stockTransferReceiving === 0 && stockTransferGiven === 0 && outQuantity === 0) {
+            return null as any;
+        }
 
         return {
             ...item,
@@ -97,11 +152,16 @@ export function calculateRealInventory(
             outQuantity,
             issueReturn,
             stockTransfer,
+            stockTransferGiven,
+            stockTransferReceiving,
+            fromProject,
+            toProject,
             current,
             totalPrice: current * (item.individualRate || 0),
-            colorCode: current < 5 ? 'red' : 'green'
-        };
-    });
+            colorCode: current < 5 ? 'red' : 'green',
+            status: current < 5 ? 'red' : 'green'
+        } as InventorySheet;
+    }).filter(Boolean);
 }
 
 /**
@@ -109,7 +169,7 @@ export function calculateRealInventory(
  */
 function groupAndSum<T>(data: T[], keyField: keyof T, sumFields: string[]): Record<string, any> {
     return data.reduce((acc, item) => {
-        const key = String(item[keyField]);
+        const key = String(item[keyField] || '').trim();
         if (!acc[key]) {
             acc[key] = {};
             sumFields.forEach(f => acc[key][f] = 0);

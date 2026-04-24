@@ -20,6 +20,10 @@ export interface InventoryRecord {
     outQuantity: number;
     issueReturn: number;
     stockTransfer: number;
+    stockTransferGiven: number;
+    stockTransferReceiving: number;
+    fromProject: string;
+    toProject: string;
     current: number;
     totalPrice: number;
     status: string;
@@ -78,6 +82,10 @@ export async function fetchInventoryRecords(): Promise<InventoryRecord[]> {
                 outQuantity: Number(r.out_quantity) || 0,
                 issueReturn: Number(r.issue_return) || 0,
                 stockTransfer: Number(r.stock_transfer) || 0,
+                stockTransferGiven: 0,
+                stockTransferReceiving: Number(r.stock_transfer) || 0,
+                fromProject: '',
+                toProject: '',
                 current: Number(r.current) || 0,
                 totalPrice: Number(r.total_price) || 0,
                 status: r.color_code || '',
