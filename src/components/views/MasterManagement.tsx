@@ -1,0 +1,995 @@
+import { Plus, Building2, Package, FileSpreadsheet, Boxes, LayoutGrid, Building, Trash, Pencil, X, Search, MapPin, UserCog, Mail, Phone } from 'lucide-react';
+import Heading from '../element/Heading';
+import { useEffect, useState } from 'react';
+import type { ColumnDef } from '@tanstack/react-table';
+import DataTable from '../element/DataTable';
+import { Button } from '../ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from '../ui/dialog';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '../ui/form';
+import { z } from 'zod';
+import { useForm, useFieldArray } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Input } from '../ui/input';
+import { toast } from 'sonner';
+import { fetchMasterRecords, insertMasterData, updateMasterData, deleteMasterData, fetchSiteEngineers, insertSiteEngineer, updateSiteEngineer, deleteSiteEngineer } from '@/services/masterService';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { ScrollArea } from '../ui/scroll-area';
+import { cn } from '@/lib/utils';
+import { Checkbox } from '../ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
+import { addItemToInventory } from '@/services/inventoryService';
+import { useSheets } from '@/context/SheetsContext';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '../ui/select';
+import { ClipLoader as Loader } from 'react-spinners';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "../ui/tooltip";
+
+const nullishToUndefined = (value: unknown) => (value === null || value === '' ? undefined : value);
+const optionalText = () => z.preprocess(nullishToUndefined, z.string().optional());
+const optionalEmail = () => z.preprocess(nullishToUndefined, z.string().email().optional());
+const optionalPaymentType = () => z.preprocess(nullishToUndefined, z.enum(['regular', 'thirdparty']).optional());
+
+const vendorSchema = z.object({
+    vendor_name: z.string().min(1, 'Required'),
+    vendor_gstin: optionalText(),
+    vendor_address: optionalText(),
+    vendor_email: optionalEmail(),
+    responsible_person: optionalText(),
+    location: optionalText(),
+    phone: optionalText(),
+});
+type VendorFormValues = {
+    vendor_name: string;
+    vendor_gstin: string;
+    vendor_address: string;
+    vendor_email: string;
+    responsible_person: string;
+    location: string;
+    phone: string;
+};
+const itemSchema = z.object({
+    item_name: z.string().min(1, 'Required'),
+    group_head: z.string().min(1, 'Required'),
+    uom: z.string().optional(),
+    include_in_inventory: z.boolean().default(false),
+    inventory_quantity: z.coerce.number().min(0, 'Quantity cannot be negative').default(0),
+    regular_conditions: z.array(z.object({ value: z.string() })).default([{ value: '' }]),
+    third_party_conditions: z.array(z.object({ value: z.string() })).default([{ value: '' }]),
+}).superRefine((data, ctx) => {
+    if (data.include_in_inventory && data.inventory_quantity <= 0) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['inventory_quantity'],
+            message: 'Quantity must be greater than 0',
+        });
+    }
+});
+const departmentSchema = z.object({ department: z.string().min(1, 'Required') });
+const projectSchema = z.object({ firm_name: z.string().min(1, 'Required') });
+const ghSchema = z.object({ group_head: z.string().min(1, 'Required') });
+const uomSchema = z.object({ uom: z.string().min(1, 'Required') });
+const aouSchema = z.object({ area_of_use: z.string().min(1, 'Required') });
+const ghUomSchema = z.object({
+    group_head: z.string().optional(),
+    uom: z.string().optional()
+}).refine(data => data.group_head || data.uom, {
+    message: "At least one field is required",
+    path: ["group_head"]
+});
+const companySchema = z.object({ company_name: z.string().min(1, 'Required'), company_gstin: z.string().optional(), company_pan: z.string().optional(), company_email: z.string().email().or(z.literal('')), company_phone: z.string().optional(), company_address: z.string().optional(), billing_address: z.string().optional(), destination_address: z.string().optional(), company_contact_person: z.string().optional() });
+const siteEngineerSchema = z.object({ name: z.string().min(1, 'Required'), number: z.string().min(1, 'Required'), email: z.string().email('Invalid email') });
+
+const ConditionsCell = ({ val }: { val: any }) => {
+    if (!val) return <span className="text-muted-foreground italic text-xs">--</span>;
+    try {
+        const parsed = typeof val === 'string' ? JSON.parse(val) : val;
+        if (!Array.isArray(parsed) || parsed.length === 0) return <span className="text-muted-foreground italic text-xs">--</span>;
+
+        const first = parsed[0];
+        const remaining = parsed.length - 1;
+
+        if (remaining === 0) return <div className="text-xs truncate max-w-[150px]">{first}</div>;
+
+        return (
+            <div className="flex items-center gap-1.5 text-xs">
+                <span className="truncate max-w-[80px] sm:max-w-[120px]">{first}</span>
+                <TooltipProvider>
+                    <Tooltip delayDuration={0}>
+                        <TooltipTrigger asChild>
+                            <div className="cursor-help px-1.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold border border-indigo-100 dark:border-indigo-900/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors shrink-0">
+                                +{remaining} more
+                            </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-xs p-3 bg-popover text-popover-foreground border shadow-xl rounded-xl">
+                            <div className="space-y-2">
+                                <div className="flex items-center gap-2 border-b border-border/50 pb-1.5 mb-1.5">
+                                    <FileSpreadsheet size={14} className="text-primary" />
+                                    <p className="font-bold text-xs uppercase tracking-wider">Terms & Conditions</p>
+                                </div>
+                                <ul className="space-y-1.5">
+                                    {parsed.map((c, i) => (
+                                        <li key={i} className="flex gap-2 items-start leading-relaxed animate-in fade-in slide-in-from-left-1 duration-200" style={{ animationDelay: `${i * 30}ms` }}>
+                                            <span className="text-primary/70 font-bold shrink-0 mt-0.5">{i + 1}.</span>
+                                            <span className="text-xs font-medium">{c}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
+            </div>
+        );
+    } catch (e) {
+        return <span className="text-muted-foreground italic text-xs">--</span>;
+    }
+};
+
+export default function MasterManagement() {
+    const { updateInventorySheet, masterSheet, updateAll } = useSheets();
+    const [allRecords, setAllRecords] = useState<any[]>([]);
+    const [siteEngineers, setSiteEngineers] = useState<any[]>([]);
+    const [dataLoading, setDataLoading] = useState(true);
+    const [editingRecord, setEditingRecord] = useState<any>(null);
+    const [openDialog, setOpenDialog] = useState<string | null>(null);
+    const [searchTermDept, setSearchTermDept] = useState('');
+    const [isAddingDept, setIsAddingDept] = useState(false);
+
+    const vForm = useForm<VendorFormValues>({
+        resolver: zodResolver(vendorSchema) as any,
+        defaultValues: {
+            vendor_name: '',
+            vendor_gstin: '',
+            vendor_address: '',
+            vendor_email: '',
+            responsible_person: '',
+            location: '',
+            phone: '',
+        }
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const iForm = useForm<z.infer<typeof itemSchema>>({ resolver: zodResolver(itemSchema) as any, defaultValues: { item_name: '', group_head: '', uom: '', include_in_inventory: false, inventory_quantity: 0, regular_conditions: [{ value: '' }], third_party_conditions: [{ value: '' }] } });
+    const dForm = useForm<z.infer<typeof departmentSchema>>({ resolver: zodResolver(departmentSchema), defaultValues: { department: '' } });
+    const pForm = useForm<z.infer<typeof projectSchema>>({ resolver: zodResolver(projectSchema), defaultValues: { firm_name: '' } });
+    const ghForm = useForm<z.infer<typeof ghSchema>>({ resolver: zodResolver(ghSchema), defaultValues: { group_head: '' } });
+    const uomForm = useForm<z.infer<typeof uomSchema>>({ resolver: zodResolver(uomSchema), defaultValues: { uom: '' } });
+    const aouForm = useForm<z.infer<typeof aouSchema>>({ resolver: zodResolver(aouSchema), defaultValues: { area_of_use: '' } });
+    const ghUomForm = useForm<z.infer<typeof ghUomSchema>>({ resolver: zodResolver(ghUomSchema), defaultValues: { group_head: '', uom: '' } });
+    const cForm = useForm<z.infer<typeof companySchema>>({ resolver: zodResolver(companySchema), defaultValues: { company_name: '', company_gstin: '', company_pan: '', company_email: '', company_phone: '', company_address: '', billing_address: '', destination_address: '', company_contact_person: '' } });
+    const seForm = useForm<z.infer<typeof siteEngineerSchema>>({ resolver: zodResolver(siteEngineerSchema), defaultValues: { name: '', number: '', email: '' } });
+
+    const { fields: regFields, append: regAppend, remove: regRemove } = useFieldArray({ control: iForm.control, name: "regular_conditions" });
+    const { fields: tpFields, append: tpAppend, remove: tpRemove } = useFieldArray({ control: iForm.control, name: "third_party_conditions" });
+
+    const includeInInventory = iForm.watch('include_in_inventory');
+
+    useEffect(() => { loadData(); }, []);
+    useEffect(() => {
+        const previousOverflow = document.body.style.overflow;
+        if (openDialog) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = previousOverflow;
+        }
+
+        return () => {
+            document.body.style.overflow = previousOverflow;
+        };
+    }, [openDialog]);
+
+    useEffect(() => {
+        const parseConds = (val: any) => {
+            if (!val) return [{ value: '' }];
+            try {
+                const parsed = typeof val === 'string' ? JSON.parse(val) : val;
+                if (Array.isArray(parsed)) return parsed.map(c => ({ value: typeof c === 'object' ? (c.value || c.text || '') : String(c) }));
+                return [{ value: String(parsed) }];
+            } catch {
+                return [{ value: String(val) }];
+            }
+        };
+
+        if (editingRecord) {
+            const normalized = {
+                ...editingRecord,
+                vendor_gstin: editingRecord.vendor_gstin ?? '',
+                vendor_address: editingRecord.vendor_address ?? '',
+                vendor_email: editingRecord.vendor_email ?? '',
+                responsible_person: editingRecord.responsible_person ?? '',
+                location: editingRecord.location ?? '',
+                phone: editingRecord.phone ?? '',
+                regular_conditions: parseConds(editingRecord.regular_conditions),
+                third_party_conditions: parseConds(editingRecord.third_party_conditions),
+                firm_name: editingRecord.firm_name ?? '',
+                company_contact_person: editingRecord.company_contact_person ?? '',
+            };
+            if (openDialog === 'vendor') vForm.reset(normalized);
+            if (openDialog === 'item') iForm.reset({ ...normalized, include_in_inventory: false, inventory_quantity: 0 });
+            if (openDialog === 'dept') dForm.reset(normalized);
+            if (openDialog === 'project') pForm.reset(normalized);
+            if (openDialog === 'gh') ghForm.reset(normalized);
+            if (openDialog === 'uom') uomForm.reset(normalized);
+            if (openDialog === 'areaofuse') aouForm.reset(normalized);
+            if (openDialog === 'ghuom') ghUomForm.reset(normalized);
+            if (openDialog === 'company') cForm.reset(normalized);
+            if (openDialog === 'site_engineer') seForm.reset(normalized);
+        } else if (openDialog) {
+            if (openDialog === 'vendor') vForm.reset({ vendor_name: '', vendor_gstin: '', vendor_address: '', vendor_email: '', responsible_person: '', location: '', phone: '' });
+            if (openDialog === 'item') iForm.reset({ item_name: '', group_head: '', uom: '', include_in_inventory: false, inventory_quantity: 0, regular_conditions: [{ value: '' }], third_party_conditions: [{ value: '' }] });
+            if (openDialog === 'dept') dForm.reset({ department: '' });
+            if (openDialog === 'project') pForm.reset({ firm_name: '' });
+            if (openDialog === 'gh') ghForm.reset({ group_head: '' });
+            if (openDialog === 'uom') uomForm.reset({ uom: '' });
+            if (openDialog === 'areaofuse') aouForm.reset({ area_of_use: '' });
+            if (openDialog === 'ghuom') ghUomForm.reset({ group_head: '', uom: '' });
+            if (openDialog === 'company') cForm.reset({ company_name: '', company_gstin: '', company_pan: '', company_email: '', company_phone: '', company_address: '', billing_address: '', destination_address: '', company_contact_person: '' });
+            if (openDialog === 'site_engineer') seForm.reset({ name: '', number: '', email: '' });
+        }
+    }, [editingRecord, openDialog]);
+
+    async function loadData() {
+        setDataLoading(true);
+        try {
+            const [master, engineers] = await Promise.all([
+                fetchMasterRecords(),
+                fetchSiteEngineers()
+            ]);
+            setAllRecords(master);
+            setSiteEngineers(engineers);
+        } finally {
+            setDataLoading(false);
+        }
+    }
+
+    const handleDeleteGHUom = async (record: any) => {
+        if (confirm(`Remove this record?`)) {
+            const res = await deleteMasterData(record.id);
+            if (res.success) { toast.success('Deleted'); loadData(); updateAll(); } else toast.error('Delete failed');
+        }
+    };
+
+    const handleDeleteByDept = async (deptName: string) => {
+        if (confirm(`Remove department "${deptName}"? (Standalone entries deleted, Item entries cleared)`)) {
+            const targets = allRecords.filter(r => r.department === deptName);
+            const ops = targets.map(t => (!t.item_name && !t.vendor_name && !t.company_name) ? deleteMasterData(t.id) : updateMasterData(t.id, { department: null }));
+            await Promise.all(ops);
+            toast.success('Department removed'); loadData(); updateAll();
+        }
+    };
+
+    const handleDelete = async (record: any, type?: string) => {
+        if (confirm('Permanently delete this record?')) {
+            const res = type === 'site_engineer' ? await deleteSiteEngineer(record.number) : await deleteMasterData(record.id);
+            if (res.success) { toast.success('Deleted'); loadData(); updateAll(); } else toast.error('Delete failed');
+        }
+    };
+
+    const getActions = (row: any, type: string) => (
+        <div className="flex items-center gap-1 justify-end pr-4">
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" onClick={() => { setEditingRecord(row); setOpenDialog(type); }}><Pencil size={14} /></Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => (type === 'ghuom' ? handleDeleteGHUom(row) : handleDelete(row, type))}><Trash size={14} /></Button>
+        </div>
+    );
+
+    const handleAddDeptInline = async (formInstance: any, fieldName: string) => {
+        if (!searchTermDept.trim()) return;
+        setIsAddingDept(true);
+        try {
+            const res = await insertMasterData({ department: searchTermDept.trim() });
+            if (res.success) {
+                toast.success(`Department "${searchTermDept}" added successfully!`);
+                await loadData();
+                updateAll();
+                formInstance.setValue(fieldName, searchTermDept.trim());
+                setSearchTermDept('');
+            } else {
+                toast.error('Failed to add department');
+            }
+        } catch (error) {
+            console.error('Error adding department:', error);
+            toast.error('Error adding department');
+        } finally {
+            setIsAddingDept(false);
+        }
+    };
+
+
+    const ghUomColumns: ColumnDef<any>[] = [
+        { accessorKey: 'group_head', header: 'Group Head', cell: ({ row }) => <div className="flex items-center gap-2 font-medium"><LayoutGrid size={16} className="text-blue-500" />{row.original.group_head || '--'}</div> },
+        { accessorKey: 'uom', header: 'UOM', cell: ({ row }) => <div className="flex items-center gap-2 font-medium"><Package size={16} className="text-emerald-500" />{row.original.uom || '--'}</div> },
+        { id: 'actions', cell: ({ row }) => getActions(row.original, 'ghuom') }
+    ];
+
+    const ghColumns: ColumnDef<any>[] = [
+        { accessorKey: 'group_head', header: 'Group Head', cell: ({ row }) => <div className="flex items-center gap-2 font-medium"><LayoutGrid size={16} className="text-blue-500" />{row.original.group_head || '--'}</div> },
+        { id: 'actions', cell: ({ row }) => getActions(row.original, 'gh') }
+    ];
+
+    const uomColumns: ColumnDef<any>[] = [
+        { accessorKey: 'uom', header: 'UOM', cell: ({ row }) => <div className="flex items-center gap-2 font-medium"><Package size={16} className="text-emerald-500" />{row.original.uom || '--'}</div> },
+        { id: 'actions', cell: ({ row }) => getActions(row.original, 'uom') }
+    ];
+
+    const aouColumns: ColumnDef<any>[] = [
+        { accessorKey: 'area_of_use', header: 'Area of Use', cell: ({ row }) => <div className="flex items-center gap-2 font-medium"><MapPin size={16} className="text-red-500" />{row.original.area_of_use || '--'}</div> },
+        { id: 'actions', cell: ({ row }) => getActions(row.original, 'areaofuse') }
+    ];
+
+    const vendorColumns: ColumnDef<any>[] = [
+        { accessorKey: 'vendor_name', header: 'Vendor Name', cell: ({ row }) => <div className="flex items-center gap-2 font-medium"><Building2 size={16} className="text-primary" />{row.original.vendor_name}</div> },
+        { accessorKey: 'vendor_gstin', header: 'GSTIN' },
+        { accessorKey: 'vendor_email', header: 'Email' },
+        { accessorKey: 'responsible_person', header: 'Responsible Person' },
+        { accessorKey: 'phone', header: 'Phone' },
+        { accessorKey: 'location', header: 'Location' },
+        { id: 'actions', cell: ({ row }) => getActions(row.original, 'vendor') }
+    ];
+
+    const itemColumns: ColumnDef<any>[] = [
+        { accessorKey: 'item_name', header: 'Product Name', cell: ({ row }) => <div className="flex items-center gap-2 font-medium"><Package size={16} className="text-blue-500" />{row.original.item_name}</div> },
+        { accessorKey: 'group_head', header: 'Group Head' },
+        { accessorKey: 'uom', header: 'UOM' },
+        {
+            accessorKey: 'regular_conditions',
+            header: 'Regular Terms Conditions',
+            cell: ({ row }) => <ConditionsCell val={row.original.regular_conditions} />
+        },
+        {
+            accessorKey: 'third_party_conditions',
+            header: '3rd Party terms Conditions',
+            cell: ({ row }) => <ConditionsCell val={row.original.third_party_conditions} />
+        },
+        { header: 'Actions', id: 'actions', cell: ({ row }) => getActions(row.original, 'item') }
+    ];
+
+    const departmentColumns: ColumnDef<any>[] = [
+        { accessorKey: 'department', header: 'Dept Name', cell: ({ row }) => <div className="flex items-center gap-2 font-medium"><LayoutGrid size={16} className="text-orange-500" />{row.original.department}</div> },
+        {
+            id: 'actions', cell: ({ row }) => (
+                <div className="flex items-center gap-1 justify-end pr-4">
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" onClick={() => { setEditingRecord(row.original); setOpenDialog('dept'); }}><Pencil size={14} /></Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeleteByDept(row.original.department)}><Trash size={14} /></Button>
+                </div>
+            )
+        }
+    ];
+    const projectColumns: ColumnDef<any>[] = [
+        { accessorKey: 'firm_name', header: 'Project Name', cell: ({ row }) => <div className="flex items-center gap-2 font-medium"><Building size={16} className="text-purple-500" />{row.original.firm_name}</div> },
+
+        { id: 'actions', cell: ({ row }) => getActions(row.original, 'project') }
+    ];
+
+    const companyColumns: ColumnDef<any>[] = [
+        { accessorKey: 'company_name', header: 'Company Name', cell: ({ row }) => <div className="flex items-center gap-2 font-medium"><Building size={16} className="text-emerald-500" />{row.original.company_name}</div> },
+        { accessorKey: 'company_gstin', header: 'GSTIN' },
+        { accessorKey: 'company_pan', header: 'PAN' },
+        { accessorKey: 'company_email', header: 'Email' },
+        { accessorKey: 'company_phone', header: 'Phone' },
+        { accessorKey: 'company_contact_person', header: 'Contact Person' },
+        { accessorKey: 'company_address', header: 'Address', cell: ({ row }) => <span className="text-xs truncate max-w-[120px] block" title={row.original.company_address}>{row.original.company_address || '--'}</span> },
+        { accessorKey: 'billing_address', header: 'Billing Address', cell: ({ row }) => <span className="text-xs truncate max-w-[120px] block" title={row.original.billing_address}>{row.original.billing_address || '--'}</span> },
+        { accessorKey: 'destination_address', header: 'Destination', cell: ({ row }) => <span className="text-xs truncate max-w-[120px] block" title={row.original.destination_address}>{row.original.destination_address || '--'}</span> },
+        { id: 'actions', cell: ({ row }) => getActions(row.original, 'company') }
+    ];
+
+    const siteEngineerColumns: ColumnDef<any>[] = [
+        { accessorKey: 'name', header: 'Engineer Name', cell: ({ row }) => <div className="flex items-center gap-2 font-medium"><UserCog size={16} className="text-orange-500" />{row.original.name}</div> },
+        { accessorKey: 'number', header: 'Phone Number', cell: ({ row }) => <div className="flex items-center gap-2"><Phone size={14} className="text-muted-foreground" />{row.original.number}</div> },
+        { accessorKey: 'email', header: 'Email Address', cell: ({ row }) => <div className="flex items-center gap-2"><Mail size={14} className="text-muted-foreground" />{row.original.email}</div> },
+        { id: 'actions', cell: ({ row }) => getActions(row.original, 'site_engineer') }
+    ];
+
+    const onSubmit = async (values: any, type: string) => {
+        let res;
+        const vendorPayload = type === 'vendor'
+            ? {
+                ...values,
+                vendor_gstin: values.vendor_gstin || null,
+                vendor_address: values.vendor_address || null,
+                vendor_email: values.vendor_email || null,
+                responsible_person: values.responsible_person || null,
+                location: values.location || null,
+                phone: values.phone || null,
+            }
+            : values;
+        const itemPayload = type === 'item'
+            ? {
+                item_name: values.item_name,
+                group_head: values.group_head,
+                uom: values.uom,
+                regular_conditions: values.regular_conditions?.map((c: any) => c.value).filter(Boolean) || [],
+                third_party_conditions: values.third_party_conditions?.map((c: any) => c.value).filter(Boolean) || [],
+            }
+            : vendorPayload;
+
+        const finalPayload = type === 'project'
+            ? {
+                firm_name: values.firm_name,
+            }
+            : type === 'ghuom'
+                ? { group_head: values.group_head || null, uom: values.uom || null }
+                : itemPayload;
+
+        if (editingRecord) {
+            if (type === 'dept') {
+                const targets = allRecords.filter(r => r.department === editingRecord.department);
+                const updates = targets.map(t => updateMasterData(t.id, { department: values.department }));
+                const results = await Promise.all(updates);
+                res = { success: results.every(r => r.success) };
+            } else if (type === 'project') {
+                const targets = allRecords.filter(r => r.firm_name === editingRecord.firm_name);
+                const updates = targets.map(t => updateMasterData(t.id, { firm_name: values.firm_name }));
+                const results = await Promise.all(updates);
+                res = { success: results.every(r => r.success) };
+            } else if (type === 'gh') {
+                const targets = allRecords.filter(r => r.group_head === editingRecord.group_head);
+                const updates = targets.map(t => updateMasterData(t.id, { group_head: values.group_head }));
+                const results = await Promise.all(updates);
+                res = { success: results.every(r => r.success) };
+            } else if (type === 'uom') {
+                const targets = allRecords.filter(r => r.uom === editingRecord.uom);
+                const updates = targets.map(t => updateMasterData(t.id, { uom: values.uom }));
+                const results = await Promise.all(updates);
+                res = { success: results.every(r => r.success) };
+            } else if (type === 'site_engineer') {
+                res = await updateSiteEngineer(editingRecord.number, values);
+            } else {
+                res = await updateMasterData(editingRecord.id, finalPayload);
+            }
+        } else {
+            if (type === 'gh') {
+                res = await insertMasterData({ group_head: values.group_head });
+            } else if (type === 'uom') {
+                res = await insertMasterData({ uom: values.uom });
+            } else if (type === 'areaofuse') {
+                res = await insertMasterData({ area_of_use: values.area_of_use });
+            } else if (type === 'site_engineer') {
+                res = await insertSiteEngineer(values);
+            } else {
+                res = await insertMasterData(finalPayload);
+            }
+
+            if (res.success && type === 'item' && values.include_in_inventory) {
+                const inventoryRes = await addItemToInventory({
+                    itemName: values.item_name,
+                    groupHead: values.group_head,
+                    uom: values.uom,
+                    quantity: values.inventory_quantity,
+                });
+
+                if (!inventoryRes.success) {
+                    toast.error('Item saved, but inventory could not be updated');
+                    return;
+                }
+
+                updateInventorySheet();
+            }
+        }
+        if (res.success) { toast.success('Saved'); setOpenDialog(null); setEditingRecord(null); loadData(); updateAll(); }
+    };
+
+    const vendorsData = allRecords.filter(r => r.vendor_name);
+    const itemsData = allRecords.filter(r => r.item_name);
+    const departmentsData = Array.from(new Set(allRecords.map(r => r.department).filter(Boolean))).map(name => {
+        const original = allRecords.find(r => r.department === name);
+        return { department: name, id: original?.id };
+    });
+    const projectsData = Array.from(new Set(allRecords.map(r => r.firm_name).filter(Boolean))).map(name => {
+        const original = allRecords.find(r => r.firm_name === name);
+        return { firm_name: name, id: original?.id };
+    });
+    const ghData = Array.from(new Set(allRecords.map(r => r.group_head).filter(Boolean))).map(name => {
+        const original = allRecords.find(r => r.group_head === name);
+        return { group_head: name, id: original?.id };
+    });
+    const uomData = Array.from(new Set(allRecords.map(r => r.uom).filter(Boolean))).map(name => {
+        const original = allRecords.find(r => r.uom === name);
+        return { uom: name, id: original?.id };
+    });
+    const aouData = Array.from(new Set(allRecords.map(r => r.area_of_use).filter(Boolean))).map(name => {
+        const original = allRecords.find(r => r.area_of_use === name);
+        return { area_of_use: name, id: original?.id };
+    });
+    const ghUomData = allRecords.filter(r => (r.group_head || r.uom) && !r.item_name && !r.vendor_name && !r.company_name);
+    const companiesData = allRecords.filter(r => r.company_name);
+
+    return (
+        <div className="h-full space-y-4 md:space-y-6 flex flex-col px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+            <Heading heading="Master Registry" subtext="Universal repository for Vendors, Items, Departments, and Corporate Profiles"><div className="bg-gradient-to-br from-indigo-500 to-cyan-500 p-2 sm:p-3 rounded-2xl text-white"><FileSpreadsheet size={32} className="sm:w-10 sm:h-10" /></div></Heading>
+
+            <Tabs defaultValue="vendors" className="flex-1 flex flex-col min-h-0">
+                <TabsList className="bg-muted/30 p-1 rounded-xl border border-border/50 mb-4 max-w-fit h-10 sm:h-12 flex-wrap justify-start">
+                    <TabsTrigger value="vendors" className="gap-1 sm:gap-2 px-3 sm:px-6 text-xs sm:text-sm"><Building2 size={14} className="sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Vendors</span></TabsTrigger>
+                    <TabsTrigger value="items" className="gap-1 sm:gap-2 px-3 sm:px-6 text-xs sm:text-sm"><Boxes size={14} className="sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Items</span></TabsTrigger>
+                    {/* <TabsTrigger value="departments" className="gap-1 sm:gap-2 px-3 sm:px-6 text-xs sm:text-sm"><LayoutGrid size={14} className="sm:w-4 sm:h-4" /> <span className="hidden md:inline">Depts</span><span className="md:hidden">D</span></TabsTrigger> */}
+                    <TabsTrigger value="group-heads" className="gap-1 sm:gap-2 px-3 sm:px-6 text-xs sm:text-sm"><LayoutGrid size={14} className="sm:w-4 sm:h-4" /> <span className="hidden md:inline">Group Head</span><span className="md:hidden">GH/U</span></TabsTrigger>
+                    <TabsTrigger value="companies" className="gap-1 sm:gap-2 px-3 sm:px-6 text-xs sm:text-sm"><Building size={14} className="sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Companies</span></TabsTrigger>
+                    <TabsTrigger value="site_engineers" className="gap-1 sm:gap-2 px-3 sm:px-6 text-xs sm:text-sm"><UserCog size={14} className="sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Site Engineers</span></TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="vendors" className="flex-1 outline-none"><DataTable data={vendorsData} columns={vendorColumns} searchFields={['vendor_name']} dataLoading={dataLoading} extraActions={<Button className="bg-indigo-600" onClick={() => { vForm.reset(); setEditingRecord(null); setOpenDialog('vendor'); }}><Plus size={18} /> Add Vendor</Button>} /></TabsContent>
+                <TabsContent value="items" className="flex-1 outline-none"><DataTable data={itemsData} columns={itemColumns} searchFields={['item_name']} dataLoading={dataLoading} extraActions={<Button className="bg-blue-600" onClick={() => { iForm.reset(); setEditingRecord(null); setOpenDialog('item'); }}><Plus size={18} /> Add Item</Button>} /></TabsContent>
+                {/* <TabsContent value="departments" className="flex-1 outline-none">
+                    <Tabs defaultValue="dept-table" className="h-full flex flex-col">
+                        <div className="flex w-full mb-4">
+                            <TabsList className="bg-muted/50 p-1 rounded-lg w-full">
+                                <TabsTrigger value="dept-table" className="text-xs px-4">Dept Name</TabsTrigger>
+                                <TabsTrigger value="project-table" className="text-xs px-4">Project Name</TabsTrigger>
+                            </TabsList>
+                        </div>
+
+                        <TabsContent value="dept-table" className="flex-1 outline-none ">
+                            <DataTable
+                                data={departmentsData}
+                                columns={departmentColumns}
+                                searchFields={['department']}
+                                dataLoading={dataLoading}
+                                extraActions={
+                                    <Button className="bg-orange-600" onClick={() => { dForm.reset(); setEditingRecord(null); setOpenDialog('dept'); }}>
+                                        <Plus size={18} /> Add Dept
+                                    </Button>
+                                }
+                            />
+                        </TabsContent>
+
+                        <TabsContent value="project-table" className="flex-1 outline-none">
+                            <DataTable
+                                data={projectsData}
+                                columns={projectColumns}
+                                searchFields={['firm_name']}
+                                dataLoading={dataLoading}
+                                extraActions={
+                                    <Button className="bg-purple-600" onClick={() => { pForm.reset(); setEditingRecord(null); setOpenDialog('project'); }}>
+                                        <Plus size={18} /> Add Project
+                                    </Button>
+                                }
+                            />
+                        </TabsContent>
+                    </Tabs>
+                </TabsContent> */}
+                <TabsContent value="group-heads" className="flex-1 outline-none">
+                    <Tabs defaultValue="gh-table" className="h-full flex flex-col">
+                        <div className="flex w-full mb-4">
+                            <TabsList className="bg-muted/50 p-1 rounded-lg w-full">
+                                <TabsTrigger value="gh-table" className="text-xs px-4">Group Head</TabsTrigger>
+                                <TabsTrigger value="uom-table" className="text-xs px-4">UOM</TabsTrigger>
+                                <TabsTrigger value="aou-table" className="text-xs px-4">Area of Use</TabsTrigger>
+                            </TabsList>
+                        </div>
+
+                        <TabsContent value="gh-table" className="flex-1 outline-none">
+                            <DataTable
+                                data={ghData}
+                                columns={ghColumns}
+                                searchFields={['group_head']}
+                                dataLoading={dataLoading}
+                                extraActions={
+                                    <Button className="bg-blue-600" onClick={() => { ghForm.reset(); setEditingRecord(null); setOpenDialog('gh'); }}>
+                                        <Plus size={18} /> Add Group Head
+                                    </Button>
+                                }
+                            />
+                        </TabsContent>
+
+                        <TabsContent value="uom-table" className="flex-1 outline-none">
+                            <DataTable
+                                data={uomData}
+                                columns={uomColumns}
+                                searchFields={['uom']}
+                                dataLoading={dataLoading}
+                                extraActions={
+                                    <Button className="bg-emerald-600" onClick={() => { uomForm.reset(); setEditingRecord(null); setOpenDialog('uom'); }}>
+                                        <Plus size={18} /> Add UOM
+                                    </Button>
+                                }
+                            />
+                        </TabsContent>
+
+                        <TabsContent value="aou-table" className="flex-1 outline-none">
+                            <DataTable
+                                data={aouData}
+                                columns={aouColumns}
+                                searchFields={['area_of_use']}
+                                dataLoading={dataLoading}
+                                extraActions={
+                                    <Button className="bg-red-600" onClick={() => { aouForm.reset(); setEditingRecord(null); setOpenDialog('areaofuse'); }}>
+                                        <Plus size={18} /> Add Area of Use
+                                    </Button>
+                                }
+                            />
+                        </TabsContent>
+                    </Tabs>
+                </TabsContent>
+                <TabsContent value="projects" className="flex-1 outline-none hidden"></TabsContent>
+                <TabsContent value="companies" className="flex-1 outline-none"><DataTable data={companiesData} columns={companyColumns} searchFields={['company_name']} dataLoading={dataLoading} extraActions={<Button className="bg-emerald-600" onClick={() => { cForm.reset(); setEditingRecord(null); setOpenDialog('company'); }}><Plus size={18} /> Add Company</Button>} /></TabsContent>
+                <TabsContent value="site_engineers" className="flex-1 outline-none"><DataTable data={siteEngineers} columns={siteEngineerColumns} searchFields={['name', 'email']} dataLoading={dataLoading} extraActions={<Button className="bg-orange-600" onClick={() => { seForm.reset(); setEditingRecord(null); setOpenDialog('site_engineer'); }}><Plus size={18} /> Add Engineer</Button>} /></TabsContent>
+            </Tabs>
+
+            <Dialog open={!!openDialog} onOpenChange={(o) => {
+                if (!o) {
+                    setOpenDialog(null);
+                    setEditingRecord(null);
+                    vForm.reset();
+                    iForm.reset();
+                    dForm.reset();
+                    pForm.reset();
+                    cForm.reset();
+                }
+            }}>
+                <DialogContent className={cn("z-50 w-screen h-[100dvh] max-h-[100dvh] max-w-none p-0 overflow-hidden rounded-none flex flex-col sm:w-[95vw] sm:h-auto sm:max-h-[90vh] sm:rounded-3xl sm:max-w-xl md:max-w-2xl lg:max-w-3xl [&>button]:z-30", openDialog === 'company' && "md:max-w-4xl")}>
+                    <div className={cn("h-2 w-full bg-gradient-to-r", openDialog === 'vendor' ? "from-indigo-600 to-cyan-600" : openDialog === 'item' ? "from-blue-600 to-indigo-600" : openDialog === 'dept' ? "from-orange-400 to-red-500" : "from-emerald-500 to-teal-600")} />
+                    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                        <div className="sticky top-0 z-20 px-4 sm:px-6 pt-4 sm:pt-6 pb-2 flex-shrink-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border/40 shadow-sm">
+                            <DialogHeader><DialogTitle className="text-lg sm:text-xl font-bold">{editingRecord ? 'Edit' : 'Add'} {openDialog === 'ghuom' ? 'Group Head & UOM' : openDialog?.toUpperCase()}</DialogTitle></DialogHeader>
+                        </div>
+                        <ScrollArea className="flex-1 min-h-0 scroll-smooth overflow-y-auto" type="always">
+                            <div className="space-y-4 sm:space-y-6 px-4 sm:px-6 pb-24 sm:pb-24">
+                                {openDialog === 'vendor' && (
+                                    <Form {...vForm}>
+                                        <form className="grid gap-4" onSubmit={vForm.handleSubmit(v => onSubmit(v, 'vendor'))}>
+                                            <FormField control={vForm.control} name="vendor_name" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Vendor Name</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="e.g., ABC Enterprises" /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )} />
+                                            <FormField control={vForm.control} name="vendor_gstin" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>GSTIN</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="e.g., 22AAAAA0000A1Z5" /></FormControl>
+                                                </FormItem>
+                                            )} />
+                                            <FormField control={vForm.control} name="vendor_email" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Email</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="e.g., vendor@example.com" /></FormControl>
+                                                </FormItem>
+                                            )} />
+                                            <FormField control={vForm.control} name="phone" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Phone (Optional)</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="+91 XXXXX XXXXX" /></FormControl>
+                                                </FormItem>
+                                            )} />
+                                            <FormField control={vForm.control} name="vendor_address" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Vendor Address</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="e.g., Plot No. 45, Industrial Area, Phase-I" /></FormControl>
+                                                </FormItem>
+                                            )} />
+                                            <FormField control={vForm.control} name="location" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Location (Optional)</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="e.g., New Delhi" /></FormControl>
+                                                </FormItem>
+                                            )} />
+                                            <FormField control={vForm.control} name="responsible_person" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Responsible Person</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="e.g., Mr. Rajesh Kumar" /></FormControl>
+                                                </FormItem>
+                                            )} />
+                                            <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save Vendor</Button>
+                                        </form>
+                                    </Form>
+                                )}
+                                {openDialog === 'item' && (
+                                    <Form {...iForm}>
+                                        <form className="grid gap-4" onSubmit={iForm.handleSubmit(v => onSubmit(v, 'item'))}>
+                                            <FormField control={iForm.control} name="item_name" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Item Name</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="" /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )} />
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <FormField control={iForm.control} name="group_head" render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Group Head</FormLabel>
+                                                        <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                                                            <FormControl>
+                                                                <SelectTrigger className="w-full">
+                                                                    <SelectValue placeholder="Select Group Head" />
+                                                                </SelectTrigger>
+                                                            </FormControl>
+                                                            <SelectContent>
+                                                                {masterSheet?.allGroupHeads?.map((gh) => (
+                                                                    <SelectItem key={gh} value={gh}>{gh}</SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )} />
+                                                <FormField control={iForm.control} name="uom" render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>UOM</FormLabel>
+                                                        <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                                                            <FormControl>
+                                                                <SelectTrigger className="w-full">
+                                                                    <SelectValue placeholder="Select UOM" />
+                                                                </SelectTrigger>
+                                                            </FormControl>
+                                                            <SelectContent>
+                                                                {masterSheet?.uoms?.map((uom) => (
+                                                                    <SelectItem key={uom} value={uom}>{uom}</SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )} />
+                                            </div>
+                                            <div className="space-y-6 border rounded-xl p-4 sm:p-6 bg-muted/20 border-border/60">
+                                                <div className="space-y-4">
+                                                    <div className="flex items-center justify-between">
+                                                        <FormLabel className="text-base font-bold text-indigo-700 dark:text-indigo-400">Regular Payment Conditions</FormLabel>
+                                                        <Button type="button" variant="outline" size="sm" onClick={() => regAppend({ value: '' })} className="h-7 px-2 text-xs gap-1 border-indigo-200 hover:bg-indigo-50 dark:border-indigo-900/50"><Plus size={12} /> Add</Button>
+                                                    </div>
+                                                    <div className="space-y-3">
+                                                        {regFields.map((field, index) => (
+                                                            <div key={field.id} className="flex gap-2 items-center group animate-in slide-in-from-left-2 duration-200">
+                                                                <div className="bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold h-5 w-5 rounded-full flex items-center justify-center shrink-0">{index + 1}</div>
+                                                                <FormField control={iForm.control} name={`regular_conditions.${index}.value` as any} render={({ field }) => (
+                                                                    <div className="flex-1 shrink-0"><Input {...field} placeholder="" className="h-9 text-sm" /></div>
+                                                                )} />
+                                                                <Button type="button" variant="ghost" size="icon" onClick={() => regRemove(index)} className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"><X size={14} /></Button>
+                                                            </div>
+                                                        ))}
+                                                        {regFields.length === 0 && <p className="text-xs text-muted-foreground italic pl-7">No regular conditions added</p>}
+                                                    </div>
+                                                </div>
+
+                                                <div className="h-px bg-border/40" />
+
+                                                <div className="space-y-4">
+                                                    <div className="flex items-center justify-between">
+                                                        <FormLabel className="text-base font-bold text-emerald-700 dark:text-emerald-400">Third Party Conditions</FormLabel>
+                                                        <Button type="button" variant="outline" size="sm" onClick={() => tpAppend({ value: '' })} className="h-7 px-2 text-xs gap-1 border-emerald-200 hover:bg-emerald-50 dark:border-emerald-900/50"><Plus size={12} /> Add</Button>
+                                                    </div>
+                                                    <div className="space-y-3">
+                                                        {tpFields.map((field, index) => (
+                                                            <div key={field.id} className="flex gap-2 items-center group animate-in slide-in-from-left-2 duration-200">
+                                                                <div className="bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold h-5 w-5 rounded-full flex items-center justify-center shrink-0">{index + 1}</div>
+                                                                <FormField control={iForm.control} name={`third_party_conditions.${index}.value` as any} render={({ field }) => (
+                                                                    <div className="flex-1 shrink-0"><Input {...field} placeholder="" className="h-9 text-sm" /></div>
+                                                                )} />
+                                                                <Button type="button" variant="ghost" size="icon" onClick={() => tpRemove(index)} className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"><X size={14} /></Button>
+                                                            </div>
+                                                        ))}
+                                                        {tpFields.length === 0 && <p className="text-xs text-muted-foreground italic pl-7">No third party conditions added</p>}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <FormField control={iForm.control} name="include_in_inventory" render={({ field }) => (
+                                                <FormItem className="flex flex-row items-start gap-3 rounded-xl border p-4">
+                                                    <FormControl><Checkbox checked={field.value} onCheckedChange={(checked) => field.onChange(checked === true)} /></FormControl>
+                                                    <div className="space-y-1 leading-none">
+                                                        <FormLabel>Add to Inventory</FormLabel>
+                                                        <p className="text-sm text-muted-foreground">Include this item in stock immediately after saving.</p>
+                                                    </div>
+                                                </FormItem>
+                                            )} />
+                                            {includeInInventory && (
+                                                <FormField control={iForm.control} name="inventory_quantity" render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Initial Inventory Quantity</FormLabel>
+                                                        <FormControl><Input type="number" min={0} {...field} onChange={(e) => field.onChange(e.target.value)} /></FormControl>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )} />
+                                            )}
+                                            <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save Item</Button>
+                                        </form>
+                                    </Form>
+                                )}
+                                {openDialog === 'ghuom' && (
+                                    <Form {...ghUomForm}>
+                                        <form className="grid gap-4 m-5" onSubmit={ghUomForm.handleSubmit(v => onSubmit(v, 'ghuom'))}>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                <FormField control={ghUomForm.control} name="group_head" render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Group Head</FormLabel>
+                                                        <FormControl><Input {...field} placeholder="e.g., Electrical" /></FormControl>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )} />
+                                                <FormField control={ghUomForm.control} name="uom" render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>UOM Name</FormLabel>
+                                                        <FormControl><Input {...field} placeholder="e.g., NOS" /></FormControl>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )} />
+                                            </div>
+                                            <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save Record</Button>
+                                        </form>
+                                    </Form>
+                                )}
+                                {/* {openDialog === 'dept' && (
+                                    <Form {...dForm}>
+                                        <form className="grid gap-4 m-5" onSubmit={dForm.handleSubmit(v => onSubmit(v, 'dept'))}>
+                                            <FormField control={dForm.control} name="department" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Department Name</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="e.g., Operations / Store" /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )} />
+                                            <Button type="submit" className="w-full bg-orange-600 hover:bg-orange-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save Department</Button>
+                                        </form>
+                                    </Form>
+                                )} */ }
+                                {openDialog === 'project' && (
+                                    <Form {...pForm}>
+                                        <form className="grid gap-4 p-5" onSubmit={pForm.handleSubmit(v => onSubmit(v, 'project'))}>
+                                            <FormField control={pForm.control} name="firm_name" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Project Name</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="e.g., Project Raipur Phase 2" /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )} />
+                                            <Button type="submit" className="w-full bg-purple-600 hover:bg-purple-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save Project</Button>
+                                        </form>
+                                    </Form>
+                                )}
+                                {openDialog === 'gh' && (
+                                    <Form {...ghForm}>
+                                        <form className="grid gap-4 p-5" onSubmit={ghForm.handleSubmit(v => onSubmit(v, 'gh'))}>
+                                            <FormField control={ghForm.control} name="group_head" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Group Head</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="e.g., Electrical" /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )} />
+                                            <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save Group Head</Button>
+                                        </form>
+                                    </Form>
+                                )}
+                                {openDialog === 'uom' && (
+                                    <Form {...uomForm}>
+                                        <form className="grid gap-4 p-5" onSubmit={uomForm.handleSubmit(v => onSubmit(v, 'uom'))}>
+                                            <FormField control={uomForm.control} name="uom" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>UOM Name</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="e.g., NOS" /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )} />
+                                            <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save UOM</Button>
+                                        </form>
+                                    </Form>
+                                )}
+                                {openDialog === 'areaofuse' && (
+                                    <Form {...aouForm}>
+                                        <form className="grid gap-4 p-5" onSubmit={aouForm.handleSubmit(v => onSubmit(v, 'areaofuse'))}>
+                                            <FormField control={aouForm.control} name="area_of_use" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Area of Use</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="e.g., Site Office" /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )} />
+                                            <Button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save Area of Use</Button>
+                                        </form>
+                                    </Form>
+                                )}
+                                {openDialog === 'company' && (
+                                    <Form {...cForm}>
+                                        <form className="grid gap-6" onSubmit={cForm.handleSubmit(v => onSubmit(v, 'company'))}>
+                                            <FormField control={cForm.control} name="company_name" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Company Name</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="e.g., Pooja Constructions Pvt Ltd" /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )} />
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                                                <FormField control={cForm.control} name="company_gstin" render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>GSTIN</FormLabel>
+                                                        <FormControl><Input {...field} placeholder="e.g., 22AAAAA0000A1Z5" /></FormControl>
+                                                    </FormItem>
+                                                )} />
+                                                <FormField control={cForm.control} name="company_pan" render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>PAN</FormLabel>
+                                                        <FormControl><Input {...field} placeholder="e.g., ABCDE1234F" /></FormControl>
+                                                    </FormItem>
+                                                )} />
+                                                <FormField control={cForm.control} name="company_contact_person" render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Company Contact Person</FormLabel>
+                                                        <FormControl><Input {...field} placeholder="e.g., John Doe" /></FormControl>
+                                                    </FormItem>
+                                                )} />
+                                                <FormField control={cForm.control} name="company_email" render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Email</FormLabel>
+                                                        <FormControl><Input {...field} placeholder="e.g., info@company.com" /></FormControl>
+                                                    </FormItem>
+                                                )} />
+                                                <FormField control={cForm.control} name="company_phone" render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Phone</FormLabel>
+                                                        <FormControl><Input {...field} placeholder="e.g., +91 99999 00000" /></FormControl>
+                                                    </FormItem>
+                                                )} />
+                                                <FormField control={cForm.control} name="company_address" render={({ field }) => (
+                                                    <FormItem className="sm:col-span-1">
+                                                        <FormLabel>Address</FormLabel>
+                                                        <FormControl><Input {...field} placeholder="e.g., 123 Business Park, Sector 5..." /></FormControl>
+                                                    </FormItem>
+                                                )} />
+                                                <FormField control={cForm.control} name="billing_address" render={({ field }) => (
+                                                    <FormItem className="sm:col-span-1">
+                                                        <FormLabel>Billing Address</FormLabel>
+                                                        <FormControl><Input {...field} placeholder="e.g., Same as above or specify billing office" /></FormControl>
+                                                    </FormItem>
+                                                )} />
+                                                <FormField control={cForm.control} name="destination_address" render={({ field }) => (
+                                                    <FormItem className="sm:col-span-1">
+                                                        <FormLabel>Destination Address</FormLabel>
+                                                        <FormControl><Input {...field} placeholder="e.g., Site Office, Raipur Project" /></FormControl>
+                                                    </FormItem>
+                                                )} />
+                                            </div>
+                                            <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save Company</Button>
+                                        </form>
+                                    </Form>
+                                )}
+                                {openDialog === 'site_engineer' && (
+                                    <Form {...seForm}>
+                                        <form className="grid gap-4 p-5" onSubmit={seForm.handleSubmit(v => onSubmit(v, 'site_engineer'))}>
+                                            <FormField control={seForm.control} name="name" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Engineer Name</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="e.g., John Smith" /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )} />
+                                            <FormField control={seForm.control} name="number" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Phone Number</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="e.g., +91 9876543210" /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )} />
+                                            <FormField control={seForm.control} name="email" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Email Address</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="e.g., john@example.com" /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )} />
+                                            <Button type="submit" className="w-full bg-orange-600 hover:bg-orange-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save Engineer Details</Button>
+                                        </form>
+                                    </Form>
+                                )}
+                            </div>
+                        </ScrollArea>
+                    </div>
+                </DialogContent>
+            </Dialog>
+        </div>
+    );
+}

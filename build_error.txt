@@ -1,0 +1,1 @@
+﻿src/context/SheetsContext.tsx(412,42): error TS2551: Property 'billRecievedLater' does not exist on type 'TallyEntryRecord'. Did you mean 'billReceivedLater'?
