@@ -12,6 +12,7 @@ import {
 } from '../ui/dropdown-menu';
 import { Button } from '../ui/button';
 import { useAuth } from '@/context/AuthContext';
+import { useSheets } from '@/context/SheetsContext';
 import {
     Dialog,
     DialogClose,
@@ -27,6 +28,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Input } from '../ui/input';
 import { Checkbox } from '../ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { toast } from 'sonner';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '../ui/hover-card';
 import { Pill } from '../ui/pill';
@@ -40,7 +42,9 @@ interface UsersTableData {
     username: string;
     name: string;
     password: string;
+    modify_access: 'EDIT' | 'VIEW';
     firmNameMatch: string;
+    firm_access: string[];
     permissions: string[];
 }
 
@@ -51,31 +55,31 @@ function camelToTitleCase(str: string): string {
 }
 
 const permissionLabels: Record<string, string> = {
-    administrate: 'Admin Access (Manage Users/Registry)',
+    administrate: 'Admin Access (Manage Users / Master Registry)',
     createIndent: 'Create Indent',
-    pendingIndentsView: 'PO to Make/Not',
-    indentApprovalView: 'Department Indent Approval',
-    indentApprovalAction: 'Indent Approval Action (Approve/Reject)',
-    createPo: 'Create PO / Quotation',
-    poHistory: 'PO History',
-    ordersView: 'PO History / Lifting View',
+    pendingIndentsView: 'PO to Make/Not (Legacy)',
+    indentApprovalView: 'Indent Approval',
+    indentApprovalAction: 'Indent Approval (Approve/Reject)',
+    createPo: 'Create PO / Enquiry',
+    poHistory: 'PO History (Legacy)',
+    ordersView: 'Lifting / PO History',
     updateVendorView: 'Vendor Rate Update',
-    updateVendorAction: 'Vendor Rate Action (Save/Update)',
-    threePartyApprovalView: 'Dept/Management Approval',
-    threePartyApprovalAction: 'Approval Action (Rank/Approve)',
+    updateVendorAction: 'Vendor Rate Update (Save/Update)',
+    threePartyApprovalView: 'Technical / Management Approval',
+    threePartyApprovalAction: 'Technical/Management (Rank/Approve)',
     pendingPo: 'Pending PO to be Created',
     storeIssue: 'Store Issue',
     storeIssueReturn: 'Store Issue Return',
     issueData: 'Store Data',
     inventory: 'Inventory',
-    storeIn: 'Store Check (Store-In)',
+    storeIn: 'Store Check',
     hodStoreApproval: 'HOD Check',
-    fullKiting: 'Freight Payment (Full Kiting)',
-    receiveItemView: 'Reject For GRN',
-    insteadOfQualityCheckInReceivedItem: 'Reject For GRN (Alternative)',
-    receiveItemAction: 'Reject For GRN Action (Process)',
+    fullKiting: 'Freight Payment',
+    receiveItemView: 'Reject For GRN (View)',
+    insteadOfQualityCheckInReceivedItem: 'Reject For GRN',
+    receiveItemAction: 'Reject For GRN (Action)',
     storeOutApprovalView: 'Store Out Approval',
-    storeOutApprovalAction: 'Store Out Approval Action',
+    storeOutApprovalAction: 'Store Out Approval (Action)',
     againAuditing: 'Again Auditing',
     reauditData: 'Reaudit Data',
     rectifyTheMistake: 'Rectify the mistake',
@@ -122,8 +126,9 @@ const permissionGroups = [
     }
 ];
 
-export default () => {
+export default function ManageUsers() {
     const { user: currentUser } = useAuth();
+    const { masterSheet: options } = useSheets();
 
     const [tableData, setTableData] = useState<UsersTableData[]>([]);
     const [dataLoading, setDataLoading] = useState(true);
@@ -154,7 +159,9 @@ export default () => {
                         username: user.username,
                         name: user.name,
                         password: user.password,
+                        modify_access: user.modify_access || 'EDIT',
                         firmNameMatch: user.firmNameMatch,
+                        firm_access: user.firm_access || [],
                         permissions: permissionKeys,
                     };
                 })
@@ -188,18 +195,22 @@ export default () => {
             )
         },
         {
-            accessorKey: 'firmNameMatch',
+            accessorKey: 'firm_access',
             header: 'Project Scope',
             cell: ({ row }) => (
                 <div className="flex items-center gap-2 text-sm justify-start pl-4">
                     <Building size={14} className="text-muted-foreground shrink-0" />
                     <span className={cn(
                         "px-2 py-0.5 rounded-full text-xs font-medium",
-                        row.original.firmNameMatch.toLowerCase() === 'all' 
+                        row.original.permissions.includes('administrate')
                         ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" 
                         : "bg-muted text-muted-foreground border border-border"
                     )}>
-                        {row.original.firmNameMatch || "Not Assigned"}
+                        {row.original.permissions.includes('administrate') 
+                            ? "Full Access (Admin)" 
+                            : row.original.firm_access.length > 0 
+                                ? `${row.original.firm_access.length} Project(s)` 
+                                : "No Access"}
                     </span>
                 </div>
             )
@@ -337,17 +348,21 @@ export default () => {
         name: z.string().min(1, 'Full name is required'),
         username: z.string().min(3, 'Username must be at least 3 characters'),
         password: z.string().min(4, 'Password must be at least 4 characters'),
+        modify_access: z.enum(['EDIT', 'VIEW']),
         firmNameMatch: z.string().optional(),
+        firm_access: z.array(z.string()),
         permissions: z.array(z.string()),
     });
 
     const form = useForm<z.infer<typeof schema>>({
         resolver: zodResolver(schema),
         defaultValues: {
-            name: '',
             username: '',
+            name: '',
             password: '',
+            modify_access: 'EDIT',
             firmNameMatch: '',
+            firm_access: [],
             permissions: [],
         },
     });
@@ -358,7 +373,9 @@ export default () => {
                 username: selectedUser.username,
                 name: selectedUser.name,
                 password: selectedUser.password,
+                modify_access: selectedUser.modify_access || 'EDIT',
                 firmNameMatch: selectedUser.firmNameMatch,
+                firm_access: selectedUser.firm_access,
                 permissions: selectedUser.permissions,
             });
             return;
@@ -367,7 +384,9 @@ export default () => {
             name: '',
             username: '',
             password: '',
+            modify_access: 'EDIT',
             firmNameMatch: '',
+            firm_access: [],
             permissions: [],
         });
     }, [selectedUser]);
@@ -385,7 +404,9 @@ export default () => {
             username: value.username,
             name: value.name,
             password: value.password,
+            modify_access: value.modify_access,
             firmNameMatch: value.firmNameMatch || '',
+            firm_access: value.firm_access,
         };
 
         allPermissionKeys.forEach((perm) => {
@@ -531,22 +552,64 @@ export default () => {
                                     />
                                     <FormField
                                         control={form.control}
-                                        name="firmNameMatch"
+                                        name="modify_access"
                                         render={({ field }) => (
                                             <FormItem>
                                                 <FormLabel className="flex items-center gap-2">
-                                                    <Building size={14} className="text-primary" /> Project/Firm Scope
+                                                    <ShieldCheck size={14} className="text-primary" /> Modify Access
                                                 </FormLabel>
-                                                <FormControl>
-                                                    <Input
-                                                        className="bg-background"
-                                                        placeholder="Enter firm name or 'all'"
-                                                        {...field}
-                                                    />
-                                                </FormControl>
+                                                <Select value={field.value} onValueChange={field.onChange}>
+                                                    <FormControl>
+                                                        <SelectTrigger className="bg-background w-full">
+                                                            <SelectValue placeholder="Select access" />
+                                                        </SelectTrigger>
+                                                    </FormControl>
+                                                    <SelectContent>
+                                                        <SelectItem value="EDIT">EDIT - Can view and modify</SelectItem>
+                                                        <SelectItem value="VIEW">VIEW - View only</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
                                             </FormItem>
                                         )}
                                     />
+                                    <div className="md:col-span-2 space-y-4">
+                                        <FormLabel className="flex items-center gap-2">
+                                            <Building size={14} className="text-primary" /> Permitted Projects (Firm Access)
+                                        </FormLabel>
+                                        <div className="bg-background border rounded-xl p-4 max-h-48 overflow-y-auto custom-scrollbar grid sm:grid-cols-2 gap-3">
+                                            {(options?.firms || []).map((firm) => (
+                                                <FormField
+                                                    key={firm}
+                                                    control={form.control}
+                                                    name="firm_access"
+                                                    render={({ field }) => (
+                                                        <FormItem className="flex items-center space-x-2 space-y-0 p-2 rounded-lg hover:bg-muted/50 transition-colors">
+                                                            <FormControl>
+                                                                <Checkbox
+                                                                    checked={field.value?.includes(firm)}
+                                                                    onCheckedChange={(checked) => {
+                                                                        const values = field.value || [];
+                                                                        checked
+                                                                            ? field.onChange([...values, firm])
+                                                                            : field.onChange(values.filter((f) => f !== firm));
+                                                                    }}
+                                                                />
+                                                            </FormControl>
+                                                            <FormLabel className="text-sm font-medium leading-none cursor-pointer select-none">
+                                                                {firm}
+                                                            </FormLabel>
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                            ))}
+                                            {(options?.firms || []).length === 0 && (
+                                                <p className="text-sm text-muted-foreground italic col-span-2 text-center py-4">No projects found in Master Registry</p>
+                                            )}
+                                        </div>
+                                        <p className="text-[10px] text-muted-foreground pl-1 italic">
+                                            * Administrators automatically have access to all projects.
+                                        </p>
+                                    </div>
                                 </div>
 
                                 <div className="space-y-4">
@@ -557,49 +620,68 @@ export default () => {
                                     <Separator className="bg-primary/10" />
                                     
                                     <div className="grid gap-6">
-                                        {permissionGroups.map((group) => (
-                                            <Card key={group.name} className="border-none bg-muted/20 overflow-hidden shadow-none">
-                                                <div className="px-4 py-2 border-b bg-muted/40 flex items-center gap-2">
-                                                    <span className="text-primary">{group.icon}</span>
-                                                    <span className="text-xs font-bold uppercase tracking-widest">{group.name}</span>
+                                        <div className="flex items-center justify-between bg-muted/40 p-4 rounded-xl border border-primary/10">
+                                            <div className="flex items-center gap-3">
+                                                <div className="p-2 bg-primary/10 text-primary rounded-lg">
+                                                    <CheckSquare size={16} />
                                                 </div>
-                                                <CardContent className="p-4 bg-muted/10">
-                                                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-y-3 gap-x-4">
-                                                        {group.keys.map((perm) => (
-                                                            <FormField
-                                                                key={perm}
-                                                                control={form.control}
-                                                                name="permissions"
-                                                                render={({ field }) => (
-                                                                    <FormItem className="flex items-center space-x-2 space-y-0 py-1 transition-all hover:translate-x-1">
-                                                                        <FormControl>
-                                                                            <Checkbox
-                                                                                id={perm}
-                                                                                className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
-                                                                                checked={field.value?.includes(perm)}
-                                                                                onCheckedChange={(checked) => {
-                                                                                    const values = field.value || [];
-                                                                                    checked
-                                                                                        ? field.onChange([...values, perm])
-                                                                                        : field.onChange(values.filter((p) => p !== perm));
-                                                                                }}
-                                                                            />
-                                                                        </FormControl>
-                                                                        <FormLabel
-                                                                            className="text-sm font-medium leading-none cursor-pointer select-none truncate"
-                                                                            htmlFor={perm}
-                                                                            title={permissionLabels[perm] || camelToTitleCase(perm)}
-                                                                        >
-                                                                            {permissionLabels[perm] || camelToTitleCase(perm)}
-                                                                        </FormLabel>
-                                                                    </FormItem>
-                                                                )}
-                                                            />
-                                                        ))}
-                                                    </div>
-                                                </CardContent>
-                                            </Card>
-                                        ))}
+                                                <div>
+                                                    <p className="text-sm font-bold">Quick Select</p>
+                                                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium">Toggle All Access</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2 px-3 py-1.5 bg-background rounded-lg border shadow-sm">
+                                                <Checkbox
+                                                    id="select-all"
+                                                    checked={form.watch('permissions')?.length === allPermissionKeys.length}
+                                                    onCheckedChange={(checked) => {
+                                                        if (checked) {
+                                                            form.setValue('permissions', [...allPermissionKeys]);
+                                                        } else {
+                                                            form.setValue('permissions', []);
+                                                        }
+                                                    }}
+                                                />
+                                                <label htmlFor="select-all" className="text-xs font-bold cursor-pointer select-none">
+                                                    Select All Permissions
+                                                </label>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-muted/10 rounded-2xl border border-border/50 p-6">
+                                            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-y-4 gap-x-6">
+                                                {allPermissionKeys.map((perm) => (
+                                                    <FormField
+                                                        key={perm}
+                                                        control={form.control}
+                                                        name="permissions"
+                                                        render={({ field }) => (
+                                                            <FormItem className="flex items-center space-x-3 space-y-0 p-2 rounded-xl hover:bg-muted/50 transition-all group border border-transparent hover:border-primary/10">
+                                                                <FormControl>
+                                                                    <Checkbox
+                                                                        id={perm}
+                                                                        className="h-5 w-5 data-[state=checked]:bg-primary data-[state=checked]:border-primary transition-transform group-active:scale-90"
+                                                                        checked={field.value?.includes(perm)}
+                                                                        onCheckedChange={(checked) => {
+                                                                            const values = field.value || [];
+                                                                            checked
+                                                                                ? field.onChange([...values, perm])
+                                                                                : field.onChange(values.filter((p) => p !== perm));
+                                                                        }}
+                                                                    />
+                                                                </FormControl>
+                                                                <FormLabel
+                                                                    className="text-sm font-medium leading-none cursor-pointer select-none py-1 flex-1 group-hover:text-primary transition-colors"
+                                                                    htmlFor={perm}
+                                                                >
+                                                                    {permissionLabels[perm] || camelToTitleCase(perm)}
+                                                                </FormLabel>
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                ))}
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

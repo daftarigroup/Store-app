@@ -1,7 +1,7 @@
 
 
 
-import { FilePlus2, Pencil, Save, Trash } from 'lucide-react';
+import { ChevronDown, ChevronUp, FilePlus2, Pencil, Save, Trash } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -14,7 +14,7 @@ import type { PoMasterSheet, QuotationHistorySheet, MasterDataRow } from '@/type
 import { uploadFile } from '@/lib/fetchers';
 import { fetchQuotationHistory, insertQuotationHistory } from '@/services/quotationService';
 import { fetchMasterOptions, fetchMasterRecords } from '@/services/masterService';
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useSheets } from '@/context/SheetsContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { cn, formatDate } from '@/lib/utils';
@@ -27,12 +27,13 @@ import POPdf, { type POPdfProps } from '../element/QuotationPdf';
 import { Checkbox } from '../ui/checkbox';
 import { Search as SearchIcon } from 'lucide-react'; 
 import Heading from '../element/Heading';
+import { sendEmail, generateBiddingEmailHtml } from '@/services/emailService';
 
 
 
 
 
-type Mode = 'create' | 'revise';
+type Mode = 'create' | 'history';
 
 
 interface SupplierInfo {
@@ -118,13 +119,13 @@ export default function QuotationPage() {
   const [mode, setMode] = useState<Mode>('create');
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>([]);
-  const [originalSuppliers, setOriginalSuppliers] = useState<string[]>([]); // Track suppliers already in the quotation
   const [supplierInfos, setSupplierInfos] = useState<SupplierInfo[]>([]);
   const [masterSuppliers, setMasterSuppliers] = useState<MasterSheetSupplier[]>([]);
   const [latestQuotationNumbers, setLatestQuotationNumbers] = useState<string[]>([]);
   const [allHistory, setAllHistory] = useState<QuotationHistorySheet[]>([]);
-  const [selectedQuotationNo, setSelectedQuotationNo] = useState<string>('');
   const [fullMasterData, setFullMasterData] = useState<MasterDataRow[]>([]);
+  const [historySearch, setHistorySearch] = useState('');
+  const [expandedQuotation, setExpandedQuotation] = useState<string | null>(null);
 
 
 
@@ -145,29 +146,28 @@ export default function QuotationPage() {
   }, [details]);
 
 
-  // Fetch latest quotation numbers from QUOTATION HISTORY sheet
-  useEffect(() => {
-    const fetchLatestQuotationNumbers = async () => {
-      try {
-        const quotationHistory = await fetchQuotationHistory();
-        console.log('Fetched QUOTATION HISTORY:', quotationHistory);
+  const fetchLatestQuotationNumbers = async () => {
+    try {
+      const quotationHistory = await fetchQuotationHistory();
+      console.log('Fetched QUOTATION HISTORY:', quotationHistory);
 
-        if (Array.isArray(quotationHistory)) {
-          setAllHistory(quotationHistory);
-          const quotationNos = Array.from(new Set(
-            quotationHistory
-              .map((row: any) => row.quatationNo || '')
-              .filter((no: string) => no && no.trim() !== '')
-          ));
+      if (Array.isArray(quotationHistory)) {
+        setAllHistory(quotationHistory);
+        const quotationNos = Array.from(new Set(
+          quotationHistory
+            .map((row: any) => row.quatationNo || '')
+            .filter((no: string) => no && no.trim() !== '')
+        ));
 
-          setLatestQuotationNumbers(quotationNos);
-          console.log('Latest quotation numbers:', quotationNos);
-        }
-      } catch (error) {
-        console.error('Error fetching quotation numbers:', error);
+        setLatestQuotationNumbers(quotationNos);
+        console.log('Latest quotation numbers:', quotationNos);
       }
-    };
+    } catch (error) {
+      console.error('Error fetching quotation numbers:', error);
+    }
+  };
 
+  useEffect(() => {
     fetchLatestQuotationNumbers();
   }, []);
 
@@ -257,25 +257,20 @@ export default function QuotationPage() {
       // The backend IndentController adds a 'status' field: 'Approved' if approvedIndents.length > 0
       const isApproved = item.status === 'Approved' || item.indentStatus === 'Approved' || !isEmpty(item.actual1);
 
-      // 2. Identify if it already has a quotation
+      // 4. Identify if it already has a quotation
       const hasQuotationInHistory = allHistory.some(h => h.indentNo === item.indentNumber);
 
-      // 3. Stage check: Identify if it already moved to Stage 3 (HOD Approval) or beyond
+      // 5. Stage check: Identify if it already moved to Stage 3 (HOD Approval) or beyond
       const isAlreadyInNextStage =
         !isEmpty(item.planned3) || !isEmpty(item.planned4);
 
-      // 4. If we are in revise mode, include items that were already in this quotation
-      const isPartOfCurrentQuotation = mode === 'revise' && selectedQuotationNo &&
-        allHistory.some(h => h.quatationNo === selectedQuotationNo && h.indentNo === item.indentNumber);
-
-      // Eligible if Approved AND (Not yet in Vendor Rate Update/Approval stages OR part of the current revision)
-      return isApproved &&
-        (!isAlreadyInNextStage || isPartOfCurrentQuotation);
+      // Eligible if Approved AND Not yet in Vendor Rate Update/Approval stages
+      return isApproved && !isAlreadyInNextStage;
     }).reverse();
 
     console.log('Filtered eligible items:', filtered.length);
     return filtered;
-  }, [indentSheet, mode, selectedQuotationNo, allHistory]);
+  }, [indentSheet, mode, allHistory]);
 
 
 
@@ -343,55 +338,7 @@ export default function QuotationPage() {
   };
 
 
-  // Logic for Revise mode: Populate form when selectedQuotationNo changes
-  useEffect(() => {
-    if (mode === 'revise' && selectedQuotationNo) {
-      const historyRecords = allHistory.filter(h =>
-        (h.quatationNo) === selectedQuotationNo
-      );
 
-      if (historyRecords.length > 0) {
-        // Unique suppliers from these records
-        const uniqueSuppliers = Array.from(new Set(historyRecords.map(h => h.supplierName)));
-
-        // Find them in masterData to get full info
-        const infos = uniqueSuppliers.map(name => {
-          const master = masterSuppliers.find(s => (s.supplierName || '').trim().toLowerCase() === name.trim().toLowerCase());
-          return {
-            name,
-            address: master?.vendorAddress || historyRecords.find(h => h.supplierName === name)?.adreess || '',
-            gstin: master?.vendorGstin || historyRecords.find(h => h.supplierName === name)?.gst || '',
-            email: master?.email || ''
-          };
-        });
-
-        // Unique indents from these records
-        const uniqueIndents = Array.from(new Set(historyRecords.map(h => h.indentNo)));
-
-        // Update state
-        setSelectedSuppliers(uniqueSuppliers);
-        setOriginalSuppliers(uniqueSuppliers); // Remember who was already here
-        setSupplierInfos(infos as SupplierInfo[]);
-        setSelectedItems(uniqueIndents);
-
-        // Update form
-        form.setValue('quotationNumber', selectedQuotationNo);
-        form.setValue('suppliers', uniqueSuppliers);
-        form.setValue('selectedIndents', uniqueIndents);
-
-        // Optionally set date if we have it
-        const firstRecord = historyRecords[0];
-        if (firstRecord.timestamp) {
-          form.setValue('quotationDate', new Date(firstRecord.timestamp));
-        }
-        if (firstRecord.description) {
-          form.setValue('description', firstRecord.description);
-        }
-
-        toast.success(`Loaded quotation ${selectedQuotationNo}`);
-      }
-    }
-  }, [selectedQuotationNo, mode, allHistory, masterSuppliers]);
 
 
   // Handle checkbox selection
@@ -474,22 +421,18 @@ export default function QuotationPage() {
         .filter(num => num > 0)
         .reduce((max, num) => Math.max(max, num), 0);
 
-      // In revise mode, only process suppliers that are NOT part of the original quotation
-      const suppliersToProcess = mode === 'create' 
-        ? supplierInfos 
-        : supplierInfos.filter(info => !originalSuppliers.includes(info.name));
+      const suppliersToProcess = supplierInfos; 
 
-      if (suppliersToProcess.length === 0 && mode === 'revise') {
-        toast.info("No new suppliers to add. Existing suppliers are already saved.");
+      if (suppliersToProcess.length === 0) {
+        toast.error("Please select at least one supplier.");
         return;
       }
 
       for (let i = 0; i < suppliersToProcess.length; i++) {
         const supplierInfo = suppliersToProcess[i];
 
-        // Generate unique quotation number for each supplier
-        currentMaxNumber += 1;
         const uniqueQuotationNumber = `QT-${String(currentMaxNumber).padStart(3, '0')}`;
+        const sessionToken = crypto.randomUUID(); // Unique token for this vendor session
 
         const pdfProps: POPdfProps = {
           companyName: details?.companyName || '',
@@ -559,9 +502,24 @@ export default function QuotationPage() {
           unit: item.uom || '',
           pdfLink: pdfUrl,
           firm: item.firmNameMatch || 'N/A',
+          token: sessionToken,
         }));
 
         allQuotationRows.push(...quotationHistoryRows);
+
+        // Send Email to Vendor
+        try {
+          const emailHtml = generateBiddingEmailHtml(supplierInfo.name, selectedItemsData[0]?.firmNameMatch || details?.companyName || 'Our Firm', sessionToken);
+          await sendEmail({
+            to: supplierInfo.email,
+            subject: `Quotation Request: ${uniqueQuotationNumber}`,
+            html: emailHtml
+          });
+          console.log(`Email sent to ${supplierInfo.name} (${supplierInfo.email})`);
+        } catch (emailError) {
+          console.error(`Failed to send email to ${supplierInfo.name}:`, emailError);
+          toast.error(`Quotation created, but email failed for ${supplierInfo.name}.`);
+        }
       }
 
       console.log('Submitting to QUOTATION HISTORY:', allQuotationRows);
@@ -576,11 +534,11 @@ export default function QuotationPage() {
       setSelectedItems([]);
       setSelectedSuppliers([]);
       setSupplierInfos([]);
-      setOriginalSuppliers([]);
 
       setTimeout(() => {
         updatePoMasterSheet();
         updateIndentSheet();
+        fetchLatestQuotationNumbers(); // Refresh history
       }, 1000);
     } catch (e) {
       console.error('Submit error:', e);
@@ -592,6 +550,159 @@ export default function QuotationPage() {
     console.log('Form errors:', e);
     toast.error('Please check the form');
   }
+
+  const filteredHistory = useMemo(() => {
+    if (!historySearch) return allHistory;
+    const search = historySearch.toLowerCase();
+    return allHistory.filter(h => 
+      (h.quatationNo || '').toLowerCase().includes(search) ||
+      (h.supplierName || '').toLowerCase().includes(search) ||
+      (h.indentNo || '').toLowerCase().includes(search) ||
+      (h.product || '').toLowerCase().includes(search) ||
+      (h.firm || '').toLowerCase().includes(search)
+    );
+  }, [allHistory, historySearch]);
+
+  const toggleExpand = (quotationNo: string) => {
+    setExpandedQuotation(expandedQuotation === quotationNo ? null : quotationNo);
+  };
+
+  const groupedHistory = useMemo(() => {
+    const groups: Record<string, QuotationHistorySheet[]> = {};
+    filteredHistory.forEach(item => {
+      const qNo = item.quatationNo || 'Unknown';
+      if (!groups[qNo]) {
+        groups[qNo] = [];
+      }
+      groups[qNo].push(item);
+    });
+    
+    return Object.entries(groups).map(([quatationNo, items]) => ({
+      quatationNo,
+      items,
+      timestamp: items[0].timestamp,
+      supplierName: items[0].supplierName,
+      firm: items[0].firm,
+      pdfLink: items[0].pdfLink,
+    })).sort((a, b) => {
+        return new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime();
+    });
+  }, [filteredHistory]);
+
+  const renderHistoryTable = () => (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center mb-4">
+        <div className="relative w-full max-w-sm">
+          <SearchIcon className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search history..."
+            className="pl-8"
+            value={historySearch}
+            onChange={(e) => setHistorySearch(e.target.value)}
+          />
+        </div>
+        <div className="text-sm text-muted-foreground">
+          Showing {groupedHistory.length} unique quotations
+        </div>
+      </div>
+
+      <div className="border rounded-md bg-white overflow-hidden shadow-sm">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/50">
+              <TableHead className="w-10"></TableHead>
+              <TableHead className="font-bold">Date</TableHead>
+              <TableHead className="font-bold">Quotation No</TableHead>
+              <TableHead className="font-bold">Supplier</TableHead>
+              <TableHead className="font-bold">Firm</TableHead>
+              <TableHead className="font-bold">Items Count</TableHead>
+              <TableHead className="font-bold text-right pr-4">Action</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {groupedHistory.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
+                  No history records found
+                </TableCell>
+              </TableRow>
+            ) : (
+              groupedHistory.map((group) => (
+                <Fragment key={group.quatationNo}>
+                  <TableRow 
+                    className="hover:bg-muted/30 cursor-pointer transition-colors" 
+                    onClick={() => toggleExpand(group.quatationNo)}
+                  >
+                    <TableCell>
+                      {expandedQuotation === group.quatationNo ? (
+                        <ChevronUp size={18} className="text-primary" />
+                      ) : (
+                        <ChevronDown size={18} className="text-muted-foreground" />
+                      )}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {group.timestamp ? formatDate(new Date(group.timestamp)) : 'N/A'}
+                    </TableCell>
+                    <TableCell className="font-medium text-blue-600">{group.quatationNo}</TableCell>
+                    <TableCell>{group.supplierName}</TableCell>
+                    <TableCell>{group.firm || 'N/A'}</TableCell>
+                    <TableCell>
+                      <Badge className="bg-blue-50 text-blue-700 border-blue-200">
+                        {group.items.length} Product(s)
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right pr-4">
+                      {group.pdfLink && (
+                        <Button variant="ghost" size="sm" asChild onClick={(e) => e.stopPropagation()}>
+                          <a href={group.pdfLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 flex items-center gap-1 justify-end">
+                            View PDF
+                          </a>
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                  {expandedQuotation === group.quatationNo && (
+                    <TableRow className="bg-muted/5 animate-in fade-in slide-in-from-top-1 duration-200">
+                      <TableCell colSpan={7} className="p-0 border-t">
+                        <div className="px-12 py-6 bg-slate-50/50">
+                          <div className="border rounded-lg bg-white shadow-sm overflow-hidden">
+                            <Table>
+                              <TableHeader>
+                                <TableRow className="bg-slate-100/80">
+                                  <TableHead className="h-9 text-xs font-bold text-slate-600">Indent No</TableHead>
+                                  <TableHead className="h-9 text-xs font-bold text-slate-600">Product</TableHead>
+                                  <TableHead className="h-9 text-xs font-bold text-slate-600">Description</TableHead>
+                                  <TableHead className="h-9 text-xs font-bold text-slate-600 text-center">Qty</TableHead>
+                                  <TableHead className="h-9 text-xs font-bold text-slate-600">Unit</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {group.items.map((item, i) => (
+                                  <TableRow key={i} className="hover:bg-slate-50 border-b last:border-0">
+                                    <TableCell className="py-2.5 text-xs text-slate-600">{item.indentNo}</TableCell>
+                                    <TableCell className="py-2.5 text-xs font-medium text-slate-900">{item.product}</TableCell>
+                                    <TableCell className="py-2.5 text-xs text-slate-500 max-w-sm truncate" title={item.description}>
+                                      {item.description || '-'}
+                                    </TableCell>
+                                    <TableCell className="py-2.5 text-xs text-center font-semibold text-slate-700">{item.qty}</TableCell>
+                                    <TableCell className="py-2.5 text-xs text-slate-600">{item.unit}</TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </Fragment>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
 
   // Simple inline edit controls
   const EditIconButton = ({ editing, onClick }: { editing: boolean; onClick: () => void }) => (
@@ -616,26 +727,7 @@ export default function QuotationPage() {
             </div>
           </div>
           <hr />
-          {mode === 'revise' && (
-            <div className="px-4 py-2 space-y-2 bg-yellow-50 rounded border border-yellow-100">
-              <FormLabel className="text-yellow-800">Select Quotation to Revise</FormLabel>
-              <Select onValueChange={setSelectedQuotationNo} value={selectedQuotationNo}>
-                <SelectTrigger size="sm" className="w-full bg-white border-yellow-200">
-                  <SelectValue placeholder="Select a quotation to revise..." />
-                </SelectTrigger>
-                <SelectContent className="z-[100] max-h-[300px]">
-                  {latestQuotationNumbers.length === 0 ? (
-                    <SelectItem value="no-quotations" disabled>No quotations found</SelectItem>
-                  ) : (
-                    latestQuotationNumbers.map((no, k) => (
-                      <SelectItem key={k} value={no}>{no}</SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-          <h2 className="text-center font-bold text-lg">{mode === 'create' ? 'Create New' : 'Revise Existing'} Quotation</h2>
+          <h2 className="text-center font-bold text-lg">Create New Quotation</h2>
           <hr />
 
           <div className="grid gap-5 px-4 py-2 text-foreground/80">
@@ -780,12 +872,11 @@ export default function QuotationPage() {
                   <TableHead>Qty</TableHead>
                   <TableHead>Unit</TableHead>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
+              </TableHeader>              <TableBody>
                 {eligibleItems.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center text-muted-foreground py-10 text-xl font-bold">
-                      {mode === 'create' ? "No eligible items found" : "No items found for this quotation"}
+                      No eligible items found
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -815,7 +906,6 @@ export default function QuotationPage() {
             setSelectedItems([]); 
             setSelectedSuppliers([]); 
             setSupplierInfos([]); 
-            setOriginalSuppliers([]);
           }}>Reset</Button>
           <Button type="submit" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting && <Loader size={20} color="white" />}
@@ -829,22 +919,22 @@ export default function QuotationPage() {
   return (
     <div className="w-full min-h-screen bg-gradient-to-br from-blue-100 via-purple-50 to-blue-50 rounded-md flex flex-col pb-10">
       <Tabs defaultValue="create" className="w-full flex flex-col flex-1" onValueChange={(v) => {
-        setMode(v === 'create' ? 'create' as Mode : 'revise' as Mode);
+        setMode(v as Mode);
         // Clear selection state when switching modes
         setSelectedItems([]);
         setSelectedSuppliers([]);
         setSupplierInfos([]);
-        setOriginalSuppliers([]);
         form.reset();
       }}>
         <Heading
-          heading="Create or Revise Quotation"
-          subtext="Create a quotation from eligible indents or revise an existing one"
+          heading="Quotation / Enquiry"
+          subtext="Create a quotation from eligible indents or view history"
           tabs
           pendingLabel="Create"
           pendingValue="create"
-          historyLabel="Revise"
-          historyValue="revise"
+          historyLabel="History"
+          historyValue="history"
+          historyCount={allHistory.length}
         >
           <FilePlus2 size={30} className="text-primary" />
         </Heading>
@@ -856,9 +946,11 @@ export default function QuotationPage() {
             </div>
           </TabsContent>
 
-          <TabsContent value="revise" className="m-0 border-none outline-none">
-            <div className="px-4">
-              {renderForm()}
+
+
+          <TabsContent value="history" className="m-0 border-none outline-none">
+            <div className="px-4 py-6">
+              {renderHistoryTable()}
             </div>
           </TabsContent>
         </div>

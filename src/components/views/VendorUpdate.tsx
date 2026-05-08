@@ -75,7 +75,6 @@ export default () => {
     const { user } = useAuth();
 
     const [selectedIndent, setSelectedIndent] = useState<VendorUpdateData | null>(null);
-    const [selectedHistory, setSelectedHistory] = useState<HistoryData | null>(null);
     const [historyData, setHistoryData] = useState<HistoryData[]>([]);
     const [tableData, setTableData] = useState<VendorUpdateData[]>([]);
     const [filteredTableData, setFilteredTableData] = useState<VendorUpdateData[]>([]);
@@ -100,7 +99,6 @@ export default () => {
     // Fetch pending vendor updates from Supabase
     const fetchPendingVendorUpdates = async () => {
         if (!supabaseEnabled) return;
-
         try {
             setDataLoading(true);
             let query = supabase
@@ -121,7 +119,7 @@ export default () => {
             const mappedData = rows.map((r) => ({
                 id: r.id,
                 indentNo: r.indent_number || '',
-                firmNameMatch: r.firm_name_match || '',
+                firmNameMatch: r.firm_name || '',
                 indenter: r.indenter_name || '',
                 // department: r.department || '',
                 product: r.product_name || '',
@@ -168,13 +166,15 @@ export default () => {
                 id: r.id,
                 date: formatDate(new Date(r.actual2)),
                 indentNo: r.indent_number || '',
-                firmNameMatch: r.firm_name_match || '',
+                firmNameMatch: r.firm_name || '',
                 indenter: r.indenter_name || '',
                 // department: r.department || '',
                 product: r.product_name || '',
                 quantity: r.approved_quantity || r.quantity || 0,
                 uom: r.uom || '',
-                rate: parseFloat(r.approved_rate) || 0,
+                rate: (r.vendor_type === 'Three Party')
+                    ? (parseFloat(r.approved_rate) || 0)
+                    : (parseFloat(r.approved_rate) || parseFloat(r.rate1) || 0),
                 vendorType: (r.vendor_type || 'Regular') as HistoryData['vendorType'],
                 planned2: r.planned2 || '',
                 actual2: r.actual2 || '',
@@ -361,7 +361,6 @@ export default () => {
                                 <Button
                                     variant="outline"
                                     onClick={() => {
-                                        setSelectedHistory(null);
                                         setSelectedIndent(indent);
                                         setDialogStep(1);
                                         setAmountToDetermineType(0);
@@ -433,34 +432,6 @@ export default () => {
     ];
 
     const historyColumns: ColumnDef<HistoryData>[] = [
-        ...(user.updateVendorAction
-            ? [
-                {
-                    header: 'Action',
-                    cell: ({ row }: { row: Row<HistoryData> }) => {
-                        const indent = row.original;
-
-                        return (
-                            <div onClick={(e) => e.stopPropagation()}>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => {
-                                        setSelectedIndent(null);
-                                        setSelectedHistory(indent);
-                                        setOpenDialog(true);
-                                    }}
-                                    disabled={!!indent.actual4}
-                                    title={indent.actual4 ? "PO already created for this indent" : ""}
-                                >
-                                    Update
-                                </Button>
-                            </div>
-                        );
-                    },
-                },
-            ]
-            : []),
         {
             accessorKey: 'date',
             header: 'Date',
@@ -871,76 +842,7 @@ export default () => {
         }
     }
 
-    // History Update form
-    const historyUpdateSchema = z.object({
-        rate: z.coerce.number().optional(),
-        vendors: z.array(z.object({
-            vendorName: z.string(),
-            rate: z.coerce.number(),
-        })).optional(),
-    });
 
-    const historyUpdateForm = useForm<z.infer<typeof historyUpdateSchema>>({
-        resolver: zodResolver(historyUpdateSchema),
-        defaultValues: {
-            rate: 0,
-            vendors: [],
-        },
-    });
-
-    useEffect(() => {
-        if (selectedHistory) {
-            if (selectedHistory.vendorType === 'Regular') {
-                historyUpdateForm.reset({
-                    rate: selectedHistory.rate,
-                    vendors: [],
-                });
-            } else {
-                const vendors = [];
-                if (selectedHistory.vendorName1) vendors.push({ vendorName: selectedHistory.vendorName1, rate: selectedHistory.rate1 || 0 });
-                if (selectedHistory.vendorName2) vendors.push({ vendorName: selectedHistory.vendorName2, rate: selectedHistory.rate2 || 0 });
-                if (selectedHistory.vendorName3) vendors.push({ vendorName: selectedHistory.vendorName3, rate: selectedHistory.rate3 || 0 });
-
-                historyUpdateForm.reset({
-                    rate: 0,
-                    vendors: vendors,
-                });
-            }
-        }
-    }, [selectedHistory]);
-
-    async function onSubmitHistoryUpdate(values: z.infer<typeof historyUpdateSchema>) {
-        try {
-            let updates: any = {};
-
-            if (selectedHistory?.vendorType === 'Regular') {
-                updates = {
-                    rate1: values.rate?.toString(),
-                    approved_rate: values.rate?.toString(),
-                };
-            } else {
-                // Three Party update
-                if (values.vendors?.[0]) updates.rate1 = values.vendors[0].rate.toString();
-                if (values.vendors?.[1]) updates.rate2 = values.vendors[1].rate.toString();
-                if (values.vendors?.[2]) updates.rate3 = values.vendors[2].rate.toString();
-            }
-
-            const { error } = await supabase
-                .from('indent')
-                .update(updates)
-                .eq('id', selectedHistory?.id);
-
-            if (error) throw error;
-
-            toast.success(`Updated history for ${selectedHistory?.indentNo}`);
-            setOpenDialog(false);
-            historyUpdateForm.reset();
-            fetchCompletedVendorUpdates();
-        } catch (err) {
-            console.error('Error updating history:', err);
-            toast.error('Failed to update vendor');
-        }
-    }
 
     function onError(e: any) {
         console.log(e);
@@ -955,7 +857,6 @@ export default () => {
                     setOpenDialog(open);
                     if (!open) {
                         setSelectedIndent(null);
-                        setSelectedHistory(null);
                     }
                 }}
             >
@@ -1694,97 +1595,7 @@ export default () => {
                     </DialogContent>
                 )}
 
-                {selectedHistory && (
-                    <DialogContent onCloseAutoFocus={(e) => e.preventDefault()}>
-                        <Form {...historyUpdateForm}>
-                            <form
-                                onSubmit={historyUpdateForm.handleSubmit(onSubmitHistoryUpdate, onError)}
-                                className="grid gap-5"
-                            >
-                                <DialogHeader className="grid gap-2">
-                                    <DialogTitle>Update Rate</DialogTitle>
-                                    <DialogDescription>
-                                        Update rate for indent{' '}
-                                        <span className="font-medium">{selectedHistory?.indentNo}</span>
-                                    </DialogDescription>
-                                </DialogHeader>
 
-                                {selectedHistory?.vendorType === 'Regular' ? (
-                                    <FormField
-                                        control={historyUpdateForm.control}
-                                        name="rate"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>Approved Rate (Regular)</FormLabel>
-                                                <FormControl>
-                                                    <Input type="number" {...field} />
-                                                </FormControl>
-                                            </FormItem>
-                                        )}
-                                    />
-                                ) : (
-                                    <div className="space-y-4">
-                                        <p className="text-sm font-semibold text-muted-foreground border-b pb-2">Three Party Vendor Rates</p>
-                                        {selectedHistory?.vendorName1 && (
-                                            <FormField
-                                                control={historyUpdateForm.control}
-                                                name="vendors.0.rate"
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>{selectedHistory.vendorName1}</FormLabel>
-                                                        <FormControl>
-                                                            <Input type="number" {...field} />
-                                                        </FormControl>
-                                                    </FormItem>
-                                                )}
-                                            />
-                                        )}
-                                        {selectedHistory?.vendorName2 && (
-                                            <FormField
-                                                control={historyUpdateForm.control}
-                                                name="vendors.1.rate"
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>{selectedHistory.vendorName2}</FormLabel>
-                                                        <FormControl>
-                                                            <Input type="number" {...field} />
-                                                        </FormControl>
-                                                    </FormItem>
-                                                )}
-                                            />
-                                        )}
-                                        {selectedHistory?.vendorName3 && (
-                                            <FormField
-                                                control={historyUpdateForm.control}
-                                                name="vendors.2.rate"
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>{selectedHistory.vendorName3}</FormLabel>
-                                                        <FormControl>
-                                                            <Input type="number" {...field} />
-                                                        </FormControl>
-                                                    </FormItem>
-                                                )}
-                                            />
-                                        )}
-                                    </div>
-                                )}
-
-                                <DialogFooter>
-                                    <DialogClose asChild>
-                                        <Button variant="outline">Close</Button>
-                                    </DialogClose>
-                                    <Button type="submit" disabled={historyUpdateForm.formState.isSubmitting}>
-                                        {historyUpdateForm.formState.isSubmitting && (
-                                            <Loader size={20} color="white" aria-label="Loading Spinner" />
-                                        )}
-                                        Update
-                                    </Button>
-                                </DialogFooter>
-                            </form>
-                        </Form>
-                    </DialogContent>
-                )}
             </Dialog>
         </div>
     );

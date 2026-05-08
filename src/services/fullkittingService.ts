@@ -37,14 +37,21 @@ export interface FullkittingRecord {
 
 /**
  * Fetch all fullkitting records from Supabase
+ * @param permittedFirms Optional array of firm names to filter by
  */
-export async function fetchFullkittingRecords(): Promise<FullkittingRecord[]> {
+export async function fetchFullkittingRecords(permittedFirms?: string[]): Promise<FullkittingRecord[]> {
     try {
-        const { data, error } = await supabase
+        let query = supabase
             .from('fullkitting')
             .select('*')
             .order('indent_number', { ascending: false })
             .order('timestamp', { ascending: false });
+
+        if (permittedFirms && permittedFirms.length > 0) {
+            query = query.in('firm_name', permittedFirms);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw error;
 
@@ -75,7 +82,7 @@ export async function fetchFullkittingRecords(): Promise<FullkittingRecord[]> {
             rateType: r.rate_type || '',
             amount1: Number(r.amount1) || 0,
             biltyImage: r.bilty_image || '',
-            firmNameMatch: r.firm_name_match || '',
+            firmNameMatch: r.firm_name || '',
         }));
     } catch (error) {
         console.error('Error fetching fullkitting records:', error);

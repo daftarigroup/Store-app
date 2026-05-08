@@ -70,13 +70,20 @@ export interface TallyEntryRecord {
 
 /**
  * Fetch all tally entry records from Supabase
+ * @param permittedFirms Optional array of firm names to filter by
  */
-export async function fetchTallyEntryRecords(): Promise<TallyEntryRecord[]> {
+export async function fetchTallyEntryRecords(permittedFirms?: string[]): Promise<TallyEntryRecord[]> {
     try {
-        const { data: tallyData, error: tallyError } = await supabase
+        let query = supabase
             .from('tally_entry')
             .select('*')
             .order('lift_number', { ascending: false });
+
+        if (permittedFirms && permittedFirms.length > 0) {
+            query = query.in('firm_name', permittedFirms);
+        }
+
+        const { data: tallyData, error: tallyError } = await query;
 
         if (tallyError) throw tallyError;
 
@@ -152,7 +159,7 @@ export async function fetchTallyEntryRecords(): Promise<TallyEntryRecord[]> {
                 delay5: r.delay5 || '',
                 status5: r.status5 || '',
                 remarks5: r.remarks5 || '',
-                firmNameMatch: r.firm_name_match || '',
+                firmNameMatch: r.firm_name || '',
                 // Use Store In supplementary data if available
                 damageOrder: storeInfo?.damage_order || '',
                 quantityAsPerBill: storeInfo?.quantity_as_per_bill || '',

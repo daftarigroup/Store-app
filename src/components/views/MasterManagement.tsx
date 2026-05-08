@@ -1,4 +1,4 @@
-import { Plus, Building2, Package, FileSpreadsheet, Boxes, LayoutGrid, Building, Trash, Pencil, X, Search, MapPin, UserCog, Mail, Phone } from 'lucide-react';
+import { Plus, Building2, Package, FileSpreadsheet, Boxes, LayoutGrid, Building, Trash, Pencil, X, Search, MapPin, UserCog, Mail, Phone, Users, Map } from 'lucide-react';
 import Heading from '../element/Heading';
 import { useEffect, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -16,7 +16,7 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Input } from '../ui/input';
 import { toast } from 'sonner';
-import { fetchMasterRecords, insertMasterData, updateMasterData, deleteMasterData, fetchSiteEngineers, insertSiteEngineer, updateSiteEngineer, deleteSiteEngineer } from '@/services/masterService';
+import { fetchMasterRecords, insertMasterData, updateMasterData, deleteMasterData, fetchSiteEngineers, insertSiteEngineer, updateSiteEngineer, deleteSiteEngineer, fetchContractors, insertContractor, updateContractor, deleteContractor, fetchSiteLocations, insertSiteLocation, updateSiteLocation, deleteSiteLocation } from '@/services/masterService';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { ScrollArea } from '../ui/scroll-area';
 import { cn } from '@/lib/utils';
@@ -62,12 +62,34 @@ type VendorFormValues = {
     location: string;
     phone: string;
 };
+const contractorSchema = z.object({
+    contractor_name: z.string().min(1, 'Required'),
+    contractor_gstin: optionalText(),
+    contractor_address: optionalText(),
+    contractor_email: optionalEmail(),
+    responsible_person: optionalText(),
+    location: optionalText(),
+    phone: optionalText(),
+});
+type ContractorFormValues = {
+    contractor_name: string;
+    contractor_gstin: string;
+    contractor_address: string;
+    contractor_email: string;
+    responsible_person: string;
+    location: string;
+    phone: string;
+};
+const siteLocationSchema = z.object({
+    location: z.string().min(1, 'Required'),
+});
 const itemSchema = z.object({
     item_name: z.string().min(1, 'Required'),
     group_head: z.string().min(1, 'Required'),
     uom: z.string().optional(),
     include_in_inventory: z.boolean().default(false),
     inventory_quantity: z.coerce.number().min(0, 'Quantity cannot be negative').default(0),
+    firm_name: z.string().optional(),
     regular_conditions: z.array(z.object({ value: z.string() })).default([{ value: '' }]),
     third_party_conditions: z.array(z.object({ value: z.string() })).default([{ value: '' }]),
 }).superRefine((data, ctx) => {
@@ -76,6 +98,13 @@ const itemSchema = z.object({
             code: z.ZodIssueCode.custom,
             path: ['inventory_quantity'],
             message: 'Quantity must be greater than 0',
+        });
+    }
+    if (data.include_in_inventory && !data.firm_name) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['firm_name'],
+            message: 'Project is required for inventory',
         });
     }
 });
@@ -144,11 +173,14 @@ export default function MasterManagement() {
     const { updateInventorySheet, masterSheet, updateAll } = useSheets();
     const [allRecords, setAllRecords] = useState<any[]>([]);
     const [siteEngineers, setSiteEngineers] = useState<any[]>([]);
+    const [contractors, setContractors] = useState<any[]>([]);
+    const [siteLocations, setSiteLocations] = useState<any[]>([]);
     const [dataLoading, setDataLoading] = useState(true);
     const [editingRecord, setEditingRecord] = useState<any>(null);
     const [openDialog, setOpenDialog] = useState<string | null>(null);
     const [searchTermDept, setSearchTermDept] = useState('');
     const [isAddingDept, setIsAddingDept] = useState(false);
+    const [activeTab, setActiveTab] = useState('vendors');
 
     const vForm = useForm<VendorFormValues>({
         resolver: zodResolver(vendorSchema) as any,
@@ -163,7 +195,7 @@ export default function MasterManagement() {
         }
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const iForm = useForm<z.infer<typeof itemSchema>>({ resolver: zodResolver(itemSchema) as any, defaultValues: { item_name: '', group_head: '', uom: '', include_in_inventory: false, inventory_quantity: 0, regular_conditions: [{ value: '' }], third_party_conditions: [{ value: '' }] } });
+    const iForm = useForm<z.infer<typeof itemSchema>>({ resolver: zodResolver(itemSchema) as any, defaultValues: { item_name: '', group_head: '', uom: '', include_in_inventory: false, inventory_quantity: 0, firm_name: '', regular_conditions: [{ value: '' }], third_party_conditions: [{ value: '' }] } });
     const dForm = useForm<z.infer<typeof departmentSchema>>({ resolver: zodResolver(departmentSchema), defaultValues: { department: '' } });
     const pForm = useForm<z.infer<typeof projectSchema>>({ resolver: zodResolver(projectSchema), defaultValues: { firm_name: '' } });
     const ghForm = useForm<z.infer<typeof ghSchema>>({ resolver: zodResolver(ghSchema), defaultValues: { group_head: '' } });
@@ -172,6 +204,8 @@ export default function MasterManagement() {
     const ghUomForm = useForm<z.infer<typeof ghUomSchema>>({ resolver: zodResolver(ghUomSchema), defaultValues: { group_head: '', uom: '' } });
     const cForm = useForm<z.infer<typeof companySchema>>({ resolver: zodResolver(companySchema), defaultValues: { company_name: '', company_gstin: '', company_pan: '', company_email: '', company_phone: '', company_address: '', billing_address: '', destination_address: '', company_contact_person: '' } });
     const seForm = useForm<z.infer<typeof siteEngineerSchema>>({ resolver: zodResolver(siteEngineerSchema), defaultValues: { name: '', number: '', email: '' } });
+    const conForm = useForm<ContractorFormValues>({ resolver: zodResolver(contractorSchema) as any, defaultValues: { contractor_name: '', contractor_gstin: '', contractor_address: '', contractor_email: '', responsible_person: '', location: '', phone: '' } });
+    const slForm = useForm<z.infer<typeof siteLocationSchema>>({ resolver: zodResolver(siteLocationSchema), defaultValues: { location: '' } });
 
     const { fields: regFields, append: regAppend, remove: regRemove } = useFieldArray({ control: iForm.control, name: "regular_conditions" });
     const { fields: tpFields, append: tpAppend, remove: tpRemove } = useFieldArray({ control: iForm.control, name: "third_party_conditions" });
@@ -219,7 +253,7 @@ export default function MasterManagement() {
                 company_contact_person: editingRecord.company_contact_person ?? '',
             };
             if (openDialog === 'vendor') vForm.reset(normalized);
-            if (openDialog === 'item') iForm.reset({ ...normalized, include_in_inventory: false, inventory_quantity: 0 });
+            if (openDialog === 'item') iForm.reset({ ...normalized, include_in_inventory: false, inventory_quantity: 0, firm_name: '' });
             if (openDialog === 'dept') dForm.reset(normalized);
             if (openDialog === 'project') pForm.reset(normalized);
             if (openDialog === 'gh') ghForm.reset(normalized);
@@ -228,9 +262,11 @@ export default function MasterManagement() {
             if (openDialog === 'ghuom') ghUomForm.reset(normalized);
             if (openDialog === 'company') cForm.reset(normalized);
             if (openDialog === 'site_engineer') seForm.reset(normalized);
+            if (openDialog === 'contractor') conForm.reset(normalized);
+            if (openDialog === 'site_location') slForm.reset(normalized);
         } else if (openDialog) {
             if (openDialog === 'vendor') vForm.reset({ vendor_name: '', vendor_gstin: '', vendor_address: '', vendor_email: '', responsible_person: '', location: '', phone: '' });
-            if (openDialog === 'item') iForm.reset({ item_name: '', group_head: '', uom: '', include_in_inventory: false, inventory_quantity: 0, regular_conditions: [{ value: '' }], third_party_conditions: [{ value: '' }] });
+            if (openDialog === 'item') iForm.reset({ item_name: '', group_head: '', uom: '', include_in_inventory: false, inventory_quantity: 0, firm_name: '', regular_conditions: [{ value: '' }], third_party_conditions: [{ value: '' }] });
             if (openDialog === 'dept') dForm.reset({ department: '' });
             if (openDialog === 'project') pForm.reset({ firm_name: '' });
             if (openDialog === 'gh') ghForm.reset({ group_head: '' });
@@ -239,18 +275,24 @@ export default function MasterManagement() {
             if (openDialog === 'ghuom') ghUomForm.reset({ group_head: '', uom: '' });
             if (openDialog === 'company') cForm.reset({ company_name: '', company_gstin: '', company_pan: '', company_email: '', company_phone: '', company_address: '', billing_address: '', destination_address: '', company_contact_person: '' });
             if (openDialog === 'site_engineer') seForm.reset({ name: '', number: '', email: '' });
+            if (openDialog === 'contractor') conForm.reset({ contractor_name: '', contractor_gstin: '', contractor_address: '', contractor_email: '', responsible_person: '', location: '', phone: '' });
+            if (openDialog === 'site_location') slForm.reset({ location: '' });
         }
     }, [editingRecord, openDialog]);
 
     async function loadData() {
         setDataLoading(true);
         try {
-            const [master, engineers] = await Promise.all([
+            const [master, engineers, contractorList, locationList] = await Promise.all([
                 fetchMasterRecords(),
-                fetchSiteEngineers()
+                fetchSiteEngineers(),
+                fetchContractors(),
+                fetchSiteLocations()
             ]);
             setAllRecords(master);
             setSiteEngineers(engineers);
+            setContractors(contractorList);
+            setSiteLocations(locationList);
         } finally {
             setDataLoading(false);
         }
@@ -274,7 +316,12 @@ export default function MasterManagement() {
 
     const handleDelete = async (record: any, type?: string) => {
         if (confirm('Permanently delete this record?')) {
-            const res = type === 'site_engineer' ? await deleteSiteEngineer(record.number) : await deleteMasterData(record.id);
+            let res;
+            if (type === 'site_engineer') res = await deleteSiteEngineer(record.number);
+            else if (type === 'contractor') res = await deleteContractor(record.id);
+            else if (type === 'site_location') res = await deleteSiteLocation(record.id);
+            else res = await deleteMasterData(record.id);
+
             if (res.success) { toast.success('Deleted'); loadData(); updateAll(); } else toast.error('Delete failed');
         }
     };
@@ -370,7 +417,6 @@ export default function MasterManagement() {
     ];
     const projectColumns: ColumnDef<any>[] = [
         { accessorKey: 'firm_name', header: 'Project Name', cell: ({ row }) => <div className="flex items-center gap-2 font-medium"><Building size={16} className="text-purple-500" />{row.original.firm_name}</div> },
-
         { id: 'actions', cell: ({ row }) => getActions(row.original, 'project') }
     ];
 
@@ -392,6 +438,21 @@ export default function MasterManagement() {
         { accessorKey: 'number', header: 'Phone Number', cell: ({ row }) => <div className="flex items-center gap-2"><Phone size={14} className="text-muted-foreground" />{row.original.number}</div> },
         { accessorKey: 'email', header: 'Email Address', cell: ({ row }) => <div className="flex items-center gap-2"><Mail size={14} className="text-muted-foreground" />{row.original.email}</div> },
         { id: 'actions', cell: ({ row }) => getActions(row.original, 'site_engineer') }
+    ];
+
+    const contractorColumns: ColumnDef<any>[] = [
+        { accessorKey: 'contractor_name', header: 'Contractor Name', cell: ({ row }) => <div className="flex items-center gap-2 font-medium"><Users size={16} className="text-primary" />{row.original.contractor_name}</div> },
+        { accessorKey: 'contractor_gstin', header: 'GSTIN' },
+        { accessorKey: 'contractor_email', header: 'Email' },
+        { accessorKey: 'responsible_person', header: 'Responsible Person' },
+        { accessorKey: 'phone', header: 'Phone' },
+        { accessorKey: 'location', header: 'Location' },
+        { id: 'actions', cell: ({ row }) => getActions(row.original, 'contractor') }
+    ];
+
+    const siteLocationColumns: ColumnDef<any>[] = [
+        { accessorKey: 'location', header: 'Location', cell: ({ row }) => <div className="flex items-center gap-2 font-medium"><Map size={16} className="text-indigo-500" />{row.original.location}</div> },
+        { id: 'actions', cell: ({ row }) => getActions(row.original, 'site_location') }
     ];
 
     const onSubmit = async (values: any, type: string) => {
@@ -416,6 +477,18 @@ export default function MasterManagement() {
                 third_party_conditions: values.third_party_conditions?.map((c: any) => c.value).filter(Boolean) || [],
             }
             : vendorPayload;
+
+        const contractorPayload = type === 'contractor'
+            ? {
+                ...values,
+                contractor_gstin: values.contractor_gstin || null,
+                contractor_address: values.contractor_address || null,
+                contractor_email: values.contractor_email || null,
+                responsible_person: values.responsible_person || null,
+                location: values.location || null,
+                phone: values.phone || null,
+            }
+            : itemPayload;
 
         const finalPayload = type === 'project'
             ? {
@@ -448,8 +521,12 @@ export default function MasterManagement() {
                 res = { success: results.every(r => r.success) };
             } else if (type === 'site_engineer') {
                 res = await updateSiteEngineer(editingRecord.number, values);
+            } else if (type === 'contractor') {
+                res = await updateContractor(editingRecord.id, contractorPayload);
+            } else if (type === 'site_location') {
+                res = await updateSiteLocation(editingRecord.id, values);
             } else {
-                res = await updateMasterData(editingRecord.id, finalPayload);
+                res = await updateMasterData(editingRecord.id, contractorPayload);
             }
         } else {
             if (type === 'gh') {
@@ -460,6 +537,10 @@ export default function MasterManagement() {
                 res = await insertMasterData({ area_of_use: values.area_of_use });
             } else if (type === 'site_engineer') {
                 res = await insertSiteEngineer(values);
+            } else if (type === 'contractor') {
+                res = await insertContractor(contractorPayload);
+            } else if (type === 'site_location') {
+                res = await insertSiteLocation(values);
             } else {
                 res = await insertMasterData(finalPayload);
             }
@@ -470,6 +551,7 @@ export default function MasterManagement() {
                     groupHead: values.group_head,
                     uom: values.uom,
                     quantity: values.inventory_quantity,
+                    firmName: values.firm_name,
                 });
 
                 if (!inventoryRes.success) {
@@ -512,15 +594,24 @@ export default function MasterManagement() {
         <div className="h-full space-y-4 md:space-y-6 flex flex-col px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
             <Heading heading="Master Registry" subtext="Universal repository for Vendors, Items, Departments, and Corporate Profiles"><div className="bg-gradient-to-br from-indigo-500 to-cyan-500 p-2 sm:p-3 rounded-2xl text-white"><FileSpreadsheet size={32} className="sm:w-10 sm:h-10" /></div></Heading>
 
-            <Tabs defaultValue="vendors" className="flex-1 flex flex-col min-h-0">
-                <TabsList className="bg-muted/30 p-1 rounded-xl border border-border/50 mb-4 max-w-fit h-10 sm:h-12 flex-wrap justify-start">
-                    <TabsTrigger value="vendors" className="gap-1 sm:gap-2 px-3 sm:px-6 text-xs sm:text-sm"><Building2 size={14} className="sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Vendors</span></TabsTrigger>
-                    <TabsTrigger value="items" className="gap-1 sm:gap-2 px-3 sm:px-6 text-xs sm:text-sm"><Boxes size={14} className="sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Items</span></TabsTrigger>
-                    {/* <TabsTrigger value="departments" className="gap-1 sm:gap-2 px-3 sm:px-6 text-xs sm:text-sm"><LayoutGrid size={14} className="sm:w-4 sm:h-4" /> <span className="hidden md:inline">Depts</span><span className="md:hidden">D</span></TabsTrigger> */}
-                    <TabsTrigger value="group-heads" className="gap-1 sm:gap-2 px-3 sm:px-6 text-xs sm:text-sm"><LayoutGrid size={14} className="sm:w-4 sm:h-4" /> <span className="hidden md:inline">Group Head</span><span className="md:hidden">GH/U</span></TabsTrigger>
-                    <TabsTrigger value="companies" className="gap-1 sm:gap-2 px-3 sm:px-6 text-xs sm:text-sm"><Building size={14} className="sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Companies</span></TabsTrigger>
-                    <TabsTrigger value="site_engineers" className="gap-1 sm:gap-2 px-3 sm:px-6 text-xs sm:text-sm"><UserCog size={14} className="sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Site Engineers</span></TabsTrigger>
-                </TabsList>
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
+                <div className="mb-4">
+                    <Select value={activeTab} onValueChange={setActiveTab}>
+                        <SelectTrigger className="w-full sm:w-[300px] bg-background border-border/50 rounded-xl h-10 sm:h-12 shadow-sm font-medium">
+                            <SelectValue placeholder="Select Registry" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl">
+                            <SelectItem value="vendors" className="cursor-pointer"><div className="flex items-center gap-2"><Building2 size={16} className="text-indigo-500" /> Vendors</div></SelectItem>
+                            <SelectItem value="items" className="cursor-pointer"><div className="flex items-center gap-2"><Boxes size={16} className="text-blue-500" /> Items</div></SelectItem>
+                            <SelectItem value="group-heads" className="cursor-pointer"><div className="flex items-center gap-2"><LayoutGrid size={16} className="text-orange-500" /> Group Head & UOM</div></SelectItem>
+                            <SelectItem value="companies" className="cursor-pointer"><div className="flex items-center gap-2"><Building size={16} className="text-emerald-500" /> Companies</div></SelectItem>
+                            <SelectItem value="contractors" className="cursor-pointer"><div className="flex items-center gap-2"><Users size={16} className="text-indigo-500" /> Contractors</div></SelectItem>
+                            <SelectItem value="site_locations" className="cursor-pointer"><div className="flex items-center gap-2"><Map size={16} className="text-rose-500" /> Site Locations</div></SelectItem>
+                            <SelectItem value="projects" className="cursor-pointer"><div className="flex items-center gap-2"><Building size={16} className="text-purple-500" /> Projects</div></SelectItem>
+                            <SelectItem value="site_engineers" className="cursor-pointer"><div className="flex items-center gap-2"><UserCog size={16} className="text-amber-500" /> Site Engineers</div></SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
 
                 <TabsContent value="vendors" className="flex-1 outline-none"><DataTable data={vendorsData} columns={vendorColumns} searchFields={['vendor_name']} dataLoading={dataLoading} extraActions={<Button className="bg-indigo-600" onClick={() => { vForm.reset(); setEditingRecord(null); setOpenDialog('vendor'); }}><Plus size={18} /> Add Vendor</Button>} /></TabsContent>
                 <TabsContent value="items" className="flex-1 outline-none"><DataTable data={itemsData} columns={itemColumns} searchFields={['item_name']} dataLoading={dataLoading} extraActions={<Button className="bg-blue-600" onClick={() => { iForm.reset(); setEditingRecord(null); setOpenDialog('item'); }}><Plus size={18} /> Add Item</Button>} /></TabsContent>
@@ -615,8 +706,10 @@ export default function MasterManagement() {
                         </TabsContent>
                     </Tabs>
                 </TabsContent>
-                <TabsContent value="projects" className="flex-1 outline-none hidden"></TabsContent>
+                <TabsContent value="projects" className="flex-1 outline-none"><DataTable data={projectsData} columns={projectColumns} searchFields={['firm_name']} dataLoading={dataLoading} extraActions={<Button className="bg-purple-600" onClick={() => { pForm.reset(); setEditingRecord(null); setOpenDialog('project'); }}><Plus size={18} /> Add Project</Button>} /></TabsContent>
                 <TabsContent value="companies" className="flex-1 outline-none"><DataTable data={companiesData} columns={companyColumns} searchFields={['company_name']} dataLoading={dataLoading} extraActions={<Button className="bg-emerald-600" onClick={() => { cForm.reset(); setEditingRecord(null); setOpenDialog('company'); }}><Plus size={18} /> Add Company</Button>} /></TabsContent>
+                <TabsContent value="contractors" className="flex-1 outline-none"><DataTable data={contractors} columns={contractorColumns} searchFields={['contractor_name']} dataLoading={dataLoading} extraActions={<Button className="bg-indigo-600" onClick={() => { conForm.reset(); setEditingRecord(null); setOpenDialog('contractor'); }}><Plus size={18} /> Add Contractor</Button>} /></TabsContent>
+                <TabsContent value="site_locations" className="flex-1 outline-none"><DataTable data={siteLocations} columns={siteLocationColumns} searchFields={['location']} dataLoading={dataLoading} extraActions={<Button className="bg-indigo-600" onClick={() => { slForm.reset(); setEditingRecord(null); setOpenDialog('site_location'); }}><Plus size={18} /> Add Location</Button>} /></TabsContent>
                 <TabsContent value="site_engineers" className="flex-1 outline-none"><DataTable data={siteEngineers} columns={siteEngineerColumns} searchFields={['name', 'email']} dataLoading={dataLoading} extraActions={<Button className="bg-orange-600" onClick={() => { seForm.reset(); setEditingRecord(null); setOpenDialog('site_engineer'); }}><Plus size={18} /> Add Engineer</Button>} /></TabsContent>
             </Tabs>
 
@@ -624,9 +717,9 @@ export default function MasterManagement() {
                 if (!o) {
                     setOpenDialog(null);
                     setEditingRecord(null);
-                    vForm.reset();
-                    iForm.reset();
-                    dForm.reset();
+                    cForm.reset();
+                    conForm.reset();
+                    slForm.reset();
                     pForm.reset();
                     cForm.reset();
                 }
@@ -686,6 +779,70 @@ export default function MasterManagement() {
                                                 </FormItem>
                                             )} />
                                             <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save Vendor</Button>
+                                        </form>
+                                    </Form>
+                                )}
+                                {openDialog === 'contractor' && (
+                                    <Form {...conForm}>
+                                        <form className="grid gap-4" onSubmit={conForm.handleSubmit(v => onSubmit(v, 'contractor'))}>
+                                            <FormField control={conForm.control} name="contractor_name" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Contractor Name</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="e.g., John Doe" /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )} />
+                                            <FormField control={conForm.control} name="contractor_gstin" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>GSTIN</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="e.g., 22AAAAA0000A1Z5" /></FormControl>
+                                                </FormItem>
+                                            )} />
+                                            <FormField control={conForm.control} name="contractor_email" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Email</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="e.g., contractor@example.com" /></FormControl>
+                                                </FormItem>
+                                            )} />
+                                            <FormField control={conForm.control} name="phone" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Phone (Optional)</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="+91 XXXXX XXXXX" /></FormControl>
+                                                </FormItem>
+                                            )} />
+                                            <FormField control={conForm.control} name="contractor_address" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Contractor Address</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="e.g., 123 Main St" /></FormControl>
+                                                </FormItem>
+                                            )} />
+                                            <FormField control={conForm.control} name="location" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Location (Optional)</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="e.g., New York" /></FormControl>
+                                                </FormItem>
+                                            )} />
+                                            <FormField control={conForm.control} name="responsible_person" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Responsible Person</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="e.g., Jane Doe" /></FormControl>
+                                                </FormItem>
+                                            )} />
+                                            <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save Contractor</Button>
+                                        </form>
+                                    </Form>
+                                )}
+                                {openDialog === 'site_location' && (
+                                    <Form {...slForm}>
+                                        <form className="grid gap-4" onSubmit={slForm.handleSubmit(v => onSubmit(v, 'site_location'))}>
+                                            <FormField control={slForm.control} name="location" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Location</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="e.g., Sector 15, Gurgaon" /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )} />
+                                            <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save Location</Button>
                                         </form>
                                     </Form>
                                 )}
@@ -788,13 +945,33 @@ export default function MasterManagement() {
                                                 </FormItem>
                                             )} />
                                             {includeInInventory && (
-                                                <FormField control={iForm.control} name="inventory_quantity" render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>Initial Inventory Quantity</FormLabel>
-                                                        <FormControl><Input type="number" min={0} {...field} onChange={(e) => field.onChange(e.target.value)} /></FormControl>
-                                                        <FormMessage />
-                                                    </FormItem>
-                                                )} />
+                                                <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                                                    <FormField control={iForm.control} name="inventory_quantity" render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel>Initial Inventory Quantity</FormLabel>
+                                                            <FormControl><Input type="number" min={0} {...field} onChange={(e) => field.onChange(e.target.value)} /></FormControl>
+                                                            <FormMessage />
+                                                        </FormItem>
+                                                    )} />
+                                                    <FormField control={iForm.control} name="firm_name" render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel>Select Project</FormLabel>
+                                                            <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                                                                <FormControl>
+                                                                    <SelectTrigger className="w-full">
+                                                                        <SelectValue placeholder="Select Project" />
+                                                                    </SelectTrigger>
+                                                                </FormControl>
+                                                                <SelectContent>
+                                                                    {masterSheet?.firms?.map((firm) => (
+                                                                        <SelectItem key={firm} value={firm}>{firm}</SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                            <FormMessage />
+                                                        </FormItem>
+                                                    )} />
+                                                </div>
                                             )}
                                             <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save Item</Button>
                                         </form>

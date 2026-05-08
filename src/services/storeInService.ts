@@ -95,14 +95,21 @@ export interface LocationOption {
 /**
  * Fetch all store-in records from Supabase
  * Used for displaying pending and completed store-in items
+ * @param permittedFirms Optional array of firm names to filter by
  */
-export async function fetchStoreInRecords() {
+export async function fetchStoreInRecords(permittedFirms?: string[]) {
     try {
-        const { data, error } = await supabase
+        let query = supabase
             .from('store_in')
             .select('*')
             .order('indent_no', { ascending: false })
             .order('timestamp', { ascending: false });
+
+        if (permittedFirms && permittedFirms.length > 0) {
+            query = query.in('firm_name', permittedFirms);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw error;
 
@@ -140,7 +147,7 @@ export async function fetchStoreInRecords() {
             billStatus: r.bill_status || '',
             leadTimeToLiftMaterial: Number(r.lead_time_to_lift_material) || 0,
             discountAmount: Number(r.discount_amount) || 0,
-            firmNameMatch: r.firm_name_match || '',
+            firmNameMatch: r.firm_name || '',
             timestamp: r.timestamp || '',
             billNumber: r.bill_number || '',
             unitOfMeasurement: r.unit_of_measurement || '',
@@ -194,13 +201,20 @@ export async function fetchStoreInRecords() {
 
 /**
  * Fetch all direct store-in records from the specialized table
+ * @param permittedFirms Optional array of firm names to filter by
  */
-export async function fetchDirectRecords() {
+export async function fetchDirectRecords(permittedFirms?: string[]) {
     try {
-        const { data, error } = await supabase
+        let query = supabase
             .from('store_in_direct')
             .select('*')
             .order('timestamp', { ascending: false });
+
+        if (permittedFirms && permittedFirms.length > 0) {
+            query = query.in('firm_name_match', permittedFirms);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw error;
 
@@ -515,7 +529,7 @@ export async function createPaymentEntry(storeInData: {
     bill_amount: number;
     photo_of_bill?: string;
     product_name: string;
-    firm_name_match: string;
+    firm_name: string;
     payment_form?: string;
     prefix?: string;
     remark?: string;
@@ -564,7 +578,7 @@ export async function createPaymentEntry(storeInData: {
             actual: null,
             status1: 'hod_approval_pending',
             payment_form: storeInData.payment_form || 'store_in',
-            firm_name: storeInData.firm_name_match,
+            firm_name: storeInData.firm_name,
         };
 
         const { data, error } = await supabase

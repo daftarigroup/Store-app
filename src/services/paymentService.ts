@@ -8,13 +8,20 @@ import type { PaymentsSheet, PaymentHistory } from '@/types/sheets';
 
 /**
  * Fetch all payment records from Supabase
+ * @param permittedFirms Optional array of firm names to filter by
  */
-export async function fetchPayments(): Promise<PaymentsSheet[]> {
+export async function fetchPayments(permittedFirms?: string[]): Promise<PaymentsSheet[]> {
     try {
-        const { data, error } = await supabase
+        let query = supabase
             .from('payments')
             .select('*')
             .order('id', { ascending: false });
+
+        if (permittedFirms && permittedFirms.length > 0) {
+            query = query.in('firm_name', permittedFirms);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw error;
 
@@ -53,14 +60,21 @@ export async function fetchPayments(): Promise<PaymentsSheet[]> {
 
 /**
  * Fetch all payment history records from Supabase (now from payments table)
+ * @param permittedFirms Optional array of firm names to filter by
  */
-export async function fetchPaymentHistory(): Promise<PaymentHistory[]> {
+export async function fetchPaymentHistory(permittedFirms?: string[]): Promise<PaymentHistory[]> {
     try {
-        const { data, error } = await supabase
+        let query = supabase
             .from('payments')
             .select('*')
             .eq('payment_done', true)
             .order('id', { ascending: false });
+
+        if (permittedFirms && permittedFirms.length > 0) {
+            query = query.in('firm_name', permittedFirms);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw error;
 

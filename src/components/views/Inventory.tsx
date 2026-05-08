@@ -202,7 +202,7 @@ export default () => {
                         refNo: is.issueNo,
                         quantity: Number(is.givenQty || 0),
                         party: is.issueTo || 'N/A',
-                        projectName: is.project_name || 'N/A'
+                        projectName: is.firm_name || 'N/A'
                     }));
                 break;
             case 'Issue Return':
@@ -213,7 +213,7 @@ export default () => {
                         refNo: is.issueNo,
                         quantity: Number(is.rejected_damage_qty || 0),
                         party: is.return_person_name || 'N/A',
-                        projectName: is.project_name || 'N/A'
+                        projectName: is.firm_name || 'N/A'
                     }));
                 break;
             case 'Purchase Return':

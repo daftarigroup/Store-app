@@ -26,4 +26,5 @@ export interface RouteAttributes {
     icon: JSX.Element;
     gateKey?: keyof UserPermissions;
     notifications: (sheet: AllSheets, user?: any) => number;
+    hidden?: boolean;
 }

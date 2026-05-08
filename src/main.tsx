@@ -88,6 +88,7 @@ import PaymentStatus from './components/views/PaymentStatus';
 import HodStoreApproval from './components/views/HodStoreApproval';
 import MasterManagement from './components/views/MasterManagement';
 import QuotationPage from './components/views/Quotation';
+import VendorBidding from './components/views/VendorBidding';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
     const { loggedIn, loading } = useAuth();
@@ -133,7 +134,7 @@ const routes: RouteAttributes[] = [
     {
         path: 'quotation',
         gateKey: 'createPo',
-        name: 'Quotation',
+        name: 'Enquiry',
         icon: <FilePlus2 size={20} />,
         element: <QuotationPage />,
         notifications: () => 0,
@@ -164,14 +165,14 @@ const routes: RouteAttributes[] = [
         notifications: (issueSheet: any[], user: any) =>
             issueSheet.filter((sheet: any) => {
                 const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
-                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || sheet.project_name || '').trim().toLowerCase();
+                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name || '').trim().toLowerCase();
                 const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
-                
+
                 return isFirmMatch &&
-                sheet.planned1 &&
-                sheet.planned1.toString().trim() !== '' &&
-                (!sheet.actual1 || sheet.actual1.toString().trim() === '') &&
-                !(sheet.rejected_damage_qty && sheet.rejected_damage_qty !== '0' && sheet.rejected_damage_qty !== '');
+                    sheet.planned1 &&
+                    sheet.planned1.toString().trim() !== '' &&
+                    (!sheet.actual1 || sheet.actual1.toString().trim() === '') &&
+                    !(sheet.rejected_damage_qty && sheet.rejected_damage_qty !== '0' && sheet.rejected_damage_qty !== '');
             }).length,
     },
 
@@ -206,12 +207,12 @@ const routes: RouteAttributes[] = [
 
             return data.filter(
                 (sheet: any) => {
-                    const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || '').trim().toLowerCase();
+                    const sheetFirm = (sheet.firmNameMatch || sheet.firm_name || '').trim().toLowerCase();
                     const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
 
                     return isFirmMatch &&
-                    sheet.planned1 && sheet.planned1 !== '' &&
-                    (!sheet.actual1 || sheet.actual1 === '');
+                        sheet.planned1 && sheet.planned1 !== '' &&
+                        (!sheet.actual1 || sheet.actual1 === '');
                 }
             ).length;
         },
@@ -225,7 +226,7 @@ const routes: RouteAttributes[] = [
         notifications: (sheets: any[], user: any) => {
             const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
             return sheets.filter((sheet: any) => {
-                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || '').trim().toLowerCase();
+                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name || '').trim().toLowerCase();
                 const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
 
                 return isFirmMatch && sheet.planned2 !== '' && sheet.actual2 === '';
@@ -244,14 +245,14 @@ const routes: RouteAttributes[] = [
 
             return sheets.filter(
                 (sheet: any) => {
-                    const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || '').trim().toLowerCase();
+                    const sheetFirm = (sheet.firmNameMatch || sheet.firm_name || '').trim().toLowerCase();
                     const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
 
                     return isFirmMatch &&
-                    (sheet.vendorType || sheet.vendor_type) !== 'Direct' &&
-                    sheet.planned3 && sheet.planned3 !== '' &&
-                    (!sheet.actual3 || sheet.actual3 === '') &&
-                    !(sheet.vendor1_rank || sheet.vendor2_rank || sheet.vendor3_rank);
+                        (sheet.vendorType || sheet.vendor_type) !== 'Direct' &&
+                        sheet.planned3 && sheet.planned3 !== '' &&
+                        (!sheet.actual3 || sheet.actual3 === '') &&
+                        !(sheet.vendor1_rank || sheet.vendor2_rank || sheet.vendor3_rank);
                 }
             ).length;
         },
@@ -268,14 +269,14 @@ const routes: RouteAttributes[] = [
 
             return sheets.filter(
                 (sheet: any) => {
-                    const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || '').trim().toLowerCase();
+                    const sheetFirm = (sheet.firmNameMatch || sheet.firm_name || '').trim().toLowerCase();
                     const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
 
                     return isFirmMatch &&
-                    (sheet.vendorType || sheet.vendor_type) !== 'Direct' &&
-                    sheet.planned4 && sheet.planned4 !== '' &&
-                    (!sheet.approvedVendorName && !sheet.approved_vendor_name) &&
-                    (sheet.vendor1_rank || sheet.vendor2_rank || sheet.vendor3_rank);
+                        (sheet.vendorType || sheet.vendor_type) !== 'Direct' &&
+                        sheet.planned4 && sheet.planned4 !== '' &&
+                        (!sheet.approvedVendorName && !sheet.approved_vendor_name) &&
+                        (sheet.vendor1_rank || sheet.vendor2_rank || sheet.vendor3_rank);
                 }
             ).length;
         },
@@ -307,16 +308,16 @@ const routes: RouteAttributes[] = [
         notifications: (sheets: any[], user: any) => {
             const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
             return sheets.filter((sheet: any) => {
-                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || '').trim().toLowerCase();
+                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name || '').trim().toLowerCase();
                 const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
 
                 return isFirmMatch &&
-                sheet.poRequred &&
-                sheet.poRequred.toString().trim() === 'Yes' &&
-                sheet.pendingPoQty &&
-                sheet.pendingPoQty > 0 &&
-                sheet.approvedVendorName &&
-                sheet.approvedVendorName.toString().trim() !== '';
+                    sheet.poRequred &&
+                    sheet.poRequred.toString().trim() === 'Yes' &&
+                    sheet.pendingPoQty &&
+                    sheet.pendingPoQty > 0 &&
+                    sheet.approvedVendorName &&
+                    sheet.approvedVendorName.toString().trim() !== '';
             }).length;
         },
     },
@@ -345,12 +346,12 @@ const routes: RouteAttributes[] = [
                 // Filter by firm and valid PO numbers
                 const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
                 const sheetsWithPoNumbers = sheets.filter((sheet: any) => {
-                    const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || '').trim().toLowerCase();
+                    const sheetFirm = (sheet.firmNameMatch || sheet.firm_name || '').trim().toLowerCase();
                     const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
 
                     return isFirmMatch &&
-                    sheet?.poNumber &&
-                    sheet?.poNumber.toString().trim() !== '';
+                        sheet?.poNumber &&
+                        sheet?.poNumber.toString().trim() !== '';
                 });
 
                 if (sheetsWithPoNumbers.length === 0) {
@@ -392,7 +393,7 @@ const routes: RouteAttributes[] = [
 
             indentSheet.forEach((sheet: any) => {
                 const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
-                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || '').trim().toLowerCase();
+                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name || '').trim().toLowerCase();
                 const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
 
                 // Calculate received quantity dynamically as done in GetLift.tsx
@@ -400,7 +401,7 @@ const routes: RouteAttributes[] = [
                     .filter(
                         (store: any) =>
                             (store.indentNo === sheet.indentNumber?.toString() || store.indent_no === sheet.indentNumber?.toString()) &&
-                            (store.firmNameMatch === sheet.firmNameMatch || store.firm_name_match === sheet.firmNameMatch)
+                            (store.firmNameMatch === sheet.firmNameMatch || store.firm_name === sheet.firmNameMatch)
                     )
                     .reduce(
                         (sum: number, store: any) =>
@@ -435,16 +436,16 @@ const routes: RouteAttributes[] = [
             const sheets = Array.isArray(sheetsData[0]) ? sheetsData[0] : sheetsData;
             const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
             const filteredByFirm = sheets.filter((item: any) => {
-                const sheetFirm = (item.firmNameMatch || item.firm_name_match || '').trim().toLowerCase();
+                const sheetFirm = (item.firmNameMatch || item.firm_name || '').trim().toLowerCase();
                 return userFirm === "all" || sheetFirm === userFirm;
             });
 
             // Filter for pending items (planned6 set, actual6 empty)
             // Matching StoreIn.tsx line 228
             const pendingItems = filteredByFirm.filter(
-                (i) => (i.planned6 || i.planned_6) && (i.planned6 || i.planned_6) !== '' && 
-                (!i.actual6 && !i.actual_6) && 
-                ((i.billStatus || i.bill_status) === 'Bill Received' || (i.billStatus || i.bill_status) === 'Not Received')
+                (i) => (i.planned6 || i.planned_6) && (i.planned6 || i.planned_6) !== '' &&
+                    (!i.actual6 && !i.actual_6) &&
+                    ((i.billStatus || i.bill_status) === 'Bill Received' || (i.billStatus || i.bill_status) === 'Not Received')
             );
 
             return pendingItems.length;
@@ -461,7 +462,7 @@ const routes: RouteAttributes[] = [
             const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
 
             return data.filter((sheet: any) => {
-                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || '').trim().toLowerCase();
+                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name || '').trim().toLowerCase();
                 const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
                 const isPlanned = (sheet.plannedHod || sheet.hod_planned || sheet.hodPlanned);
                 const isActual = (sheet.actualHod || sheet.hod_actual || sheet.hodActual);
@@ -480,14 +481,14 @@ const routes: RouteAttributes[] = [
         element: <FullKiting />,
         notifications: (sheets: any[], user: any) => {
             const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
-                return sheets.filter((sheet: any) => {
-                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || '').trim().toLowerCase();
+            return sheets.filter((sheet: any) => {
+                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name || '').trim().toLowerCase();
                 const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
 
                 return isFirmMatch &&
-                sheet.planned &&
-                sheet.planned.toString().trim() !== '' &&
-                (!sheet.actual || sheet.actual.toString().trim() === '');
+                    sheet.planned &&
+                    sheet.planned.toString().trim() !== '' &&
+                    (!sheet.actual || sheet.actual.toString().trim() === '');
             }).length;
         },
     },
@@ -526,7 +527,7 @@ const routes: RouteAttributes[] = [
     //             // Process PO-based items
     //             poMasterSheet.forEach((record: any) => {
     //                 const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
-    //                 const recordFirm = (record.firmNameMatch || record.firm_name_match || '').trim().toLowerCase();
+    //                 const recordFirm = (record.firmNameMatch || record.firm_name || '').trim().toLowerCase();
     //                 const firmMatch = userFirm === "all" || recordFirm === userFirm;
     //                 if (!firmMatch) return;
 
@@ -567,7 +568,7 @@ const routes: RouteAttributes[] = [
     //             // Process Payment-based items
     //             (paymentsSheet || []).forEach((payment: any) => {
     //                 const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
-    //                 const paymentFirm = (payment.firmNameMatch || payment.firm_name || payment.firm_name_match || '').trim().toLowerCase();
+    //                 const paymentFirm = (payment.firmNameMatch || payment.firm_name || payment.firm_name || '').trim().toLowerCase();
     //                 const firmMatch = userFirm === "all" || paymentFirm === userFirm;
     //                 if (!firmMatch) return;
 
@@ -617,7 +618,7 @@ const routes: RouteAttributes[] = [
 
             const pendingItems = paymentsData.filter((payment: any) => {
                 const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
-                const paymentFirm = (payment.firmNameMatch || payment.firm_name || payment.firm_name_match || '').trim().toLowerCase();
+                const paymentFirm = (payment.firmNameMatch || payment.firm_name || payment.firm_name || '').trim().toLowerCase();
                 const firmMatch = userFirm === "all" || paymentFirm === userFirm;
                 if (!firmMatch) return false;
 
@@ -698,13 +699,13 @@ const routes: RouteAttributes[] = [
             const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
 
             return sheets.filter((sheet: any) => {
-                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || '').trim().toLowerCase();
+                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name || '').trim().toLowerCase();
                 const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
 
                 return isFirmMatch &&
-                (sheet.planned7 || sheet.planned_7) &&
-                (sheet.planned7 || sheet.planned_7).toString().trim() !== '' &&
-                (!sheet.actual7 && !sheet.actual_7)
+                    (sheet.planned7 || sheet.planned_7) &&
+                    (sheet.planned7 || sheet.planned_7).toString().trim() !== '' &&
+                    (!sheet.actual7 && !sheet.actual_7)
             }).length;
         },
     },
@@ -719,13 +720,13 @@ const routes: RouteAttributes[] = [
             const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
 
             return sheets.filter((sheet: any) => {
-                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || '').trim().toLowerCase();
+                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name || '').trim().toLowerCase();
                 const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
 
                 return isFirmMatch &&
-                (sheet.planned9 || sheet.planned_9) &&
-                (sheet.planned9 || sheet.planned_9).toString().trim() !== '' &&
-                (!sheet.actual9 && !sheet.actual_9)
+                    (sheet.planned9 || sheet.planned_9) &&
+                    (sheet.planned9 || sheet.planned_9).toString().trim() !== '' &&
+                    (!sheet.actual9 && !sheet.actual_9)
             }).length;
         },
     },
@@ -740,13 +741,13 @@ const routes: RouteAttributes[] = [
             const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
 
             return sheets.filter((sheet: any) => {
-                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || '').trim().toLowerCase();
+                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name || '').trim().toLowerCase();
                 const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
 
                 return isFirmMatch &&
-                sheet.planned1 &&
-                sheet.planned1.toString().trim() !== '' &&
-                (!sheet.actual1 || sheet.actual1.toString().trim() === '');
+                    sheet.planned1 &&
+                    sheet.planned1.toString().trim() !== '' &&
+                    (!sheet.actual1 || sheet.actual1.toString().trim() === '');
             }).length;
         },
     },
@@ -892,7 +893,7 @@ const routes: RouteAttributes[] = [
             // Count items where planned11 is set but actual11 is not
             return sheets.filter((sheet: any) => {
                 const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
-                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || '').trim().toLowerCase();
+                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name || '').trim().toLowerCase();
                 const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
                 if (!isFirmMatch) return false;
 
@@ -937,6 +938,7 @@ const routes: RouteAttributes[] = [
         icon: <VideoIcon size={20} />,
         element: <TrainnigVideo />,
         notifications: () => 0,
+        hidden: true,
     },
     {
         path: 'license',
@@ -966,6 +968,7 @@ if (rootElement) {
                 <BrowserRouter>
                     <Routes>
                         <Route path="/login" element={<Login />} />
+                        <Route path="/bid/:token" element={<VendorBidding />} />
                         <Route
                             path="/"
                             element={

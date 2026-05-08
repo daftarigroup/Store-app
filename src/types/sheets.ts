@@ -172,6 +172,7 @@ export type InventorySheet = {
     stockTransferReceiving: number;
     fromProject: string;
     toProject: string;
+    firmName: string;
     current: number;
     totalPrice: number;
     colorCode: string;
@@ -276,6 +277,8 @@ export type MasterSheet = {
 
     firmCompanyMap: Record<string, { companyName: string; companyAddress: string; destinationAddress: string; }>;
     siteEngineers: { name: string; number: string; email: string }[];
+    contractors: { contractorName: string; contractorGstin: string; contractorAddress: string; contractorEmail: string; responsiblePerson: string; location: string; phone: string }[];
+    siteLocations: string[];
 };
 
 
@@ -285,7 +288,9 @@ export type UserPermissions = {
     username: string;
     password: string;
     name: string;
-    firmNameMatch: string;
+    modify_access: 'EDIT' | 'VIEW';
+    firmNameMatch: string; // Keep for legacy if needed
+    firm_access: string[]; // New field for project-based access
 
     administrate: boolean;
     createIndent: boolean;
@@ -649,6 +654,9 @@ export type QuotationHistorySheet = {
     unit: string;
     pdfLink: string;
     firm: string;
+    token?: string;
+    vendor_rate?: number;
+    responded_at?: string;
 };
 
-export type MasterDataRow = Record<string, any>;
+export type MasterDataRow = Record<string, any>;

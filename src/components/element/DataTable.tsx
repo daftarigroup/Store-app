@@ -82,12 +82,12 @@ export default function DataTable<TData, TValue>({
         <div className="p-5 grid gap-4">
             <div className="flex justify-between items-center w-full gap-3">
                 {searchFields.length !== 0 && (
-                    <div className="flex items-center w-full">
+                    <div className="flex items-center">
                         <Input
                             placeholder={`Search...`}
                             value={globalFilter}
                             onChange={(e) => setGlobalFilter(e.target.value)}
-                            className="w-230"
+                            className="w-64 h-9"
                         />
                     </div>
                 )}

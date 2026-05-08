@@ -116,7 +116,7 @@ export default function ApprovedPOs() {
                         date: formattedDate,
                         plannedDate: formattedPlannedDate,
                         indentNo: sheet.indent_number?.toString() || '',
-                        firmNameMatch: sheet.firm_name_match || '',
+                        firmNameMatch: sheet.firm_name || '',
                         product: sheet.product_name || '',
                         quantity: Number(sheet.pending_po_qty) || Number(sheet.quantity) || 0,
                         rate: Number(sheet.approved_rate) || Number(sheet.rate1) || 0,

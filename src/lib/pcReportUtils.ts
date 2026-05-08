@@ -16,7 +16,7 @@ export const calculatePcReportCounts = (
 
         firms.forEach(firm => {
             firmData[firm] = data.filter(item =>
-                (item.firmNameMatch || item.firm_name_match)?.toUpperCase() === firm && pendingFilter(item)
+                (item.firmNameMatch || item.firm_name)?.toUpperCase() === firm && pendingFilter(item)
             ).length;
         });
 
@@ -143,13 +143,13 @@ export const calculatePcReportCounts = (
                     const isReceived = receivedPos.has(poNum);
                     const paymentTerms = (r.paymentTerms || r.payment_terms || '').toString().trim().toLowerCase();
                     const isPI = paymentTerms.includes("partly pi") || paymentTerms.includes("partly advance");
-                    
+
                     const totalPo = Number(r.totalPoAmount || 0);
                     const totalPaid = paymentsByPo[poNum] || 0;
                     const outstanding = totalPo - totalPaid;
                     const status = String(r.status || '').toLowerCase();
                     const isPending = status === 'pending' || status === '';
-                    
+
                     if ((isReceived || isPI) && outstanding > 0 && isPending) {
                         const linkedStoreIn = (storeInSheet || []).find((s: any) => (s.poNumber || s.po_number) === poNum);
                         const billNo = linkedStoreIn?.billNo || 'NoBill';

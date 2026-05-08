@@ -149,14 +149,14 @@ export default () => {
                 <IssuePdf
                     type={type}
                     issueNumber={issueNumber}
-                    date={new Date().toLocaleString('en-IN', { 
-                        day: '2-digit', 
-                        month: '2-digit', 
-                        year: 'numeric', 
-                        hour: '2-digit', 
-                        minute: '2-digit', 
+                    date={new Date().toLocaleString('en-IN', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
                         second: '2-digit',
-                        hour12: true 
+                        hour12: true
                     })}
                     constructorName={data.constructorName}
                     siteLocation={data.siteLocation}
@@ -215,7 +215,7 @@ export default () => {
                     // department: product.department,
                     constructor_name: data.constructorName,
                     site_location: data.siteLocation,
-                    project_name: data.projectName,
+                    firm_name: data.projectName,
                     issue_person_name: data.issuePersonName,
                     return_person_name: data.returnPersonName,
                     damage_remark: data.damageRemark,
@@ -274,7 +274,7 @@ export default () => {
             form.setValue('projectName', selected.projectName || '');
             form.setValue('remarks', selected.issueTo || '');
             form.setValue('issuePersonName', selected.issuePersonName || '');
-            
+
             // Map the product
             form.setValue('products', [
                 {

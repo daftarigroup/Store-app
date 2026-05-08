@@ -52,6 +52,7 @@ import type { PaymentsSheet } from '@/types/sheets';
 
 import { createContext, useContext, useEffect, useState, useMemo } from 'react';
 import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
 
 interface SheetsState {
     updateReceivedSheet: () => void;
@@ -107,6 +108,7 @@ interface SheetsState {
 const SheetsContext = createContext<SheetsState | null>(null);
 
 export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
+    const { user } = useAuth();
     const [indentSheet, setIndentSheet] = useState<IndentSheet[]>([]);
     const [storeSheet, setStoreInSheet] = useState<StoreInSheet[]>([]);
     const [receivedSheet, setReceivedSheet] = useState<ReceivedSheet[]>([]);
@@ -155,7 +157,8 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
 
     function updateStoreInSheet(silent = false) {
         if (!silent) setStoreInLoading(true);
-        fetchStoreInRecords()
+        const permittedFirms = user?.administrate ? undefined : (user?.firm_access || []);
+        fetchStoreInRecords(permittedFirms)
             .then((res) => {
                 // Map to StoreInSheet format
                 const mapped = res.map((r: any) => ({
@@ -175,7 +178,8 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
 
     function updateIssueSheet(silent = false) {
         if (!silent) setIssueLoading(true);
-        fetchIssueRecords()
+        const permittedFirms = user?.administrate ? undefined : (user?.firm_access || []);
+        fetchIssueRecords(permittedFirms)
             .then((res) => {
                 const mapped = res.map(r => ({
                     id: r.id,
@@ -191,7 +195,7 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                     location: r.location,
                     status: r.status,
                     givenQty: r.given_qty,
-                    projectName: r.project_name,
+                    projectName: r.firm_name,
                     constructorName: r.constructor_name,
                     siteLocation: r.site_location,
                     rejected_damage_qty: r.rejected_damage_qty,
@@ -209,7 +213,8 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
 
     function updateIndentSheet(silent = false) {
         if (!silent) setIndentLoading(true);
-        fetchIndentRecords()
+        const permittedFirms = user?.administrate ? undefined : (user?.firm_access || []);
+        fetchIndentRecords(permittedFirms)
             .then((res) => {
                 const mapped = res.map(r => ({
                     indentNumber: r.indent_number,
@@ -227,7 +232,7 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                     planned1: r.planned1,
                     actual1: r.actual1,
                     firmName: r.firm_name,
-                    firmNameMatch: r.firm_name_match,
+                    firmNameMatch: r.firm_name,
                     approvedQuantity: r.approved_quantity,
                     timestamp: r.timestamp,
                     planned2: r.planned2,
@@ -259,7 +264,8 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
     function updateReceivedSheet(silent = false) {
         if (!silent) setReceivedLoading(true);
         // Using StoreIn service for received items as they are related
-        fetchStoreInRecords()
+        const permittedFirms = user?.administrate ? undefined : (user?.firm_access || []);
+        fetchStoreInRecords(permittedFirms)
             .then((res) => {
                 const mapped = res.filter(r => r.actual6 !== '').map(r => ({
                     timestamp: r.timestamp,
@@ -288,7 +294,8 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
 
     function updatePoMasterSheet(silent = false) {
         if (!silent) setPoMasterLoading(true);
-        fetchPoMaster()
+        const permittedFirms = user?.administrate ? undefined : (user?.firm_access || []);
+        fetchPoMaster(permittedFirms)
             .then((res) => {
                 setPoMasterSheet(res as unknown as PoMasterSheet[]);
                 setPoMasterLoading(false);
@@ -301,7 +308,8 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
 
     function updateInventorySheet(silent = false) {
         if (!silent) setInventoryLoading(true);
-        fetchInventoryRecords()
+        const permittedFirms = user?.administrate ? undefined : (user?.firm_access || []);
+        fetchInventoryRecords(permittedFirms)
             .then((res) => {
                 setInventorySheet(res as unknown as InventorySheet[]);
                 setInventoryLoading(false);
@@ -324,7 +332,8 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
 
     function updateFullkittingSheet(silent = false) {
         if (!silent) setFullkittingLoading(true);
-        fetchFullkittingRecords()
+        const permittedFirms = user?.administrate ? undefined : (user?.firm_access || []);
+        fetchFullkittingRecords(permittedFirms)
             .then((res) => {
                 const mapped = res.map(r => ({
                     ...r,
@@ -341,7 +350,8 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
 
     function updatePaymentsSheet(silent = false) {
         if (!silent) setPaymentsLoading(true);
-        fetchPayments()
+        const permittedFirms = user?.administrate ? undefined : (user?.firm_access || []);
+        fetchPayments(permittedFirms)
             .then((res) => {
                 setPaymentsSheet(res as unknown as PaymentsSheet[]);
                 setPaymentsLoading(false);
@@ -354,7 +364,8 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
 
     function updatePaymentHistorySheet(silent = false) {
         if (!silent) setPaymentHistoryLoading(true);
-        fetchPaymentHistory()
+        const permittedFirms = user?.administrate ? undefined : (user?.firm_access || []);
+        fetchPaymentHistory(permittedFirms)
             .then((res) => {
                 setPaymentHistorySheet(res as unknown as PaymentHistory[]);
                 setPaymentHistoryLoading(false);
@@ -367,7 +378,8 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
 
     function updateStockTransferSheet(silent = false) {
         if (!silent) setIssueLoading(true); // Reuse loading or add new one? I'll reuse for now to avoid too much boilerplate
-        fetchStockTransferRecords()
+        const permittedFirms = user?.administrate ? undefined : (user?.firm_access || []);
+        fetchStockTransferRecords(permittedFirms)
             .then((res) => {
                 setStockTransferSheet(res);
                 setIssueLoading(false);
@@ -420,7 +432,8 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
     function updateTallyEntrySheet(silent = false) {
         if (!silent) setTallyEntryLoading(true);
         console.log('🔄 Fetching Tally Entry records...');
-        fetchTallyEntryRecords()
+        const permittedFirms = user?.administrate ? undefined : (user?.firm_access || []);
+        fetchTallyEntryRecords(permittedFirms)
             .then((res) => {
                 console.log(`✅ Received ${res.length} Tally Entry records`);
                 const mapped = res.map(r => ({

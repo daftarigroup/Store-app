@@ -59,7 +59,7 @@ export default function POHistory() {
                     .order('timestamp', { ascending: false });
 
                 if ((user?.firmNameMatch || '').trim().toLowerCase() !== 'all') {
-                    poQuery = poQuery.eq('firm_name_match', (user?.firmNameMatch || '').trim());
+                    poQuery = poQuery.eq('firm_name', (user?.firmNameMatch || '').trim());
                 }
 
                 const { data: poMasterData, error: poError } = await poQuery;

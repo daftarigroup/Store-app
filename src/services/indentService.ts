@@ -25,7 +25,8 @@ export interface IndentRecord {
     planned1: string;
     actual1: string;
     firm_name: string;
-    firm_name_match: string;
+    firmName: string;
+    firmNameMatch: string;
     approved_quantity: number;
     timestamp: string;
     price: number;
@@ -74,13 +75,21 @@ export interface IndentRecord {
 
 /**
  * Fetch all indent records from Supabase
+ * @param permittedFirms Optional array of firm names to filter by (for project-based access)
  */
-export async function fetchIndentRecords(): Promise<IndentRecord[]> {
+export async function fetchIndentRecords(permittedFirms?: string[]): Promise<IndentRecord[]> {
     try {
-        const { data, error } = await supabase
+        let query = supabase
             .from('indent')
             .select('*')
             .order('indent_number', { ascending: false });
+
+        // Apply firm-based filtering if permittedFirms is provided and not empty
+        if (permittedFirms && permittedFirms.length > 0) {
+            query = query.in('firm_name', permittedFirms);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw error;
 
@@ -102,7 +111,8 @@ export async function fetchIndentRecords(): Promise<IndentRecord[]> {
             planned1: r.planned1 || '',
             actual1: r.actual1 || '',
             firm_name: r.firm_name || '',
-            firm_name_match: r.firm_name || r.firm_name_match || '',
+            firmName: r.firm_name || '',
+            firmNameMatch: r.firm_name || '',
             approved_quantity: Number(r.approved_quantity) || 0,
             timestamp: r.timestamp || '',
             price: Number(r.price) || 0,

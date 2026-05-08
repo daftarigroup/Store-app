@@ -109,7 +109,7 @@ export async function fetchIndentRecords() {
         console.log("fetchIndentRecords", data);
         return (data || []).map((r: any) => ({
             indentNumber: r.indent_number || '',
-            firmNameMatch: r.firm_name_match || '',
+            firmNameMatch: r.firm_name,
             approvedVendorName: r.approved_vendor_name || '',
             poNumber: r.po_number || '',
             actual4: r.actual4 || '',
@@ -154,7 +154,7 @@ export async function fetchStoreInRecords() {
         return (data || []).map((r: any) => ({
             liftNumber: r.lift_number || '',
             indentNo: r.indent_no || '',
-            firmNameMatch: r.firm_name_match || '',
+            firmNameMatch: r.firm_name,
             vendorName: r.vendor_name || '',
             productName: r.product_name || '',
             poNumber: r.po_number || '',
@@ -230,7 +230,7 @@ export async function insertStoreInRecord(storeInData: StoreInInsertData) {
             driver_name: storeInData.driverName,
             driver_mobile_no: storeInData.driverMobileNo,
             bill_remark: storeInData.billRemark,
-            firm_name_match: storeInData.firmNameMatch,
+            firm_name: storeInData.firmNameMatch,
             rate: storeInData.rate || '',
             // Default empty values for optional fields that exist in schema
             planned6: null,

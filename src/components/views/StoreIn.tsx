@@ -28,7 +28,7 @@ import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
 import { formatDate, formatDateTime, parseCustomDate } from '@/lib/utils';
 import { Pill } from '../ui/pill';
-import { fetchMasterOptions } from '@/services/masterService';
+import { fetchMasterOptions, type MasterData } from '@/services/masterService';
 import {
     fetchStoreInRecords,
     fetchDirectRecords,
@@ -228,6 +228,7 @@ export default () => {
     const [activeItemIndex, setActiveItemIndex] = useState(0);
     const [completedItems, setCompletedItems] = useState<Set<number>>(new Set());
     const [openDirectDialog, setOpenDirectDialog] = useState(false);
+    const [options, setOptions] = useState<MasterData | null>(null);
     const [vendorOptions, setVendorOptions] = useState<{ label: string; value: string }[]>([]);
     const [productOptions, setProductOptions] = useState<{ label: string; value: string }[]>([]);
 
@@ -235,9 +236,11 @@ export default () => {
         setIndentLoading(true);
         setReceivedLoading(true);
         try {
+            // Pass permitted firms to the service for backend-level filtering
+            const permittedFirms = user?.administrate ? undefined : (user?.firm_access || []);
             const [storeIns, directIns, masterData] = await Promise.all([
-                fetchStoreInRecords(),
-                fetchDirectRecords(),
+                fetchStoreInRecords(permittedFirms),
+                fetchDirectRecords(permittedFirms),
                 fetchMasterOptions()
             ]);
             setStoreInRecords(storeIns);
@@ -245,8 +248,9 @@ export default () => {
 
             // Populate master options
             if (masterData) {
+                setOptions(masterData);
                 setVendorOptions(masterData.vendorNames.map(name => ({ label: name, value: name })));
-                
+
                 // Extract all unique products from the products record
                 const allProducts = Array.from(new Set(Object.values(masterData.products).flat()))
                     .sort()
@@ -275,8 +279,8 @@ export default () => {
 
         // Filter for pending items (planned6 set, actual6 empty)
         const pendingItems = filteredByFirm.filter(
-            (i) => i.planned6 !== '' && i.actual6 === '' && 
-            (i.billStatus === 'Bill Received' || i.billStatus === 'Not Received')
+            (i) => i.planned6 !== '' && i.actual6 === '' &&
+                (i.billStatus === 'Bill Received' || i.billStatus === 'Not Received')
         );
 
         // Map each pending record individually (previously grouped by bill)
@@ -347,7 +351,7 @@ export default () => {
             challanImage: i.challanImage || '',
             receiverName: i.receiverName || '',
         })));
-        
+
         // Note: directData is now set directly in fetchAllData from the new table
     }, [storeInRecords, user.firmNameMatch]);
 
@@ -412,8 +416,8 @@ export default () => {
                 );
             }
         },
-        { 
-            accessorKey: 'billAmount', 
+        {
+            accessorKey: 'billAmount',
             header: 'Bill Amount',
             cell: ({ getValue }) => <div className="font-medium">₹ {(getValue() as number || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
         },
@@ -464,8 +468,8 @@ export default () => {
         { accessorKey: 'qty', header: 'Qty' },
         { accessorKey: 'leadTimeToLiftMaterial', header: 'Lead Time To Lift', cell: textWrapCell },
         { accessorKey: 'typeOfBill', header: 'Type Of Bill', cell: textWrapCell },
-        { 
-            accessorKey: 'billAmount', 
+        {
+            accessorKey: 'billAmount',
             header: 'Bill Amount',
             cell: ({ getValue }) => <div className="font-medium">₹ {(getValue() as number || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
         },
@@ -705,6 +709,7 @@ export default () => {
         vehicleNo: z.string().optional(),
         challanNo: z.string().optional(),
         challanImage: z.instanceof(File).optional(),
+        firmName: z.string().min(1, 'Project name is required'),
     });
 
     const directSchema = directSchemaBase.superRefine((val, ctx) => {
@@ -736,6 +741,7 @@ export default () => {
             receivingQty: 0,
             challanNo: '',
             challanImage: undefined,
+            firmName: user?.firmNameMatch === 'all' ? '' : (user?.firmNameMatch || ''),
         },
     });
 
@@ -754,7 +760,7 @@ export default () => {
             if (values.billImage) {
                 billUrl = await uploadBillCopy(values.billImage, liftId);
             }
-            
+
             let challanUrl = '';
             if (values.challanImage) {
                 challanUrl = await uploadChallanImage(values.challanImage, liftId);
@@ -778,7 +784,7 @@ export default () => {
                 transporterName: values.transporterName || '',
                 amount: values.transportAmount || 0,
                 vehicleNo: values.vehicleNo || '',
-                firmNameMatch: user.firmNameMatch === 'all' ? 'Default' : user.firmNameMatch,
+                firmNameMatch: values.firmName,
                 timestamp: new Date().toISOString(),
                 challanNo: values.challanNo,
                 challanImage: challanUrl,
@@ -793,7 +799,7 @@ export default () => {
                     bill_amount: values.billAmount || 0,
                     photo_of_bill: billUrl,
                     product_name: values.productName,
-                    firm_name_match: user.firmNameMatch === 'all' ? 'Default' : user.firmNameMatch,
+                    firm_name: values.firmName,
                     payment_terms: 'Advance', // Default to advance to show up in Make Payment
                     prefix: 'DIRECT'
                 });
@@ -846,6 +852,31 @@ export default () => {
                                     <Form {...directForm}>
                                         <form onSubmit={directForm.handleSubmit(onDirectSubmit)} className="space-y-4 pt-4">
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <FormField
+                                                    control={directForm.control}
+                                                    name="firmName"
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel>Project Name</FormLabel>
+                                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                                <FormControl>
+                                                                    <SelectTrigger className="w-full">
+                                                                        <SelectValue placeholder="Select project" />
+                                                                    </SelectTrigger>
+                                                                </FormControl>
+                                                                <SelectContent>
+                                                                    {(options?.firms || [])
+                                                                        .filter(f => user?.administrate || (user?.firm_access || []).includes(f))
+                                                                        .map((f) => (
+                                                                            <SelectItem key={f} value={f}>
+                                                                                {f}
+                                                                            </SelectItem>
+                                                                        ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </FormItem>
+                                                    )}
+                                                />
                                                 <FormField
                                                     control={directForm.control}
                                                     name="receiverName"
@@ -924,7 +955,7 @@ export default () => {
                                                         </FormItem>
                                                     )}
                                                 />
-                                                
+
                                                 {watchDirectStatus === 'Received' && (
                                                     <>
                                                         <FormField
@@ -1127,8 +1158,8 @@ export default () => {
                                 { accessorKey: 'vendorName', header: 'Vendor' },
                                 { accessorKey: 'productName', header: 'Product' },
                                 { accessorKey: 'billNo', header: 'Bill No' },
-                                { 
-                                    accessorKey: 'billAmount', 
+                                {
+                                    accessorKey: 'billAmount',
                                     header: 'Bill Amount',
                                     cell: ({ getValue }) => `₹${(getValue() as number || 0).toLocaleString('en-IN')}`
                                 },
@@ -1312,16 +1343,16 @@ export default () => {
 
                                 </div>
 
-                                    <FormField
-                                        control={form.control}
-                                        name="photoOfProduct"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <div className="flex items-center gap-1">
-                                                    <FormLabel className="m-0">Photo of Product</FormLabel>
-                                                    <span className="text-destructive font-bold">*</span>
-                                                </div>
-                                                <FormControl>
+                                <FormField
+                                    control={form.control}
+                                    name="photoOfProduct"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <div className="flex items-center gap-1">
+                                                <FormLabel className="m-0">Photo of Product</FormLabel>
+                                                <span className="text-destructive font-bold">*</span>
+                                            </div>
+                                            <FormControl>
                                                 <Input
                                                     type="file"
                                                     onChange={(e) =>

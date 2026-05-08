@@ -30,7 +30,9 @@ export async function fetchUsers(): Promise<UserRecord[]> {
                 username: r.user_name || '',
                 password: r.password || '',
                 name: r.name || '',
-                firmNameMatch: (r.firm_name_match || '').trim(),
+                modify_access: (String(r.modify_access || 'EDIT').toUpperCase() === 'VIEW' ? 'VIEW' : 'EDIT'),
+                firmNameMatch: (r.firm_name || '').trim(),
+                firm_access: r.firm_access || [],
                 rowIndex: r.id, // Using ID as a fallback for rowIndex since it's used in and out of tables
             };
 
@@ -61,7 +63,9 @@ export async function createUser(userData: Partial<UserPermissions>) {
             user_name: userData.username,
             name: userData.name,
             password: userData.password,
-            firm_name_match: (userData.firmNameMatch || '').trim(),
+            modify_access: userData.modify_access === 'VIEW' ? 'VIEW' : 'EDIT',
+            firm_name: (userData.firmNameMatch || '').trim(),
+            firm_access: userData.firm_access || [],
             timestamp: new Date().toISOString(),
         };
 
@@ -69,7 +73,7 @@ export async function createUser(userData: Partial<UserPermissions>) {
         allPermissionKeys.forEach(key => {
             const dbKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
             const value = userData[key as keyof UserPermissions];
-            dbRow[dbKey] = String(value || false).toUpperCase();
+            dbRow[dbKey] = value === true || value === 'true' || (value as any) === 'TRUE';
         });
 
         const { data, error } = await supabase
@@ -95,18 +99,16 @@ export async function updateUser(id: number, userData: Partial<UserPermissions>)
             user_name: userData.username,
             name: userData.name,
             password: userData.password,
-            firm_name_match: (userData.firmNameMatch || '').trim(),
+            modify_access: userData.modify_access === 'VIEW' ? 'VIEW' : 'EDIT',
+            firm_name: (userData.firmNameMatch || '').trim(),
+            firm_access: userData.firm_access || [],
         };
 
         // Map camelCase permissions to snake_case for DB
         allPermissionKeys.forEach(key => {
             const dbKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
             const value = userData[key as keyof UserPermissions];
-            if (value !== undefined) {
-                dbRow[dbKey] = String(value).toUpperCase();
-            } else {
-                dbRow[dbKey] = 'FALSE';
-            }
+            dbRow[dbKey] = value === true || value === 'true' || (value as any) === 'TRUE';
         });
 
         const { error } = await supabase
@@ -165,7 +167,9 @@ export async function authenticateUser(username: string, password: string): Prom
             username: r.user_name || '',
             password: r.password || '',
             name: r.name || '',
-            firmNameMatch: (r.firm_name_match || '').trim(),
+            modify_access: (String(r.modify_access || 'EDIT').toUpperCase() === 'VIEW' ? 'VIEW' : 'EDIT'),
+            firmNameMatch: (r.firm_name || '').trim(),
+            firm_access: r.firm_access || [],
             rowIndex: r.id,
         };
 
@@ -208,7 +212,9 @@ export async function getUserByUsername(username: string): Promise<UserRecord | 
             username: r.user_name || '',
             password: r.password || '',
             name: r.name || '',
-            firmNameMatch: (r.firm_name_match || '').trim(),
+            modify_access: (String(r.modify_access || 'EDIT').toUpperCase() === 'VIEW' ? 'VIEW' : 'EDIT'),
+            firmNameMatch: (r.firm_name || '').trim(),
+            firm_access: r.firm_access || [],
             rowIndex: r.id,
         };
 

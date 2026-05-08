@@ -72,7 +72,7 @@ export default () => {
 
             // Filter by Project Name match
             const filteredByFirm = data.filter(item =>
-                (user.firmNameMatch || '').trim().toLowerCase() === "all" || (item.firm_name_match || '').trim() === (user.firmNameMatch || '').trim()
+                (user.firmNameMatch || '').trim().toLowerCase() === "all" || (item.firm_name || '').trim() === (user.firmNameMatch || '').trim()
             );
 
             // Filter where indentType is 'Store Out'
@@ -300,9 +300,9 @@ export default () => {
     return (
         <Dialog open={openDialog} onOpenChange={setOpenDialog}>
             <Tabs defaultValue="pending">
-                <Heading 
-                    heading="Store Out Approval" 
-                    subtext="Approve store out requests" 
+                <Heading
+                    heading="Store Out Approval"
+                    subtext="Approve store out requests"
                     tabs
                     pendingCount={tableData.length}
                     historyCount={historyData.length}

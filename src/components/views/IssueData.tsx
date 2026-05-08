@@ -79,7 +79,7 @@ export default function IssueData() {
                     })}
                     constructorName={data.constructorName}
                     siteLocation={data.siteLocation}
-                    projectName={data.projectName}
+                    projectName={data.firm_name}
                     remarks={data.remarks}
                     issuePersonName={data.issuePersonName}
                     returnPersonName={data.returnPersonName}
@@ -115,14 +115,10 @@ export default function IssueData() {
     const fetchData = async () => {
         setDataLoading(true);
         try {
-            const records = await fetchIssueRecords();
-            // Filter by Project Name / Firm Name
-            const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
-            const filteredByFirm = records.filter(sheet => {
-                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name_match || sheet.project_name || '').trim().toLowerCase();
-                return userFirm === "all" || sheetFirm === userFirm;
-            });
-            setAllData(filteredByFirm);
+            // Pass permitted firms to the service for backend-level filtering
+            const permittedFirms = user?.administrate ? undefined : (user?.firm_access || []);
+            const records = await fetchIssueRecords(permittedFirms);
+            setAllData(records);
         } catch (error) {
             console.error('Failed to fetch issue records:', error);
             toast.error('Failed to load data');
@@ -212,7 +208,7 @@ export default function IssueData() {
         { accessorKey: 'location', header: 'Location' },
         { accessorKey: 'constructor_name', header: 'Contractor Name' },
         { accessorKey: 'site_location', header: 'Site Location' },
-        { accessorKey: 'project_name', header: 'Project Name' },
+        { accessorKey: 'firm_name', header: 'Project Name' },
         {
             accessorKey: 'planned1',
             header: 'Planned Date',
@@ -239,7 +235,7 @@ export default function IssueData() {
         { accessorKey: 'location', header: 'Location' },
         { accessorKey: 'constructor_name', header: 'Contractor Name' },
         { accessorKey: 'site_location', header: 'Site Location' },
-        { accessorKey: 'project_name', header: 'Project Name' },
+        { accessorKey: 'firm_name', header: 'Project Name' },
         { accessorKey: 'status', header: 'Status' },
         { accessorKey: 'given_qty', header: 'Given Qty' },
         {
@@ -275,7 +271,7 @@ export default function IssueData() {
         { accessorKey: 'issue_person_name', header: 'Issue Person' },
         { accessorKey: 'constructor_name', header: 'Contractor' },
         { accessorKey: 'site_location', header: 'Site' },
-        { accessorKey: 'project_name', header: 'Project' },
+        { accessorKey: 'firm_name', header: 'Project' },
         {
             accessorKey: 'actual1',
             header: 'Return Date',
@@ -348,7 +344,7 @@ export default function IssueData() {
             const pdfData = {
                 constructorName: selectedIssue.constructor_name || '',
                 siteLocation: selectedIssue.site_location || '',
-                projectName: selectedIssue.project_name || '',
+                projectName: selectedIssue.firm_name || '',
                 remarks: selectedIssue.issue_to || '',
                 issuePersonName: selectedIssue.issue_person_name || '',
                 returnPersonName: selectedIssue.return_person_name || '',
@@ -408,7 +404,7 @@ export default function IssueData() {
                         <DataTable
                             data={pendingData}
                             columns={columns}
-                            searchFields={['product_name', 'issue_no', 'issue_to', 'constructor_name', 'site_location', 'project_name']}
+                            searchFields={['product_name', 'issue_no', 'issue_to', 'constructor_name', 'site_location', 'firm_name']}
                             dataLoading={dataLoading}
                             extraActions={
                                 <Button
@@ -436,7 +432,7 @@ export default function IssueData() {
                         <DataTable
                             data={returnData}
                             columns={returnColumns}
-                            searchFields={['product_name', 'issue_no', 'issue_to', 'constructor_name', 'site_location', 'project_name', 'return_person_name']}
+                            searchFields={['product_name', 'issue_no', 'issue_to', 'constructor_name', 'site_location', 'firm_name', 'return_person_name']}
                             dataLoading={dataLoading}
                             // extraActions={
                             //     <Button
@@ -454,7 +450,7 @@ export default function IssueData() {
                         <DataTable
                             data={historyData}
                             columns={historyColumns}
-                            searchFields={['product_name', 'issue_no', 'issue_to', 'constructor_name', 'site_location', 'project_name']}
+                            searchFields={['product_name', 'issue_no', 'issue_to', 'constructor_name', 'site_location', 'firm_name']}
                             dataLoading={dataLoading}
                             extraActions={
                                 <Button

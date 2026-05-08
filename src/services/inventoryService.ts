@@ -24,6 +24,7 @@ export interface InventoryRecord {
     stockTransferReceiving: number;
     fromProject: string;
     toProject: string;
+    firmName: string;
     current: number;
     totalPrice: number;
     status: string;
@@ -34,6 +35,7 @@ export interface InventoryItemInput {
     groupHead: string;
     uom?: string;
     quantity: number;
+    firmName?: string;
 }
 
 function toNumber(value: unknown): number {
@@ -53,13 +55,20 @@ function toTextNumber(value: number): string {
 
 /**
  * Fetch all inventory records from Supabase
+ * @param permittedFirms Optional array of firm names to filter by
  */
-export async function fetchInventoryRecords(): Promise<InventoryRecord[]> {
+export async function fetchInventoryRecords(permittedFirms?: string[]): Promise<InventoryRecord[]> {
     try {
-        const { data, error } = await supabase
+        let query = supabase
             .from('inventory')
             .select('*')
             .order('item_name', { ascending: true });
+
+        if (permittedFirms && permittedFirms.length > 0) {
+            query = query.in('firm_name', permittedFirms);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw error;
 
@@ -86,6 +95,8 @@ export async function fetchInventoryRecords(): Promise<InventoryRecord[]> {
                 stockTransferReceiving: Number(r.stock_transfer) || 0,
                 fromProject: '',
                 toProject: '',
+                firmName: r.firm_name || '',
+                firmNameMatch: r.firm_name || '',
                 current: Number(r.current) || 0,
                 totalPrice: Number(r.total_price) || 0,
                 status: r.color_code || '',
@@ -109,6 +120,7 @@ export async function addItemToInventory(input: InventoryItemInput): Promise<{ s
             .from('inventory')
             .select('*')
             .eq('item_name', input.itemName)
+            .eq('firm_name', input.firmName || '')
             .maybeSingle();
 
         if (fetchError) throw fetchError;
@@ -127,8 +139,10 @@ export async function addItemToInventory(input: InventoryItemInput): Promise<{ s
                     current: toTextNumber(nextCurrent),
                     total_price: toTextNumber(nextCurrent * rate),
                     color_code: getInventoryStatus(nextCurrent),
+                    firm_name: existingRecord.firm_name || input.firmName || '',
                 })
-                .eq('item_name', input.itemName);
+                .eq('item_name', input.itemName)
+                .eq('firm_name', existingRecord.firm_name || input.firmName || '');
 
             if (updateError) throw updateError;
         } else {
@@ -149,6 +163,7 @@ export async function addItemToInventory(input: InventoryItemInput): Promise<{ s
                 received_quantity: toTextNumber(quantityToAdd),
                 return_quantity: '0',
                 request_quantity: '0',
+                firm_name: input.firmName || '',
             };
 
             const { error: insertError } = await supabase

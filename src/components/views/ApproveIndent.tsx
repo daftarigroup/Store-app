@@ -22,7 +22,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { toast } from 'sonner';
 import { PuffLoader as Loader } from 'react-spinners';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { ClipboardCheck, PenSquare, CheckSquare } from 'lucide-react';
+import { ClipboardCheck, PenSquare, CheckSquare, ListTodo } from 'lucide-react';
+import {
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetDescription,
+} from '@/components/ui/sheet';
 import { formatDate, formatDateTimeFull } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
@@ -58,12 +65,10 @@ export default function ApproveIndent() {
     const fetchData = async () => {
         setDataLoading(true);
         try {
-            const records = await fetchIndentRecords();
-            // Filter by Project Name
-            const filteredByFirm = records.filter(item => {
-                return (user.firmNameMatch || '').trim().toLowerCase() === "all" || (item.firm_name_match || '').trim() === (user.firmNameMatch || '').trim();
-            });
-            setAllData(filteredByFirm);
+            // Pass permitted firms to the service for backend-level filtering
+            const permittedFirms = user?.administrate ? undefined : (user?.firm_access || []);
+            const records = await fetchIndentRecords(permittedFirms);
+            setAllData(records);
         } catch (error) {
             console.error('Failed to fetch indent records:', error);
             toast.error('Failed to load data');
@@ -74,7 +79,7 @@ export default function ApproveIndent() {
 
     useEffect(() => {
         fetchData();
-    }, [user.firmNameMatch]);
+    }, [user?.firm_access, user?.administrate]);
 
     const pendingData = useMemo(() => {
         return allData.filter(i => i.planned1 && !i.actual1);
@@ -254,7 +259,7 @@ export default function ApproveIndent() {
                                     value={status}
                                     onValueChange={(val) => table.options.meta?.updateStatus(id, val)}
                                 >
-                                    <SelectTrigger className="w-[110px] h-8 text-xs">
+                                    <SelectTrigger className="w-[100px] h-8 text-xs">
                                         <SelectValue placeholder="Action" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -262,6 +267,17 @@ export default function ApproveIndent() {
                                         <SelectItem value="Reject">Reject</SelectItem>
                                     </SelectContent>
                                 </Select>
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => {
+                                        setSelectedIndent(row.original);
+                                        setOpenDialog(true);
+                                    }}
+                                >
+                                    <ListTodo className="h-4 w-4" />
+                                </Button>
                             </div>
                         );
                     },
@@ -310,7 +326,7 @@ export default function ApproveIndent() {
             : [
                 { accessorKey: 'uom', header: 'UOM' }
             ]),
-        { accessorKey: 'firm_name_match', header: 'Project Name' },
+        { accessorKey: 'firm_name', header: 'Project Name' },
         { accessorKey: 'indenter_name', header: 'Indenter' },
 
         {
@@ -430,7 +446,7 @@ export default function ApproveIndent() {
 
     const historyColumns = useMemo<ColumnDef<IndentRecord>[]>(() => [
         { accessorKey: 'indent_number', header: 'Indent No.' },
-        { accessorKey: 'firm_name_match', header: 'Project Name' },
+        { accessorKey: 'firm_name', header: 'Project Name' },
         { accessorKey: 'indenter_name', header: 'Indenter' },
 
         {
@@ -750,104 +766,135 @@ export default function ApproveIndent() {
     }
 
     return (
-        <div>
-            <Dialog open={openDialog} onOpenChange={setOpenDialog}>
-                <Tabs defaultValue="pending">
-                    <Heading
-                        heading="Indent Approval"
-                        subtext="Update Indent status to Approve or Reject them"
-                        tabs
-                        pendingCount={pendingData.length}
-                        historyCount={historyData.length}
-                    >
-                        <CheckSquare size={50} className="text-primary" />
-                    </Heading>
+        <div className="flex flex-col h-full overflow-hidden">
+            <Tabs defaultValue="pending" className="w-full">
+                <Heading
+                    heading="Indent Approval"
+                    subtext="Update Indent status to Approve or Reject them"
+                    tabs
+                    pendingCount={pendingData.length}
+                    historyCount={historyData.length}
+                >
+                    <CheckSquare size={50} className="text-primary" />
+                </Heading>
 
-                    <TabsContent value="pending">
-                        <DataTable
-                            data={pendingData}
-                            columns={columns}
-                            searchFields={['product_name', 'indenter_name', 'vendor_type', 'firm_name_match']}
-                            dataLoading={dataLoading}
-                            rowSelection={rowSelection}
-                            onRowSelectionChange={setRowSelection}
-                            getRowId={(row) => String(row.id)}
-                            meta={{
-                                editedStatuses,
-                                editedQuantities,
-                                updateStatus: (id: number, val: string) => setEditedStatuses(prev => ({ ...prev, [id]: val })),
-                                updateQuantity: (id: number, val: number) => setEditedQuantities(prev => ({ ...prev, [id]: val })),
-                            }}
-                            extraActions={
-                                <div className="flex items-center gap-3">
-                                    {user?.indentApprovalAction && Object.keys(rowSelection).length > 0 && (
-                                        <div className="flex items-center gap-2 border-r pr-4 mr-2 bg-muted p-1 rounded-md">
-                                            <span className="text-sm font-medium whitespace-nowrap">Selected: {Object.keys(rowSelection).length}</span>
-                                            <Button
-                                                onClick={handleBulkSubmit}
-                                                disabled={bulkSubmitting}
-                                                size="sm"
-                                                className="h-9"
-                                            >
-                                                {bulkSubmitting ? "Processing..." : "Submit All Selected"}
-                                            </Button>
-                                        </div>
-                                    )}
-                                    <Button
-                                        variant="default"
-                                        onClick={() => handleDownload(pendingData)}
-                                        style={{
-                                            background: "linear-gradient(90deg, #4CAF50, #2E7D32)",
-                                            border: "none",
-                                            borderRadius: "8px",
-                                            padding: "0 16px",
-                                            fontWeight: "bold",
-                                            boxShadow: "0 4px 8px rgba(0,0,0,0.15)",
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: "8px",
-                                        }}
-                                    >
-                                        <DownloadOutlined />
-                                        {downloading ? "Downloading..." : "Download"}
-                                    </Button>
+                <TabsContent value="pending" className="m-0 border-none p-0">
+                    <DataTable
+                        data={pendingData}
+                        columns={columns}
+                        searchFields={['product_name', 'indenter_name', 'vendor_type', 'firm_name']}
+                        dataLoading={dataLoading}
+                        rowSelection={rowSelection}
+                        onRowSelectionChange={setRowSelection}
+                        getRowId={(row) => String(row.id)}
+                        meta={{
+                            editedStatuses,
+                            editedQuantities,
+                            updateStatus: (id: number, val: string) => setEditedStatuses(prev => ({ ...prev, [id]: val })),
+                            updateQuantity: (id: number, val: number) => setEditedQuantities(prev => ({ ...prev, [id]: val })),
+                        }}
+                        extraActions={
+                            <div className="flex items-center gap-3">
+                                {user?.indentApprovalAction && Object.keys(rowSelection).length > 0 && (
+                                    <div className="flex items-center gap-2 border-r pr-4 mr-2 bg-muted p-1 rounded-md">
+                                        <span className="text-sm font-medium whitespace-nowrap">Selected: {Object.keys(rowSelection).length}</span>
+                                        <Button
+                                            onClick={handleBulkSubmit}
+                                            disabled={bulkSubmitting}
+                                            size="sm"
+                                            className="h-9"
+                                        >
+                                            {bulkSubmitting ? "Processing..." : "Submit All Selected"}
+                                        </Button>
+                                    </div>
+                                )}
+                                <Button
+                                    variant="default"
+                                    onClick={() => handleDownload(pendingData)}
+                                    className="h-9 font-bold flex items-center gap-2 px-4 rounded-md shadow-md"
+                                    style={{
+                                        background: "linear-gradient(90deg, #4CAF50, #2E7D32)",
+                                        border: "none",
+                                    }}
+                                >
+                                    <DownloadOutlined />
+                                    {downloading ? "Downloading..." : "Download"}
+                                </Button>
+                            </div>
+                        }
+                    />
+                </TabsContent>
+                <TabsContent value="history" className="m-0 border-none p-0">
+                    <DataTable
+                        data={historyData}
+                        columns={historyColumns}
+                        searchFields={['product_name', 'indenter_name', 'vendor_type', 'firm_name']}
+                        dataLoading={dataLoading}
+                        meta={{
+                            editingRow,
+                            editValues,
+                            onInputChange: handleInputChange,
+                        }}
+                    />
+                </TabsContent>
+            </Tabs>
+
+            <Sheet open={openDialog} onOpenChange={setOpenDialog}>
+                {selectedIndent ? (() => {
+                    const indent = selectedIndent;
+                    return (
+                        <SheetContent side="right" className="sm:max-w-md overflow-y-auto">
+                            <SheetHeader className="pb-4">
+                                <SheetTitle>Approve Indent</SheetTitle>
+                                <SheetDescription>
+                                    Update status and quantity for indent{' '}
+                                    <span className="font-semibold text-primary">
+                                        {indent.indent_number}
+                                    </span>
+                                </SheetDescription>
+                            </SheetHeader>
+
+                            <div className="py-4 border-y my-4 space-y-4">
+                                <div className="grid grid-cols-2 gap-2 text-sm">
+                                    <div className="text-muted-foreground font-medium">Product:</div>
+                                    <div className="font-semibold">{indent.product_name}</div>
+                                    <div className="text-muted-foreground font-medium">Requested Qty:</div>
+                                    <div className="font-semibold">{indent.quantity} {indent.uom}</div>
+                                    <div className="text-muted-foreground font-medium">Indenter:</div>
+                                    <div className="font-semibold">{indent.indenter_name}</div>
                                 </div>
-                            }
-                        />
-                    </TabsContent>
-                    <TabsContent value="history">
-                        <DataTable
-                            data={historyData}
-                            columns={historyColumns}
-                            searchFields={['product_name', 'indenter_name', 'vendor_type', 'firm_name_match']}
-                            dataLoading={dataLoading}
-                            meta={{
-                                editingRow,
-                                editValues,
-                                onInputChange: handleInputChange,
-                            }}
-                        />
-                    </TabsContent>
-                </Tabs>
+                            </div>
 
-                {selectedIndent && (
-                    <DialogContent>
-                        <Form {...form}>
-                            <form
-                                onSubmit={form.handleSubmit(onSubmit, onError)}
-                                className="grid gap-5"
-                            >
-                                <DialogHeader className="grid gap-2">
-                                    <DialogTitle>Approve Indent</DialogTitle>
-                                    <DialogDescription>
-                                        Approve indent{' '}
-                                        <span className="font-medium">
-                                            {selectedIndent.indent_number}
-                                        </span>
-                                    </DialogDescription>
-                                </DialogHeader>
+                            <Form {...form}>
+                                <form
+                                    onSubmit={form.handleSubmit(onSubmit, onError)}
+                                    className="space-y-6 pt-4"
+                                >
+                                    <FormField
+                                        control={form.control}
+                                        name="approval"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Action</FormLabel>
+                                                <Select
+                                                    onValueChange={field.onChange}
+                                                    defaultValue={field.value}
+                                                >
+                                                    <FormControl>
+                                                        <SelectTrigger>
+                                                            <SelectValue placeholder="Select action" />
+                                                        </SelectTrigger>
+                                                    </FormControl>
+                                                    <SelectContent>
+                                                        <SelectItem value="Regular">Accept</SelectItem>
+                                                        <SelectItem value="Reject">Reject</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
 
-                                <div className="grid gap-3">
                                     <FormField
                                         control={form.control}
                                         name="approvedQuantity"
@@ -855,50 +902,56 @@ export default function ApproveIndent() {
                                             <FormItem>
                                                 <FormLabel>Approved Quantity</FormLabel>
                                                 <FormControl>
-                                                    <Input {...field} type="number" placeholder="Enter quantity to approve" />
+                                                    <div className="relative">
+                                                        <Input {...field} type="number" className="pr-12" />
+                                                        <span className="absolute right-3 top-2.5 text-xs text-muted-foreground font-medium">
+                                                            {indent.uom}
+                                                        </span>
+                                                    </div>
                                                 </FormControl>
                                                 <FormMessage />
                                             </FormItem>
                                         )}
                                     />
-                                </div>
-                                <DialogFooter className="flex justify-between items-center w-full">
-                                    <div className="flex gap-2">
-                                        <Button
-                                            type="button"
-                                            variant="destructive"
-                                            onClick={handleReject}
-                                            className="bg-red-600 hover:bg-red-700"
-                                        >
-                                            Reject Indent
-                                        </Button>
-                                    </div>
 
-                                    <div className="flex gap-2">
-                                        <DialogClose asChild>
-                                            <Button variant="outline">Close</Button>
-                                        </DialogClose>
-
+                                    <div className="flex flex-col gap-3 pt-6">
                                         <Button
                                             type="submit"
+                                            className="w-full h-11"
                                             disabled={form.formState.isSubmitting}
                                         >
-                                            {form.formState.isSubmitting && (
-                                                <Loader
-                                                    size={20}
-                                                    color="white"
-                                                    aria-label="Loading Spinner"
-                                                />
+                                            {form.formState.isSubmitting ? (
+                                                <Loader size={20} color="white" />
+                                            ) : (
+                                                "Confirm Approval"
                                             )}
-                                            Approve
                                         </Button>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() => setOpenDialog(false)}
+                                            className="w-full h-11"
+                                        >
+                                            Cancel
+                                        </Button>
+
+                                        <div className="pt-4 border-t mt-4">
+                                            <Button
+                                                type="button"
+                                                variant="destructive"
+                                                onClick={handleReject}
+                                                className="w-full bg-red-50/50 text-red-600 border-red-200 hover:bg-red-600 hover:text-white transition-colors"
+                                            >
+                                                Reject Indent Completely
+                                            </Button>
+                                        </div>
                                     </div>
-                                </DialogFooter>
-                            </form>
-                        </Form>
-                    </DialogContent>
-                )}
-            </Dialog>
+                                </form>
+                            </Form>
+                        </SheetContent>
+                    );
+                })() : null}
+            </Sheet>
         </div>
     );
 }

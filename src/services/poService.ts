@@ -3,13 +3,75 @@ import { supabase } from '@/lib/supabase';
 /**
  * Fetch all indent data from Supabase
  * Used for populating PO creation form with indent details
+ * @param permittedFirms Optional array of firm names to filter by
  */
-export async function fetchIndents() {
+
+export interface PoMasterRecord {
+    timestamp: string;
+    partyName: string;
+    supplierAddress: string;
+    supplierGstin: string; 
+    poNumber: string;
+    internalCode: string;
+    product: string;
+    description: string;
+    quantity: number;
+    unit: string;
+    rate: number;
+    gst: number;
+    gstPercent: number;
+    companyEmail: string;
+    discount: number;
+    discountPercent: number;
+    amount: number;
+    totalPoAmount: number;
+    pdf: string;
+    quotationNumber: string;
+    quotationDate: string;
+    enquiryNumber: string;
+    enquiryDate: string;
+    term1: string;
+    term2: string;
+    term3: string;
+    term4: string;
+    term5: string;
+    term6: string;
+    term7: string;
+    term8: string;
+    term9: string;
+    term10: string;
+    term11: string;
+    term12: string;
+    term13: string;
+    term14: string;
+    term15: string;
+    term16: string;
+    term17: string;
+    term18: string;
+    term19: string;
+    term20: string;
+    deliveryDate: string;
+    paymentTerms: string;
+    numberOfDays: number;
+    deliveryDays: number;
+    deliveryType: string;
+    firmNameMatch: string;
+    emailSendStatus: string;
+    preparedBy: string;
+}
+
+export async function fetchIndents(permittedFirms?: string[]) {
     try {
-        const { data, error } = await supabase
+        let query = supabase
             .from('indent')
             .select('*')
             .order('indent_number', { ascending: false });
+
+        if (permittedFirms && permittedFirms.length > 0) {
+            query = query.in('firm_name', permittedFirms);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw error;
 
@@ -28,7 +90,7 @@ export async function fetchIndents() {
                 actual4: r.actual4 || '',
                 approvedVendorName: r.approved_vendor_name || '',
                 firmName: r.firm_name || '',
-                firmNameMatch: r.firm_name_match || '',
+                firmNameMatch: r.firm_name || '',
                 indentNumber: r.indent_number || '',
                 productName: r.product_name || '',
                 specifications: r.specifications || '',
@@ -54,13 +116,20 @@ export async function fetchIndents() {
 /**
  * Fetch all PO Master records from Supabase
  * Used for generating PO numbers and revising existing POs
+ * @param permittedFirms Optional array of firm names to filter by
  */
-export async function fetchPoMaster() {
+export async function fetchPoMaster(permittedFirms?: string[]) {
     try {
-        const { data, error } = await supabase
+        let query = supabase
             .from('po_master')
             .select('*')
             .order('timestamp', { ascending: false });
+
+        if (permittedFirms && permittedFirms.length > 0) {
+            query = query.in('firm_name', permittedFirms);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw error;
 
@@ -113,7 +182,7 @@ export async function fetchPoMaster() {
             numberOfDays: Number(r.number_of_days) || 0,
             deliveryDays: Number(r.delivery_days) || 0,
             deliveryType: r.delivery_type || '',
-            firmNameMatch: r.firm_name_match || '',
+            firmNameMatch: r.firm_name || '',
             emailSendStatus: r.email_send_status || '',
             preparedBy: r.prepared_by || '',
             approvedBy: r.approved_by || '',
@@ -168,8 +237,8 @@ export async function fetchMasterData() {
 
         // Aggregate vendors
         const vendors = records
-            .filter(r => r.vendor_name)
-            .map(r => ({
+            .filter((r: any) => r.vendor_name)
+            .map((r: any) => ({
                 vendorName: r.vendor_name,
                 gstin: r.vendor_gstin || '',
                 address: r.vendor_address || '',
@@ -177,14 +246,14 @@ export async function fetchMasterData() {
             }));
 
         // Deduplicate vendors by name
-        const uniqueVendors = Array.from(new Map(vendors.map(v => [v.vendorName, v])).values());
+        const uniqueVendors = Array.from(new Map(vendors.map((v: any) => [v.vendorName, v])).values());
 
         // Extract payment terms
-        const paymentTerms = Array.from(new Set(records.map(r => r.payment_term).filter(Boolean)));
+        const paymentTerms = Array.from(new Set(records.map((r: any) => r.payment_term).filter(Boolean)));
 
         // Firm to Company Mapping
         const firmCompanyMap: Record<string, any> = {};
-        records.forEach(r => {
+        records.forEach((r: any) => {
             if (r.firm_name && r.company_name) {
                 firmCompanyMap[r.firm_name] = {
                     companyName: r.company_name,
@@ -197,11 +266,11 @@ export async function fetchMasterData() {
         });
 
         // Company info (usually the first record or common values)
-        const firstWithCompany = records.find(r => r.company_name) || {};
+        const firstWithCompany = records.find((r: any) => r.company_name) || {};
 
         // Collect ALL default terms from ALL records (not just the first one)
         const allDefaultTerms = new Set<string>();
-        records.forEach(r => {
+        records.forEach((r: any) => {
             if (r.default_terms) {
                 allDefaultTerms.add(r.default_terms);
             }
@@ -209,8 +278,8 @@ export async function fetchMasterData() {
 
         // Aggregate Items (Products)
         const items = records
-            .filter(r => r.item_name)
-            .map(r => ({
+            .filter((r: any) => r.item_name)
+            .map((r: any) => ({
                 itemName: r.item_name,
                 regularConditions: Array.isArray(r.regular_conditions)
                     ? r.regular_conditions
@@ -299,7 +368,7 @@ export async function insertPoRecords(poRecords: any[]) {
             number_of_days: String(record.numberOfDays || 0),
             delivery_days: String(record.deliveryDays || 0),
             delivery_type: record.deliveryType || '',
-            firm_name_match: record.firmNameMatch || '',
+            firm_name: record.firmNameMatch || '',
             company_email: record.companyEmail || '',
             advance_percent: record.advancePercent || 0,
             advance_amount: record.advanceAmount || 0,

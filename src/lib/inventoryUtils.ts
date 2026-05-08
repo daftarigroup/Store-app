@@ -81,20 +81,50 @@ export function calculateRealInventory(
     ]);
 
     return Array.from(allItemNames).map(itemName => {
-        // Find existing master record or create a skeleton
-        const item = inventoryMaster.find(i => (i.itemName || '').trim() === itemName) || {
-            itemName,
-            groupHead: '',
-            uom: '',
-            opening: 0,
-            individualRate: 0,
-            purchaseReturn: 0,
-            issueReturn: 0,
-            stockTransfer: 0
-        } as InventorySheet;
-
         const key = itemName;
+        const relevantMasterRecords = inventoryMaster.filter(i => (i.itemName || '').trim() === itemName);
         
+        let opening = 0;
+        let masterStockTransfer = 0;
+        let individualRate = 0;
+        let groupHead = '';
+        let uom = '';
+
+        if (currentProject === 'All') {
+            opening = relevantMasterRecords.reduce((sum, r) => sum + (Number(r.opening) || 0), 0);
+            masterStockTransfer = relevantMasterRecords.reduce((sum, r) => sum + (Number(r.stockTransfer) || 0), 0);
+            // Use the first record for metadata
+            const first = relevantMasterRecords[0];
+            individualRate = Number(first?.individualRate) || 0;
+            groupHead = first?.groupHead || '';
+            uom = first?.uom || '';
+        } else {
+            const specific = relevantMasterRecords.find(r => r.firmName === currentProject);
+            opening = Number(specific?.opening) || 0;
+            masterStockTransfer = Number(specific?.stockTransfer) || 0;
+            // Metadata can come from specific record or fallback to any record for that item
+            const meta = specific || relevantMasterRecords[0];
+            individualRate = Number(meta?.individualRate) || 0;
+            groupHead = meta?.groupHead || '';
+            uom = meta?.uom || '';
+        }
+
+        const item = {
+            itemName,
+            groupHead,
+            uom,
+            opening,
+            individualRate,
+            stockTransfer: masterStockTransfer,
+            firmName: currentProject === 'All' ? '' : currentProject,
+            purchaseReturn: currentProject === 'All' 
+                ? relevantMasterRecords.reduce((sum, r) => sum + (Number(r.purchaseReturn) || 0), 0)
+                : (relevantMasterRecords.find(r => r.firmName === currentProject)?.purchaseReturn || 0),
+            issueReturn: currentProject === 'All'
+                ? relevantMasterRecords.reduce((sum, r) => sum + (Number(r.issueReturn) || 0), 0)
+                : (relevantMasterRecords.find(r => r.firmName === currentProject)?.issueReturn || 0),
+        };
+
         const iSum = indentSummary[key] || { quantity: 0, approvedQuantity: 0 };
         const sDet = storeInDetailed[key] || { liftingQty: 0, stockTransfer: 0, purchaseQuantity: 0, purchaseReturn: 0 };
         const oSum = issueSummary[key] || { givenQty: 0, rejectedDamageQty: 0 };

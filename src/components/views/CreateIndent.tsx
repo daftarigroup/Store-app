@@ -32,14 +32,14 @@ import { calculateRealInventory } from '@/lib/inventoryUtils';
 const logo = "/logo.png";
 
 export default () => {
-    const { 
-        masterSheet: options, 
+    const {
+        masterSheet: options,
         inventorySheet,
         storeInSheet,
         issueSheet,
         indentSheet,
-        updateInventorySheet, 
-        updateAll 
+        updateInventorySheet,
+        updateAll
     } = useSheets();
     const { user } = useAuth();
     const [searchTerm, setSearchTerm] = useState('');
@@ -114,8 +114,9 @@ export default () => {
     const fetchHistory = async () => {
         setHistoryLoading(true);
         try {
-            const data = await fetchIndentRecords();
-            // Filter by current project if needed, or show all
+            // Pass permitted firms to the service for backend-level filtering
+            const permittedFirms = user?.administrate ? undefined : (user?.firm_access || []);
+            const data = await fetchIndentRecords(permittedFirms);
             setHistoryData(data);
         } catch (error) {
             console.error('Error fetching history:', error);
@@ -131,7 +132,7 @@ export default () => {
             header: 'Date',
             cell: ({ row }) => row.original.timestamp ? formatDate(new Date(row.original.timestamp)) : '-',
         },
-        { accessorKey: 'firm_name_match', header: 'Project' },
+        { accessorKey: 'firm_name', header: 'Project' },
         { accessorKey: 'indenter_name', header: 'Indenter' },
 
         { accessorKey: 'group_head', header: 'Group Head' },
@@ -293,7 +294,7 @@ export default () => {
                 issueSheet || []
             );
 
-            const thisItem = realInventory.find(i => 
+            const thisItem = realInventory.find(i =>
                 i.itemName === productName && i.groupHead === groupHead
             );
 
@@ -491,7 +492,6 @@ export default () => {
                     expected_req_date: product.expectedRequirementDate,
                     attachment: attachmentUrl,
                     indent_url: indentUrl, // New field for PDF URL
-                    firm_name_match: user?.firmNameMatch || '',
                     status: 'Pending',
                 };
 
@@ -502,7 +502,7 @@ export default () => {
             const { error } = await supabase.from('indent').insert(rows);
 
             if (error) throw error;
-            
+
             fetchHistory(); // Refresh history tab
             toast.success(`Indent ${nextIndentNumber} created successfully!`);
 
@@ -590,11 +590,12 @@ export default () => {
                                                         />
                                                     </div>
                                                     {(options?.firms || [])
-                                                        .filter((firm) =>
-                                                            firm
-                                                                .toLowerCase()
-                                                                .includes(searchTermFirmName.toLowerCase())
-                                                        )
+                                                        .filter((firm) => {
+                                                            const matchesSearch = firm.toLowerCase().includes(searchTermFirmName.toLowerCase());
+                                                            // If admin, show all. If not, only show permitted firms.
+                                                            if (user?.administrate) return matchesSearch;
+                                                            return matchesSearch && (user?.firm_access || []).includes(firm);
+                                                        })
                                                         .map((firm, i) => (
                                                             <SelectItem key={i} value={firm}>
                                                                 {firm}
@@ -1194,7 +1195,7 @@ export default () => {
                         data={historyData}
                         columns={historyColumns}
                         dataLoading={historyLoading}
-                        searchFields={['indent_number', 'product_name', 'indenter_name', 'firm_name_match', 'group_head', 'area_of_use', 'specifications']}
+                        searchFields={['indent_number', 'product_name', 'indenter_name', 'firm_name', 'group_head', 'area_of_use', 'specifications']}
                     />
                 </TabsContent>
             </Tabs>

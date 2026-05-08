@@ -167,14 +167,14 @@ export default () => {
                 <IssuePdf
                     type={type}
                     issueNumber={issueNumber}
-                    date={new Date().toLocaleString('en-IN', { 
-                        day: '2-digit', 
-                        month: '2-digit', 
-                        year: 'numeric', 
-                        hour: '2-digit', 
-                        minute: '2-digit', 
+                    date={new Date().toLocaleString('en-IN', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
                         second: '2-digit',
-                        hour12: true 
+                        hour12: true
                     })}
                     constructorName={data.constructorName}
                     siteLocation={data.siteLocation}
@@ -256,7 +256,7 @@ export default () => {
                     // department: product.department,
                     constructor_name: data.constructorName,
                     site_location: data.siteLocation,
-                    project_name: data.projectName,
+                    firm_name: data.projectName,
                     issue_person_name: data.issuePersonName,
                     return_person_name: data.returnPersonName,
                     damage_remark: data.damageRemark,
@@ -283,7 +283,7 @@ export default () => {
                 // Create Logic (Issue)
                 const issuePdfUrl = await processPdfSlip('issue', nextIssueNumber, data);
                 const rowsWithSlip = rows.map(r => ({ ...r, issue_slip: issuePdfUrl }));
-                
+
                 await createIssueRecords(rowsWithSlip);
                 toast.success('Issue created successfully');
             }
@@ -330,7 +330,7 @@ export default () => {
             form.setValue('projectName', selected.projectName || '');
             form.setValue('remarks', selected.issueTo || '');
             form.setValue('issuePersonName', selected.issuePersonName || '');
-            
+
             // Map the product
             form.setValue('products', [
                 {
@@ -364,9 +364,20 @@ export default () => {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Contractor Name <span className="text-destructive">*</span></FormLabel>
-                                    <FormControl>
-                                        <Input placeholder="Enter contractor name" {...field} />
-                                    </FormControl>
+                                    <Select onValueChange={field.onChange} value={field.value}>
+                                        <FormControl>
+                                            <SelectTrigger className="w-full h-10">
+                                                <SelectValue placeholder="Select contractor" />
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            {(options?.contractors || []).map((c, i) => (
+                                                <SelectItem key={i} value={c.contractorName}>
+                                                    {c.contractorName}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </FormItem>
                             )}
                         />
@@ -388,9 +399,20 @@ export default () => {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Site Location <span className="text-destructive">*</span></FormLabel>
-                                    <FormControl>
-                                        <Input placeholder="Enter site location" {...field} />
-                                    </FormControl>
+                                    <Select onValueChange={field.onChange} value={field.value}>
+                                        <FormControl>
+                                            <SelectTrigger className="w-full h-10">
+                                                <SelectValue placeholder="Select location" />
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            {(options?.siteLocations || []).map((loc, i) => (
+                                                <SelectItem key={i} value={loc}>
+                                                    {loc}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </FormItem>
                             )}
                         />
@@ -407,17 +429,19 @@ export default () => {
                                             </SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                            {(options?.firms || []).map((firm, i) => (
-                                                <SelectItem key={i} value={firm}>
-                                                    {firm}
-                                                </SelectItem>
-                                            ))}
+                                            {(options?.firms || [])
+                                                .filter(f => user?.administrate || (user?.firm_access || []).includes(f))
+                                                .map((firm, i) => (
+                                                    <SelectItem key={i} value={firm}>
+                                                        {firm}
+                                                    </SelectItem>
+                                                ))}
                                         </SelectContent>
                                     </Select>
                                 </FormItem>
                             )}
                         />
-                         <FormField
+                        <FormField
                             control={form.control}
                             name="remarks"
                             render={({ field }) => (

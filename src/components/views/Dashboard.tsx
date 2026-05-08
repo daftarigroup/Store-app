@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { ChartContainer, ChartTooltip, type ChartConfig } from '../ui/chart';
 import { Bar, BarChart, CartesianGrid, LabelList, XAxis, YAxis } from 'recharts';
 import { useEffect, useState, useMemo } from 'react';
+import { useAuth } from '@/context/AuthContext';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Button } from '../ui/button';
 import { format } from 'date-fns';
@@ -21,8 +22,8 @@ import { fetchIndentRecords, type IndentRecord } from '@/services/indentService'
 import { fetchStoreInRecords, type StoreInRecord } from '@/services/storeInService';
 import { fetchIssueRecords, type IssueRecord } from '@/services/issueService';
 import { insertMasterData, fetchMasterOptions } from '@/services/masterService';
-import { fetchPoMaster } from '@/services/poService';
-import { fetchInventoryRecords } from '@/services/inventoryService';
+import { fetchPoMaster, type PoMasterRecord } from '@/services/poService';
+import { fetchInventoryRecords, type InventoryRecord } from '@/services/inventoryService';
 import { Line, LineChart, Pie, PieChart, Cell, ResponsiveContainer, Tooltip, Area, AreaChart } from 'recharts';
 import { useSheets } from '@/context/SheetsContext';
 import { Database, Plus, Save } from 'lucide-react';
@@ -41,6 +42,7 @@ export default function Dashboard() {
         pcReportSheet,
         allLoading: contextAllLoading
     } = useSheets();
+    const { user } = useAuth();
 
     const [indents, setIndents] = useState<IndentRecord[]>([]);
     const [storeIns, setStoreIns] = useState<StoreInRecord[]>([]);
@@ -78,29 +80,46 @@ export default function Dashboard() {
         const loadData = async () => {
             try {
                 setIsLoading(true);
+                const permittedFirms = user?.administrate ? undefined : (user?.firm_access || []);
                 const [iData, sData, issueData, mData, poData, invData] = await Promise.all([
-                    fetchIndentRecords(),
-                    fetchStoreInRecords(),
-                    fetchIssueRecords(),
+                    fetchIndentRecords(permittedFirms),
+                    fetchStoreInRecords(permittedFirms),
+                    fetchIssueRecords(permittedFirms),
                     fetchMasterOptions(),
-                    fetchPoMaster(),
-                    fetchInventoryRecords()
+                    fetchPoMaster(permittedFirms),
+                    fetchInventoryRecords(permittedFirms)
                 ]);
-                setIndents(iData);
-                setStoreIns(sData);
-                setIssues(issueData);
+                // Filter data based on user permissions
+                let filteredIData = iData;
+                let filteredSData = sData;
+                let filteredIssueData = issueData;
+                let filteredPoData = poData;
+                let filteredAllProjects = mData.firms;
+
+                if (!user?.administrate) {
+                    const permittedFirms = user?.firm_access || [];
+                    filteredSData = sData.filter((item: StoreInRecord) => item.firmNameMatch && permittedFirms.includes(item.firmNameMatch));
+                    filteredIssueData = issueData.filter((item: IssueRecord) => item.firm_name && permittedFirms.includes(item.firm_name));
+                    filteredPoData = poData.filter((item: PoMasterRecord) => item.firmNameMatch && permittedFirms.includes(item.firmNameMatch));
+                    filteredAllProjects = mData.firms.filter((f: string) => permittedFirms.includes(f));
+                }
+
+                setIndents(filteredIData);
+                setStoreIns(filteredSData);
+                setIssues(filteredIssueData);
                 setAllVendors(mData.vendorNames);
                 // setAllDepartments(mData.departments);
-                setAllProjects(mData.firms);
-                setPoMasterData(poData);
+                setAllProjects(filteredAllProjects);
+                setPoMasterData(filteredPoData);
 
                 // Initial total PO calculations
-                const totalVal = poData.reduce((sum, p) => sum + (Number(p.totalPoAmount) || 0), 0);
+                const totalVal = filteredPoData.reduce((sum: number, p: PoMasterRecord) => sum + (Number(p.totalPoAmount) || 0), 0);
                 setPoTotal(totalVal);
 
-                // Calculate stock alerts from inventory
-                const low = invData.filter(i => (i.current || 0) < 5 && (i.current || 0) > 0).length;
-                const outOf = invData.filter(i => (i.current || 0) <= 0).length;
+                // Calculate stock alerts from inventory (Note: Inventory is usually global, but we filter alerts by project if needed)
+                // For now keeping inventory alerts as is or we can filter by fromProject if needed
+                const low = invData.filter((i: InventoryRecord) => (i.current || 0) < 5 && (i.current || 0) > 0).length;
+                const outOf = invData.filter((i: InventoryRecord) => (i.current || 0) <= 0).length;
                 setAlerts({ lowStock: low, outOfStock: outOf });
 
             } catch (error) {
@@ -151,8 +170,8 @@ export default function Dashboard() {
             /* if (filteredDepartments.length > 0 && item.department) {
                 valid = valid && filteredDepartments.includes(item.department);
             } */
-            if (filteredProjects.length > 0 && item.firm_name_match) {
-                valid = valid && filteredProjects.includes(item.firm_name_match);
+            if (filteredProjects.length > 0 && item.firm_name) {
+                valid = valid && filteredProjects.includes(item.firm_name);
             }
 
             return valid;
@@ -221,8 +240,8 @@ export default function Dashboard() {
             if (filteredProducts.length > 0 && item.product_name) {
                 valid = valid && filteredProducts.includes(item.product_name);
             }
-            if (filteredProjects.length > 0 && item.project_name) {
-                valid = valid && filteredProjects.includes(item.project_name);
+            if (filteredProjects.length > 0 && item.firm_name) {
+                valid = valid && filteredProjects.includes(item.firm_name);
             }
             return valid;
         }
@@ -680,14 +699,14 @@ export default function Dashboard() {
                                 </div>
                                 <div className="flex-[2] space-y-2">
                                     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Enter Value</label>
-                                    <Input 
-                                        placeholder="Type the value to insert..." 
+                                    <Input
+                                        placeholder="Type the value to insert..."
                                         value={masterValue}
                                         onChange={(e) => setMasterValue(e.target.value)}
                                         className="bg-white"
                                     />
                                 </div>
-                                <Button 
+                                <Button
                                     className="bg-slate-800 hover:bg-slate-900 text-white gap-2 px-6"
                                     onClick={async () => {
                                         if (!masterColumn || !masterValue) {

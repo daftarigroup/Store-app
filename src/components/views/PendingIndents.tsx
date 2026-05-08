@@ -67,7 +67,7 @@ export default () => {
     // Fetch pending PO decisions from Supabase
     const fetchPendingPoDecisions = async () => {
         if (!supabaseEnabled) return;
-        
+
         try {
             setDataLoading(true);
             let query = supabase
@@ -91,7 +91,7 @@ export default () => {
                 rows.map((r) => ({
                     date: formatDate(new Date(r.timestamp)),
                     indentNo: r.indent_number || '',
-                    firmNameMatch: r.firm_name_match || '',
+                    firmNameMatch: r.firm_name || '',
                     product: r.product_name || '',
                     quantity: r.pending_po_qty || 0,
                     rate: r.approved_rate || 0,
@@ -118,7 +118,7 @@ export default () => {
     // Fetch PO decision history from Supabase
     const fetchPoDecisionHistory = async () => {
         if (!supabaseEnabled) return;
-        
+
         try {
             setDataLoading(true);
             let query = supabase
@@ -141,7 +141,7 @@ export default () => {
                 rows.map((r) => ({
                     date: formatDate(new Date(r.timestamp)),
                     indentNo: r.indent_number || '',
-                    firmNameMatch: r.firm_name_match || '',
+                    firmNameMatch: r.firm_name || '',
                     product: r.product_name || '',
                     quantity: r.pending_po_qty || r.quantity || 0,
                     rate: r.approved_rate || r.rate1 || 0,
@@ -193,7 +193,7 @@ export default () => {
             toast.success(`PO Required status updated to ${response}`);
             setOpenDialog(false);
             setSelectedIndent(null);
-            
+
             // Refresh both tables
             fetchPendingPoDecisions();
             fetchPoDecisionHistory();
@@ -286,11 +286,10 @@ export default () => {
                 const value = getValue() as string;
                 return (
                     <div className="px-2">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            value === 'Yes' 
-                                ? 'bg-green-100 text-green-800 border border-green-200' 
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${value === 'Yes'
+                                ? 'bg-green-100 text-green-800 border border-green-200'
                                 : 'bg-orange-100 text-orange-800 border border-orange-200'
-                        }`}>
+                            }`}>
                             {value}
                         </span>
                     </div>
@@ -382,11 +381,10 @@ export default () => {
                 const value = getValue() as string;
                 return (
                     <div className="px-2">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            value === 'Yes' 
-                                ? 'bg-green-100 text-green-800 border border-green-200' 
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${value === 'Yes'
+                                ? 'bg-green-100 text-green-800 border border-green-200'
                                 : 'bg-orange-100 text-orange-800 border border-orange-200'
-                        }`}>
+                            }`}>
                             {value}
                         </span>
                     </div>
@@ -422,7 +420,7 @@ export default () => {
             header: 'PO Required',
             cell: ({ row }) => {
                 const status = row.original.poRequiredStatus;
-                
+
                 if (status === 'No') {
                     return (
                         <div className="px-2">
@@ -455,12 +453,12 @@ export default () => {
                     >
                         <ListTodo size={50} className="text-primary" />
                     </Heading>
-                    
+
                     <TabsContent value="pending">
                         <DataTable
                             data={pendingTableData}
                             columns={pendingColumns}
-                            searchFields={['product', 'vendorName', 'paymentTerm', 'specifications','firmNameMatch']}
+                            searchFields={['product', 'vendorName', 'paymentTerm', 'specifications', 'firmNameMatch']}
                             dataLoading={dataLoading}
                             className="h-[80dvh]"
                         />
@@ -470,7 +468,7 @@ export default () => {
                         <DataTable
                             data={historyTableData}
                             columns={historyColumns}
-                            searchFields={['product', 'vendorName', 'paymentTerm', 'specifications','firmNameMatch']}
+                            searchFields={['product', 'vendorName', 'paymentTerm', 'specifications', 'firmNameMatch']}
                             dataLoading={dataLoading}
                             className="h-[80dvh]"
                         />
@@ -511,7 +509,7 @@ export default () => {
                                     Cancel
                                 </Button>
                             </DialogClose>
-                            <Button 
+                            <Button
                                 variant="destructive"
                                 onClick={() => handlePoRequired('No')}
                                 disabled={isSubmitting}
@@ -519,7 +517,7 @@ export default () => {
                                 {isSubmitting && <Loader size={16} color="white" className="mr-2" />}
                                 No
                             </Button>
-                            <Button 
+                            <Button
                                 variant="default"
                                 onClick={() => handlePoRequired('Yes')}
                                 disabled={isSubmitting}

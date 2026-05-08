@@ -219,7 +219,7 @@ export default () => {
                         bill_amount: selectedItem.billAmount || 0,
                         photo_of_bill: selectedItem.photoOfBill || '',
                         product_name: selectedItem.productName,
-                        firm_name_match: selectedItem.firmNameMatch,
+                        firm_name: selectedItem.firmNameMatch,
                         payment_terms: selectedItem.paymentTerms,
                     });
                 }
@@ -242,7 +242,7 @@ export default () => {
                         bill_image: selectedItem.photoOfBill || '',
                         bill_no: selectedItem.billNo || '',
                         planned1: formattedDateOnly, // Start Audit stage
-                        firm_name_match: selectedItem.firmNameMatch || user?.firmNameMatch || '',
+                        firm_name: selectedItem.firmNameMatch || user?.firmNameMatch || '',
                     } as any);
                 } catch (auditError) {
                     console.error('Failed to create audit entry during HOD Approval:', auditError);

@@ -14,12 +14,24 @@ export interface StockTransferRecord {
     status: string;
 }
 
-export async function fetchStockTransferRecords() {
+/**
+ * Fetch all stock transfer records from Supabase
+ * @param permittedFirms Optional array of firm names to filter by
+ */
+export async function fetchStockTransferRecords(permittedFirms?: string[]) {
     try {
-        const { data, error } = await supabase
+        let query = supabase
             .from('stock_transfers')
             .select('*')
             .order('timestamp', { ascending: false });
+
+        if (permittedFirms && permittedFirms.length > 0) {
+            // Filter if user is either the sender or receiver project
+            const firmsString = permittedFirms.map(f => `"${f}"`).join(',');
+            query = query.or(`from_project.in.(${firmsString}),to_project.in.(${firmsString})`);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw error;
 

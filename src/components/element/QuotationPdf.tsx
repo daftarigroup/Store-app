@@ -295,14 +295,14 @@ const QuotationPdf = (props: POPdfProps) => {
 
                         {items.map((item, index) => (
                             <View key={index} style={styles.tableRow}>
-                                <Text style={[styles.tableCell, styles.colSr]}>{index + 1}</Text>
-                                <Text style={[styles.tableCell, styles.colInternal]}>{item.internalCode}</Text>
+                                <Text style={[styles.tableCell, styles.colSr]}>{String(index + 1)}</Text>
+                                <Text style={[styles.tableCell, styles.colInternal]}>{String(item.internalCode || '')}</Text>
                                 <View style={[styles.tableCell, styles.colProduct, { textAlign: 'left' }]}>
-                                    <Text style={{ fontFamily: 'Helvetica-Bold' }}>{item.product}</Text>
-                                    <Text style={{ fontSize: 7, color: '#666' }}>{item.description}</Text>
+                                    <Text style={{ fontFamily: 'Helvetica-Bold' }}>{String(item.product || '')}</Text>
+                                    <Text style={{ fontSize: 7, color: '#666' }}>{String(item.description || '')}</Text>
                                 </View>
-                                <Text style={[styles.tableCell, styles.colQty]}>{item.quantity}</Text>
-                                <Text style={[styles.tableCell, styles.colUnit]}>{item.unit}</Text>
+                                <Text style={[styles.tableCell, styles.colQty]}>{String(item.quantity || '0')}</Text>
+                                <Text style={[styles.tableCell, styles.colUnit]}>{String(item.unit || '')}</Text>
                                 <Text style={[styles.tableCell, styles.colRate]}>-</Text>
                             </View>
                         ))}
@@ -312,8 +312,8 @@ const QuotationPdf = (props: POPdfProps) => {
                         <Text style={[styles.sectionHeading, { borderBottom: 0 }]}>Terms & Conditions:</Text>
                         {terms.map((term, index) => (
                             <View key={index} style={styles.termRow}>
-                                <Text style={styles.termNumber}>{index + 1}.</Text>
-                                <Text style={styles.termText}>{term}</Text>
+                                <Text style={styles.termNumber}>{String(index + 1)}.</Text>
+                                <Text style={styles.termText}>{String(term || '')}</Text>
                             </View>
                         ))}
                     </View>

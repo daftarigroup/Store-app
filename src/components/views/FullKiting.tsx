@@ -235,7 +235,7 @@ export default function FullKiting() {
                 bill_amount: Number(values.amount),
                 photo_of_bill: biltyImageUrl,
                 product_name: `Freight for ${selectedIndent.productName}`,
-                firm_name_match: selectedIndent.firmNameMatch,
+                firm_name: selectedIndent.firmNameMatch,
                 payment_form: 'freight',
                 payment_terms: 'Advance', // Set as Advance so it bypasses some filters if needed
                 remark: `Freight for Indent ${selectedIndent.indentNumber} - ${selectedIndent.productName}`,
@@ -261,9 +261,9 @@ export default function FullKiting() {
         <div>
             <Dialog open={openDialog} onOpenChange={setOpenDialog}>
                 <Tabs defaultValue="pending">
-                    <Heading 
-                        heading="Full Kitting" 
-                        subtext="Manage full kitting details" 
+                    <Heading
+                        heading="Full Kitting"
+                        subtext="Manage full kitting details"
                         tabs
                         pendingCount={pendingData.length}
                         historyCount={historyData.length}

@@ -31,6 +31,9 @@ export async function fetchQuotationHistory(): Promise<QuotationHistorySheet[]> 
             unit: r.unit || '',
             pdfLink: r.pdfLink || '',
             firm: r.firm || '',
+            token: r.token || '',
+            vendor_rate: r.vendor_rate || 0,
+            responded_at: r.responded_at || '',
         }));
     } catch (error) {
         console.error('Error fetching quotation history:', error);
@@ -57,6 +60,9 @@ export async function insertQuotationHistory(records: any[]) {
             unit: r.unit,
             pdfLink: r.pdfLink,
             firm: r.firm,
+            token: r.token,
+            vendor_rate: r.vendor_rate,
+            responded_at: r.responded_at,
         }));
 
         const { error } = await supabase
@@ -67,6 +73,51 @@ export async function insertQuotationHistory(records: any[]) {
         return true;
     } catch (error) {
         console.error('Error inserting quotation history:', error);
+        throw error;
+    }
+}
+
+/**
+ * Fetch quotation details by token
+ */
+export async function fetchQuotationByToken(token: string) {
+    try {
+        const { data, error } = await supabase
+            .from('quotation_history')
+            .select('*')
+            .eq('token', token);
+
+        if (error) throw error;
+        return data;
+    } catch (error) {
+        console.error('Error fetching quotation by token:', error);
+        throw error;
+    }
+}
+
+/**
+ * Update vendor rate for a specific item in a quotation
+ */
+export async function updateVendorRate(token: string, indentNo: string, rate: number) {
+    try {
+        const { data, error } = await supabase
+            .from('quotation_history')
+            .update({ 
+                vendor_rate: rate,
+                responded_at: new Date().toISOString()
+            })
+            .match({ token, indentNo })
+            .select();
+
+        if (error) throw error;
+        
+        if (!data || data.length === 0) {
+            return false;
+        }
+        
+        return true;
+    } catch (error) {
+        console.error('Error updating vendor rate:', error);
         throw error;
     }
 }

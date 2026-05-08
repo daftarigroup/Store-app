@@ -62,7 +62,7 @@ export default () => {
     // Filtered inventory based on "From Project"
     const sourceInventory = useMemo(() => {
         if (!fromProject || !inventorySheet) return [];
-        
+
         const filteredIndents = (indentSheet || []).filter((i: any) => i.firmName === fromProject);
         const filteredStoreIns = (storeInSheet || []).filter((s: any) => s.firmNameMatch === fromProject);
         const filteredIssues = (issueSheet || []).filter((is: any) => is.projectName === fromProject);
@@ -115,7 +115,7 @@ export default () => {
                 actual1: timestamp,
                 status: 'Approved',
                 given_qty: values.quantity,
-                project_name: values.fromProject,
+                firm_name: values.fromProject,
                 issue_person_name: user?.name || 'System',
                 remark: values.remark || 'Internal Stock Transfer',
             };
@@ -135,7 +135,7 @@ export default () => {
                 receiving_status: 'Transfer',
                 received_quantity: values.quantity,
                 actual6: timestamp,
-                firm_name_match: values.toProject,
+                firm_name: values.toProject,
                 unit_of_measurement: selectedItem?.uom || '',
                 remark: values.remark || 'Internal Stock Transfer',
                 hod_status: 'Approved',
@@ -164,8 +164,8 @@ export default () => {
 
     return (
         <div className="container mx-auto p-4 sm:p-8 max-w-4xl space-y-8 animate-in fade-in duration-500">
-            <Heading 
-                heading="Stock Transfer" 
+            <Heading
+                heading="Stock Transfer"
                 subtext="Move materials between project locations seamlessly"
             >
                 <ArrowRightLeft size={50} className="text-primary" />
@@ -201,9 +201,11 @@ export default () => {
                                                             </SelectTrigger>
                                                         </FormControl>
                                                         <SelectContent>
-                                                            {masterSheet?.firms?.map(firm => (
-                                                                <SelectItem key={firm} value={firm}>{firm}</SelectItem>
-                                                            ))}
+                                                            {(masterSheet?.firms || [])
+                                                                .filter(f => user?.administrate || (user?.firm_access || []).includes(f))
+                                                                .map(firm => (
+                                                                    <SelectItem key={firm} value={firm}>{firm}</SelectItem>
+                                                                ))}
                                                         </SelectContent>
                                                     </Select>
                                                     <FormMessage />
@@ -227,9 +229,11 @@ export default () => {
                                                             </SelectTrigger>
                                                         </FormControl>
                                                         <SelectContent>
-                                                            {masterSheet?.firms?.filter(f => f !== fromProject).map(firm => (
-                                                                <SelectItem key={firm} value={firm}>{firm}</SelectItem>
-                                                            ))}
+                                                            {(masterSheet?.firms || [])
+                                                                .filter(f => f !== fromProject && (user?.administrate || (user?.firm_access || []).includes(f)))
+                                                                .map(firm => (
+                                                                    <SelectItem key={firm} value={firm}>{firm}</SelectItem>
+                                                                ))}
                                                         </SelectContent>
                                                     </Select>
                                                     <FormMessage />
@@ -276,11 +280,11 @@ export default () => {
                                                     <FormLabel>Quantity to Transfer</FormLabel>
                                                     <FormControl>
                                                         <div className="relative">
-                                                            <Input 
-                                                                type="number" 
-                                                                placeholder="0.00" 
+                                                            <Input
+                                                                type="number"
+                                                                placeholder="0.00"
                                                                 className="bg-background/50 pr-12"
-                                                                {...field} 
+                                                                {...field}
                                                             />
                                                             <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none text-muted-foreground text-sm">
                                                                 {selectedItem?.uom || '-'}
@@ -292,8 +296,8 @@ export default () => {
                                             )}
                                         />
 
-                                        <Button 
-                                            type="submit" 
+                                        <Button
+                                            type="submit"
                                             className="w-full h-10 bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-lg shadow-primary/20 transition-all active:scale-[0.98]"
                                             disabled={isSubmitting}
                                         >
@@ -340,13 +344,13 @@ export default () => {
                         </CardHeader>
                         <CardContent className="text-sm space-y-4 text-muted-foreground leading-relaxed">
                             <p>
-                                <span className="font-semibold text-foreground">Source Project:</span> Stock is deducted as an 
-                                <span className="mx-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-red-500/10 text-red-500 border border-red-500/20">Issued</span> 
+                                <span className="font-semibold text-foreground">Source Project:</span> Stock is deducted as an
+                                <span className="mx-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-red-500/10 text-red-500 border border-red-500/20">Issued</span>
                                 transaction.
                             </p>
                             <p>
-                                <span className="font-semibold text-foreground">Destination Project:</span> Stock is added as a 
-                                <span className="mx-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Stock Transfer</span> 
+                                <span className="font-semibold text-foreground">Destination Project:</span> Stock is added as a
+                                <span className="mx-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Stock Transfer</span>
                                 transaction.
                             </p>
                             <div className="pt-2 border-t border-primary/10">

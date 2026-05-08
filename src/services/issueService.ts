@@ -24,7 +24,6 @@ export interface IssueRecord {
     location?: string;
     constructor_name?: string;
     site_location?: string;
-    project_name?: string;
     rejected_damage_qty?: string;
     damage_remark?: string;
     return_person_name?: string;
@@ -32,20 +31,27 @@ export interface IssueRecord {
     issue_slip?: string;
     return_slip?: string;
     firmNameMatch?: string;
-    firm_name_match?: string;
+    firm_name?: string;
 }
 
 // ==================== FETCH FUNCTIONS ====================
 
 /**
  * Fetch all issue records from Supabase
+ * @param permittedFirms Optional array of firm names to filter by
  */
-export async function fetchIssueRecords(): Promise<IssueRecord[]> {
+export async function fetchIssueRecords(permittedFirms?: string[]): Promise<IssueRecord[]> {
     try {
-        const { data, error } = await supabase
+        let query = supabase
             .from('issue')
             .select('*')
             .order('issue_no', { ascending: false });
+
+        if (permittedFirms && permittedFirms.length > 0) {
+            query = query.in('firm_name', permittedFirms);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw error;
 
@@ -66,15 +72,14 @@ export async function fetchIssueRecords(): Promise<IssueRecord[]> {
             location: r.location || '',
             constructor_name: r.constructor_name || '',
             site_location: r.site_location || '',
-            project_name: r.project_name || '',
+            firm_name: r.firm_name || '',
             rejected_damage_qty: r.rejected_damage_qty || '',
             damage_remark: r.damage_remark || '',
             return_person_name: r.return_person_name || '',
             issue_person_name: r.issue_person_name || '',
             issue_slip: r.issue_slip || '',
             return_slip: r.return_slip || '',
-            firmNameMatch: r.firmNameMatch || r.firm_name_match || '',
-            firm_name_match: r.firm_name_match || '',
+            firmNameMatch: r.firm_name || '',
         }));
     } catch (error) {
         console.error('Error fetching issue records:', error);
@@ -158,7 +163,7 @@ export async function createIssueRecords(rows: Partial<IssueRecord>[]) {
             given_qty: r.given_qty || 0,
             constructor_name: r.constructor_name || '',
             site_location: r.site_location || '',
-            project_name: r.project_name || '',
+            firm_name: r.firm_name || '',
             rejected_damage_qty: r.rejected_damage_qty || '',
             damage_remark: r.damage_remark || '',
             return_person_name: r.return_person_name || '',

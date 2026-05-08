@@ -77,6 +77,9 @@ export default ({ items }: SidebarProps) => {
                     <SidebarMenu>
                         {allItems
                             .filter((item) => {
+                                // Explicitly hidden items
+                                if (item.hidden) return false;
+
                                 // Check user permission
                                 // Grant access if user is admin or has specific permission
                                 const isAdmin = user.administrate === true || (user.administrate as any) === "true";

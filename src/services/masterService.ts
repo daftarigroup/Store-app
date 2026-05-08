@@ -37,6 +37,8 @@ export interface MasterData {
     areaOfUses: string[];
     allGroupHeads: string[];
     siteEngineers: { name: string; number: string; email: string }[];
+    contractors: { contractorName: string; contractorGstin: string; contractorAddress: string; contractorEmail: string; responsiblePerson: string; location: string; phone: string }[];
+    siteLocations: string[];
     firmCompanyMap: Record<string, { companyName: string; companyAddress: string; destinationAddress: string; companyContactPerson: string; }>;
 }
 
@@ -69,6 +71,22 @@ export async function fetchMasterOptions(): Promise<MasterData> {
             number: se.number,
             email: se.email
         }));
+
+        // Fetch contractors
+        const { data: contractorData } = await supabase.from('contractor_details').select('*');
+        const contractors = (contractorData || []).map((c: any) => ({
+            contractorName: c.contractor_name,
+            contractorGstin: c.contractor_gstin || '',
+            contractorAddress: c.contractor_address || '',
+            contractorEmail: c.contractor_email || '',
+            responsiblePerson: c.responsible_person || '',
+            location: c.location || '',
+            phone: c.phone || '',
+        }));
+
+        // Fetch site locations
+        const { data: locationData } = await supabase.from('site_location_details').select('location');
+        const siteLocations = (locationData || []).map((l: any) => l.location);
 
         // Aggregate vendors
         const vendors = records
@@ -157,6 +175,8 @@ export async function fetchMasterOptions(): Promise<MasterData> {
             companyContactPerson: firstWithCompany.company_contact_person || '',
             areaOfUses,
             siteEngineers,
+            contractors,
+            siteLocations,
             defaultTerms: allTerms,
             firmCompanyMap,
         };
@@ -186,6 +206,8 @@ export async function fetchMasterOptions(): Promise<MasterData> {
             companyContactPerson: '',
             areaOfUses: [],
             siteEngineers: [],
+            contractors: [],
+            siteLocations: [],
             defaultTerms: [],
             firmCompanyMap: {},
         };
@@ -352,6 +374,106 @@ export async function deleteSiteEngineer(number: string): Promise<{ success: boo
         return { success: true };
     } catch (error) {
         console.error('Error deleting site engineer:', error);
+        return { success: false, error };
+    }
+}
+
+/**
+ * Contractor Details Functions
+ */
+export async function fetchContractors() {
+    try {
+        const { data, error } = await supabase
+            .from('contractor_details')
+            .select('*')
+            .order('contractor_name', { ascending: true });
+        if (error) throw error;
+        return data || [];
+    } catch (error) {
+        console.error('Error fetching contractors:', error);
+        throw error;
+    }
+}
+
+export async function insertContractor(data: any): Promise<{ success: boolean; error?: any }> {
+    try {
+        const { error } = await supabase.from('contractor_details').insert(data);
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        console.error('Error inserting contractor:', error);
+        return { success: false, error };
+    }
+}
+
+export async function updateContractor(id: number, data: any): Promise<{ success: boolean; error?: any }> {
+    try {
+        const { error } = await supabase.from('contractor_details').update(data).eq('id', id);
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        console.error('Error updating contractor:', error);
+        return { success: false, error };
+    }
+}
+
+export async function deleteContractor(id: number): Promise<{ success: boolean; error?: any }> {
+    try {
+        const { error } = await supabase.from('contractor_details').delete().eq('id', id);
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        console.error('Error deleting contractor:', error);
+        return { success: false, error };
+    }
+}
+
+/**
+ * Site Location Functions
+ */
+export async function fetchSiteLocations() {
+    try {
+        const { data, error } = await supabase
+            .from('site_location_details')
+            .select('*')
+            .order('location', { ascending: true });
+        if (error) throw error;
+        return data || [];
+    } catch (error) {
+        console.error('Error fetching site locations:', error);
+        throw error;
+    }
+}
+
+export async function insertSiteLocation(data: { location: string }): Promise<{ success: boolean; error?: any }> {
+    try {
+        const { error } = await supabase.from('site_location_details').insert(data);
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        console.error('Error inserting site location:', error);
+        return { success: false, error };
+    }
+}
+
+export async function updateSiteLocation(id: number, data: { location: string }): Promise<{ success: boolean; error?: any }> {
+    try {
+        const { error } = await supabase.from('site_location_details').update(data).eq('id', id);
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        console.error('Error updating site location:', error);
+        return { success: false, error };
+    }
+}
+
+export async function deleteSiteLocation(id: number): Promise<{ success: boolean; error?: any }> {
+    try {
+        const { error } = await supabase.from('site_location_details').delete().eq('id', id);
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        console.error('Error deleting site location:', error);
         return { success: false, error };
     }
 }
