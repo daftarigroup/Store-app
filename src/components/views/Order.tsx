@@ -7,6 +7,7 @@ import { Pill } from '../ui/pill';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { useAuth } from '@/context/AuthContext';
 import { supabase, supabaseEnabled } from '@/lib/supabase';
+import { normalizeFirmAccess } from '@/lib/firmAccess';
 import { toast } from 'sonner';
 
 interface HistoryData {
@@ -58,9 +59,12 @@ export default function POHistory() {
                     .select('*')
                     .order('timestamp', { ascending: false });
 
-                if ((user?.firmNameMatch || '').trim().toLowerCase() !== 'all') {
-                    poQuery = poQuery.eq('firm_name', (user?.firmNameMatch || '').trim());
+                const userFirms = normalizeFirmAccess(user?.firm_access) || [];
+                if (userFirms.length === 0) {
+                    setHistoryData([]);
+                    return;
                 }
+                poQuery = poQuery.in('firm_name', userFirms);
 
                 const { data: poMasterData, error: poError } = await poQuery;
                 if (poError) throw poError;
@@ -142,7 +146,7 @@ export default function POHistory() {
         }
 
         fetchPOHistory();
-    }, [user?.firmNameMatch]);
+    }, [user?.firm_access]);
 
     const filteredData = statusFilter === 'All'
         ? historyData

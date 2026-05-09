@@ -7,6 +7,7 @@ import DataTable from '../element/DataTable';
 import { useAuth } from '@/context/AuthContext';
 import { Pill } from '../ui/pill';
 import { supabase, supabaseEnabled } from '@/lib/supabase';
+import { normalizeFirmAccess } from '@/lib/firmAccess';
 import { toast } from 'sonner';
 
 interface ApprovedPOData {
@@ -63,10 +64,12 @@ export default function ApprovedPOs() {
                 .select('*')
                 .eq('po_requred', 'Yes'); // Note: column name has typo in DB
 
-            // Filter by Project Name if not "all"
-            if (user?.firmNameMatch?.toLowerCase() !== 'all') {
-                query = query.eq('firm_name', user.firmNameMatch);
+            const userFirms = normalizeFirmAccess(user?.firm_access) || [];
+            if (userFirms.length === 0) {
+                setApprovedTableData([]);
+                return;
             }
+            query = query.in('firm_name', userFirms);
 
             const { data: indentData, error: indentError } = await query;
 
@@ -145,7 +148,7 @@ export default function ApprovedPOs() {
 
     useEffect(() => {
         fetchPendingPOs();
-    }, [user?.firmNameMatch]);
+    }, [user?.firm_access]);
 
     // Creating approved PO table columns (same as history but only for "Yes" entries)
     const approvedColumns: ColumnDef<ApprovedPOData>[] = [

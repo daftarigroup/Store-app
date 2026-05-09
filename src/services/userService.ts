@@ -11,6 +11,21 @@ export interface UserRecord extends UserPermissions {
     timestamp: string;
 }
 
+function normalizeFirmName(value: unknown) {
+    return String(value || '').trim();
+}
+
+function normalizeFirmAccess(value: unknown) {
+    return Array.isArray(value)
+        ? value.map(normalizeFirmName).filter(Boolean)
+        : [];
+}
+
+function applyDerivedUserAccess(user: any) {
+    user.firmNameMatch = user.firm_access?.[0] || '';
+    return user;
+}
+
 /**
  * Fetch all users from Supabase
  */
@@ -31,8 +46,8 @@ export async function fetchUsers(): Promise<UserRecord[]> {
                 password: r.password || '',
                 name: r.name || '',
                 modify_access: (String(r.modify_access || 'EDIT').toUpperCase() === 'VIEW' ? 'VIEW' : 'EDIT'),
-                firmNameMatch: (r.firm_name || '').trim(),
-                firm_access: r.firm_access || [],
+                firmNameMatch: '',
+                firm_access: normalizeFirmAccess(r.firm_access),
                 rowIndex: r.id, // Using ID as a fallback for rowIndex since it's used in and out of tables
             };
 
@@ -46,7 +61,7 @@ export async function fetchUsers(): Promise<UserRecord[]> {
                     (typeof value === 'string' && value.toLowerCase() === 'true');
             });
 
-            return user as UserRecord;
+            return applyDerivedUserAccess(user) as UserRecord;
         });
     } catch (error) {
         console.error('Error fetching users:', error);
@@ -64,8 +79,7 @@ export async function createUser(userData: Partial<UserPermissions>) {
             name: userData.name,
             password: userData.password,
             modify_access: userData.modify_access === 'VIEW' ? 'VIEW' : 'EDIT',
-            firm_name: (userData.firmNameMatch || '').trim(),
-            firm_access: userData.firm_access || [],
+            firm_access: normalizeFirmAccess(userData.firm_access),
             timestamp: new Date().toISOString(),
         };
 
@@ -100,8 +114,7 @@ export async function updateUser(id: number, userData: Partial<UserPermissions>)
             name: userData.name,
             password: userData.password,
             modify_access: userData.modify_access === 'VIEW' ? 'VIEW' : 'EDIT',
-            firm_name: (userData.firmNameMatch || '').trim(),
-            firm_access: userData.firm_access || [],
+            firm_access: normalizeFirmAccess(userData.firm_access),
         };
 
         // Map camelCase permissions to snake_case for DB
@@ -168,8 +181,8 @@ export async function authenticateUser(username: string, password: string): Prom
             password: r.password || '',
             name: r.name || '',
             modify_access: (String(r.modify_access || 'EDIT').toUpperCase() === 'VIEW' ? 'VIEW' : 'EDIT'),
-            firmNameMatch: (r.firm_name || '').trim(),
-            firm_access: r.firm_access || [],
+            firmNameMatch: '',
+            firm_access: normalizeFirmAccess(r.firm_access),
             rowIndex: r.id,
         };
 
@@ -181,7 +194,7 @@ export async function authenticateUser(username: string, password: string): Prom
                 (typeof value === 'string' && value.toLowerCase() === 'true');
         });
 
-        return user as UserRecord;
+        return applyDerivedUserAccess(user) as UserRecord;
     } catch (error) {
         console.error('Error authenticating user:', error);
         return null;
@@ -213,8 +226,8 @@ export async function getUserByUsername(username: string): Promise<UserRecord | 
             password: r.password || '',
             name: r.name || '',
             modify_access: (String(r.modify_access || 'EDIT').toUpperCase() === 'VIEW' ? 'VIEW' : 'EDIT'),
-            firmNameMatch: (r.firm_name || '').trim(),
-            firm_access: r.firm_access || [],
+            firmNameMatch: '',
+            firm_access: normalizeFirmAccess(r.firm_access),
             rowIndex: r.id,
         };
 
@@ -226,7 +239,7 @@ export async function getUserByUsername(username: string): Promise<UserRecord | 
                 (typeof value === 'string' && value.toLowerCase() === 'true');
         });
 
-        return user as UserRecord;
+        return applyDerivedUserAccess(user) as UserRecord;
     } catch (error) {
         console.error('Error fetching user by username:', error);
         return null;

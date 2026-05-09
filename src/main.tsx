@@ -123,6 +123,17 @@ function GatedRoute({
     return children;
 }
 
+function firmMatchesAccess(record: any, user: any) {
+    const allowedFirms = Array.isArray(user?.firm_access)
+        ? user.firm_access.map((firm: string) => String(firm || '').trim().toLowerCase()).filter(Boolean)
+        : [];
+
+    if (allowedFirms.length === 0) return false;
+
+    const recordFirm = String(record?.firmNameMatch || record?.firm_name || record?.firmName || '').trim().toLowerCase();
+    return allowedFirms.includes(recordFirm);
+}
+
 const routes: RouteAttributes[] = [
     {
         path: '',
@@ -164,11 +175,7 @@ const routes: RouteAttributes[] = [
         element: <IssueData />,
         notifications: (issueSheet: any[], user: any) =>
             issueSheet.filter((sheet: any) => {
-                const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
-                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name || '').trim().toLowerCase();
-                const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
-
-                return isFirmMatch &&
+                return firmMatchesAccess(sheet, user) &&
                     sheet.planned1 &&
                     sheet.planned1.toString().trim() !== '' &&
                     (!sheet.actual1 || sheet.actual1.toString().trim() === '') &&
@@ -203,14 +210,10 @@ const routes: RouteAttributes[] = [
         element: <ApproveIndent />,
         notifications: (sheets: any[], user: any) => {
             const data = Array.isArray(sheets[0]) ? sheets[0] : sheets;
-            const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
 
             return data.filter(
                 (sheet: any) => {
-                    const sheetFirm = (sheet.firmNameMatch || sheet.firm_name || '').trim().toLowerCase();
-                    const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
-
-                    return isFirmMatch &&
+                    return firmMatchesAccess(sheet, user) &&
                         sheet.planned1 && sheet.planned1 !== '' &&
                         (!sheet.actual1 || sheet.actual1 === '');
                 }
@@ -224,12 +227,8 @@ const routes: RouteAttributes[] = [
         icon: <UserCog size={20} />,
         element: <VendorUpdate />,
         notifications: (sheets: any[], user: any) => {
-            const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
             return sheets.filter((sheet: any) => {
-                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name || '').trim().toLowerCase();
-                const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
-
-                return isFirmMatch && sheet.planned2 !== '' && sheet.actual2 === '';
+                return firmMatchesAccess(sheet, user) && sheet.planned2 !== '' && sheet.actual2 === '';
             }).length;
         },
     },
@@ -241,14 +240,10 @@ const routes: RouteAttributes[] = [
         element: <DepartmentApproval />,
         notifications: (sheetsData: any[], user: any) => {
             const sheets = Array.isArray(sheetsData[0]) ? sheetsData[0] : sheetsData;
-            const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
 
             return sheets.filter(
                 (sheet: any) => {
-                    const sheetFirm = (sheet.firmNameMatch || sheet.firm_name || '').trim().toLowerCase();
-                    const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
-
-                    return isFirmMatch &&
+                    return firmMatchesAccess(sheet, user) &&
                         (sheet.vendorType || sheet.vendor_type) !== 'Direct' &&
                         sheet.planned3 && sheet.planned3 !== '' &&
                         (!sheet.actual3 || sheet.actual3 === '') &&
@@ -265,14 +260,10 @@ const routes: RouteAttributes[] = [
         element: <RateApproval />,
         notifications: (sheetsData: any[], user: any) => {
             const sheets = Array.isArray(sheetsData[0]) ? sheetsData[0] : sheetsData;
-            const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
 
             return sheets.filter(
                 (sheet: any) => {
-                    const sheetFirm = (sheet.firmNameMatch || sheet.firm_name || '').trim().toLowerCase();
-                    const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
-
-                    return isFirmMatch &&
+                    return firmMatchesAccess(sheet, user) &&
                         (sheet.vendorType || sheet.vendor_type) !== 'Direct' &&
                         sheet.planned4 && sheet.planned4 !== '' &&
                         (!sheet.approvedVendorName && !sheet.approved_vendor_name) &&
@@ -306,12 +297,8 @@ const routes: RouteAttributes[] = [
         icon: <Clock size={20} />,
         element: <PendingPo />,
         notifications: (sheets: any[], user: any) => {
-            const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
             return sheets.filter((sheet: any) => {
-                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name || '').trim().toLowerCase();
-                const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
-
-                return isFirmMatch &&
+                return firmMatchesAccess(sheet, user) &&
                     sheet.poRequred &&
                     sheet.poRequred.toString().trim() === 'Yes' &&
                     sheet.pendingPoQty &&
@@ -343,13 +330,9 @@ const routes: RouteAttributes[] = [
             }
 
             try {
-                // Filter by firm and valid PO numbers
-                const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
+                // Filter by allowed projects and valid PO numbers
                 const sheetsWithPoNumbers = sheets.filter((sheet: any) => {
-                    const sheetFirm = (sheet.firmNameMatch || sheet.firm_name || '').trim().toLowerCase();
-                    const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
-
-                    return isFirmMatch &&
+                    return firmMatchesAccess(sheet, user) &&
                         sheet?.poNumber &&
                         sheet?.poNumber.toString().trim() !== '';
                 });
@@ -392,10 +375,6 @@ const routes: RouteAttributes[] = [
             const uniquePOs = new Set<string>();
 
             indentSheet.forEach((sheet: any) => {
-                const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
-                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name || '').trim().toLowerCase();
-                const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
-
                 // Calculate received quantity dynamically as done in GetLift.tsx
                 const receivedQty = (Number(sheet.receivedQuantity) || 0) + storeInSheet
                     .filter(
@@ -416,7 +395,7 @@ const routes: RouteAttributes[] = [
                 const hasNoActual5 = !sheet.actual5 || sheet.actual5.toString().trim() === '';
                 const isPending = sheet.liftingStatus === 'Pending' || sheet.liftingStatus === '' || !sheet.liftingStatus;
 
-                if (isFirmMatch && hasPlanned5 && hasNoActual5 && isPending && pendingPoQty > 0) {
+                if (firmMatchesAccess(sheet, user) && hasPlanned5 && hasNoActual5 && isPending && pendingPoQty > 0) {
                     uniquePOs.add(sheet.poNumber || `NO_PO_${sheet.indentNumber}`);
                 }
             });
@@ -434,10 +413,8 @@ const routes: RouteAttributes[] = [
         element: <StoreIn />,
         notifications: (sheetsData: any[], user: any) => {
             const sheets = Array.isArray(sheetsData[0]) ? sheetsData[0] : sheetsData;
-            const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
             const filteredByFirm = sheets.filter((item: any) => {
-                const sheetFirm = (item.firmNameMatch || item.firm_name || '').trim().toLowerCase();
-                return userFirm === "all" || sheetFirm === userFirm;
+                return firmMatchesAccess(item, user);
             });
 
             // Filter for pending items (planned6 set, actual6 empty)
@@ -459,15 +436,12 @@ const routes: RouteAttributes[] = [
         element: <HodStoreApproval />,
         notifications: (storeInSheet: any[], user: any) => {
             const data = Array.isArray(storeInSheet[0]) ? storeInSheet[0] : storeInSheet;
-            const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
 
             return data.filter((sheet: any) => {
-                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name || '').trim().toLowerCase();
-                const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
                 const isPlanned = (sheet.plannedHod || sheet.hod_planned || sheet.hodPlanned);
                 const isActual = (sheet.actualHod || sheet.hod_actual || sheet.hodActual);
 
-                return isFirmMatch &&
+                return firmMatchesAccess(sheet, user) &&
                     isPlanned && isPlanned.toString().trim() !== '' &&
                     (!isActual || isActual.toString().trim() === '');
             }).length;
@@ -480,12 +454,8 @@ const routes: RouteAttributes[] = [
         icon: <Truck size={20} />,
         element: <FullKiting />,
         notifications: (sheets: any[], user: any) => {
-            const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
             return sheets.filter((sheet: any) => {
-                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name || '').trim().toLowerCase();
-                const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
-
-                return isFirmMatch &&
+                return firmMatchesAccess(sheet, user) &&
                     sheet.planned &&
                     sheet.planned.toString().trim() !== '' &&
                     (!sheet.actual || sheet.actual.toString().trim() === '');
@@ -617,9 +587,7 @@ const routes: RouteAttributes[] = [
             if (paymentsData.length === 0) return 0;
 
             const pendingItems = paymentsData.filter((payment: any) => {
-                const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
-                const paymentFirm = (payment.firmNameMatch || payment.firm_name || payment.firm_name || '').trim().toLowerCase();
-                const firmMatch = userFirm === "all" || paymentFirm === userFirm;
+                const firmMatch = firmMatchesAccess(payment, user);
                 if (!firmMatch) return false;
 
                 // Check payment terms: Only count if Partly Advance or Partly PI
@@ -696,13 +664,9 @@ const routes: RouteAttributes[] = [
         element: <QuantityCheckInReceiveItem />,
         notifications: (sheetsData: any[], user: any) => {
             const sheets = Array.isArray(sheetsData[0]) ? sheetsData[0] : sheetsData;
-            const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
 
             return sheets.filter((sheet: any) => {
-                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name || '').trim().toLowerCase();
-                const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
-
-                return isFirmMatch &&
+                return firmMatchesAccess(sheet, user) &&
                     (sheet.planned7 || sheet.planned_7) &&
                     (sheet.planned7 || sheet.planned_7).toString().trim() !== '' &&
                     (!sheet.actual7 && !sheet.actual_7)
@@ -717,13 +681,9 @@ const routes: RouteAttributes[] = [
         element: <SendDebitNote />,
         notifications: (sheetsData: any[], user: any) => {
             const sheets = Array.isArray(sheetsData[0]) ? sheetsData[0] : sheetsData;
-            const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
 
             return sheets.filter((sheet: any) => {
-                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name || '').trim().toLowerCase();
-                const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
-
-                return isFirmMatch &&
+                return firmMatchesAccess(sheet, user) &&
                     (sheet.planned9 || sheet.planned_9) &&
                     (sheet.planned9 || sheet.planned_9).toString().trim() !== '' &&
                     (!sheet.actual9 && !sheet.actual_9)
@@ -738,13 +698,8 @@ const routes: RouteAttributes[] = [
         icon: <BarChart size={20} />,
         element: <AuditData />,
         notifications: (sheets: any[], user: any) => {
-            const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
-
             return sheets.filter((sheet: any) => {
-                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name || '').trim().toLowerCase();
-                const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
-
-                return isFirmMatch &&
+                return firmMatchesAccess(sheet, user) &&
                     sheet.planned1 &&
                     sheet.planned1.toString().trim() !== '' &&
                     (!sheet.actual1 || sheet.actual1.toString().trim() === '');
@@ -892,10 +847,7 @@ const routes: RouteAttributes[] = [
         notifications: (sheets: any[], user: any) => {
             // Count items where planned11 is set but actual11 is not
             return sheets.filter((sheet: any) => {
-                const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
-                const sheetFirm = (sheet.firmNameMatch || sheet.firm_name || '').trim().toLowerCase();
-                const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
-                if (!isFirmMatch) return false;
+                if (!firmMatchesAccess(sheet, user)) return false;
 
                 const hasPlanned11 = sheet.planned11 && sheet.planned11.toString().trim() !== '';
                 const noActual11 = !sheet.actual11 || sheet.actual11.toString().trim() === '';

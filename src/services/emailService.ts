@@ -62,9 +62,9 @@ export function generateBiddingEmailHtml(vendorName: string, firmName: string, t
     
     return `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; rounded: 8px;">
-            <h2 style="color: #1e293b;">Quotation Request from ${firmName}</h2>
+            <h2 style="color: #1e293b;">Enquiry Request from ${firmName}</h2>
             <p>Dear ${vendorName},</p>
-            <p>We have a new quotation request for you. Please click the button below to view the items and submit your competitive rates.</p>
+            <p>We have a new enquiry request for you. Please click the button below to view the items and submit your competitive rates.</p>
             <div style="text-align: center; margin: 30px 0;">
                 <a href="${bidLink}" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">View Items & Submit Rates</a>
             </div>

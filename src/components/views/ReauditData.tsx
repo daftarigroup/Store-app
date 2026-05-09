@@ -43,12 +43,8 @@ export default function ReauditData() {
     const fetchData = async () => {
         setDataLoading(true);
         try {
-            const records = await fetchTallyEntryRecords();
-            // Filter by Project Name
-            const filteredByFirm = records.filter(item => {
-                return (user.firmNameMatch || '').trim().toLowerCase() === "all" || (item.firmNameMatch || '').trim() === (user.firmNameMatch || '').trim();
-            });
-            setAllData(filteredByFirm);
+            const records = await fetchTallyEntryRecords(user?.firm_access || []);
+            setAllData(records);
         } catch (error) {
             console.error('Failed to fetch tally entry records:', error);
             toast.error('Failed to load data');
@@ -59,7 +55,7 @@ export default function ReauditData() {
 
     useEffect(() => {
         fetchData();
-    }, [user.firmNameMatch]);
+    }, [user.firm_access]);
 
     const pendingData = useMemo(() => {
         return allData.filter(i => i.planned3 && !i.actual3);

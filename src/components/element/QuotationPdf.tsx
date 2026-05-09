@@ -252,7 +252,7 @@ const QuotationPdf = (props: POPdfProps) => {
                     </View>
 
                     <View style={styles.poHeader}>
-                        <Text style={styles.poNumber}>QUOTATION NO: {quotationNumber}</Text>
+                        <Text style={styles.poNumber}>ENQUIRY NO: {quotationNumber}</Text>
                         <Text style={styles.poDate}>DATE: {quotationDate}</Text>
                     </View>
 

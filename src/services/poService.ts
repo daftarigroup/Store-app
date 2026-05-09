@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { hasNoFirmAccess, normalizeFirmAccess } from '@/lib/firmAccess';
 
 /**
  * Fetch all indent data from Supabase
@@ -62,13 +63,16 @@ export interface PoMasterRecord {
 
 export async function fetchIndents(permittedFirms?: string[]) {
     try {
+        if (hasNoFirmAccess(permittedFirms)) return [];
+        const firms = normalizeFirmAccess(permittedFirms);
+
         let query = supabase
             .from('indent')
             .select('*')
             .order('indent_number', { ascending: false });
 
-        if (permittedFirms && permittedFirms.length > 0) {
-            query = query.in('firm_name', permittedFirms);
+        if (firms) {
+            query = query.in('firm_name', firms);
         }
 
         const { data, error } = await query;
@@ -120,13 +124,16 @@ export async function fetchIndents(permittedFirms?: string[]) {
  */
 export async function fetchPoMaster(permittedFirms?: string[]) {
     try {
+        if (hasNoFirmAccess(permittedFirms)) return [];
+        const firms = normalizeFirmAccess(permittedFirms);
+
         let query = supabase
             .from('po_master')
             .select('*')
             .order('timestamp', { ascending: false });
 
-        if (permittedFirms && permittedFirms.length > 0) {
-            query = query.in('firm_name', permittedFirms);
+        if (firms) {
+            query = query.in('firm_name', firms);
         }
 
         const { data, error } = await query;

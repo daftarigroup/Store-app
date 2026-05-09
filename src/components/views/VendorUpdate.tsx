@@ -29,6 +29,7 @@ import Heading from '../element/Heading';
 import { Pill } from '../ui/pill';
 import { formatDate, formatDateTime } from '@/lib/utils';
 import { supabase, supabaseEnabled } from '@/lib/supabase';
+import { normalizeFirmAccess } from '@/lib/firmAccess';
 
 interface VendorUpdateData {
     id: number;
@@ -107,9 +108,13 @@ export default () => {
                 .not('planned2', 'is', null)
                 .is('actual2', null);
 
-            if (user.firmNameMatch.toLowerCase() !== 'all') {
-                query = query.eq('firm_name', user.firmNameMatch);
+            const userFirms = normalizeFirmAccess(user.firm_access) || [];
+            if (userFirms.length === 0) {
+                setTableData([]);
+                setFilteredTableData([]);
+                return;
             }
+            query = query.in('firm_name', userFirms);
 
             const { data, error } = await query.order('indent_number', { ascending: false });
 
@@ -153,9 +158,13 @@ export default () => {
                 .not('planned2', 'is', null)
                 .not('actual2', 'is', null);
 
-            if (user.firmNameMatch.toLowerCase() !== 'all') {
-                query = query.eq('firm_name', user.firmNameMatch);
+            const userFirms = normalizeFirmAccess(user.firm_access) || [];
+            if (userFirms.length === 0) {
+                setHistoryData([]);
+                setFilteredHistoryData([]);
+                return;
             }
+            query = query.in('firm_name', userFirms);
 
             const { data, error } = await query.order('indent_number', { ascending: false });
 
@@ -202,7 +211,7 @@ export default () => {
     useEffect(() => {
         fetchPendingVendorUpdates();
         fetchCompletedVendorUpdates();
-    }, [user.firmNameMatch]);
+    }, [user.firm_access]);
 
     // Filter pending data by date, UOM, and search query
     useEffect(() => {

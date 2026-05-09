@@ -21,6 +21,7 @@ import {
 import { toast } from 'sonner';
 import { PuffLoader as Loader } from 'react-spinners';
 import { supabase, supabaseEnabled } from '@/lib/supabase';
+import { normalizeFirmAccess } from '@/lib/firmAccess';
 
 interface PendingIndentsData {
     date: string;
@@ -78,9 +79,12 @@ export default () => {
                 .neq('approved_vendor_name', '')
                 .or('po_requred.is.null,po_requred.eq.');
 
-            if (user.firmNameMatch.toLowerCase() !== 'all') {
-                query = query.eq('firm_name', user.firmNameMatch);
+            const userFirms = normalizeFirmAccess(user.firm_access) || [];
+            if (userFirms.length === 0) {
+                setPendingTableData([]);
+                return;
             }
+            query = query.in('firm_name', userFirms);
 
             const { data, error } = await query.order('indent_number', { ascending: false });
 
@@ -113,7 +117,7 @@ export default () => {
 
     useEffect(() => {
         fetchPendingPoDecisions();
-    }, [user.firmNameMatch]);
+    }, [user.firm_access]);
 
     // Fetch PO decision history from Supabase
     const fetchPoDecisionHistory = async () => {
@@ -128,9 +132,12 @@ export default () => {
                 .neq('po_requred', '')
                 .in('po_requred', ['Yes', 'No']);
 
-            if (user.firmNameMatch.toLowerCase() !== 'all') {
-                query = query.eq('firm_name', user.firmNameMatch);
+            const userFirms = normalizeFirmAccess(user.firm_access) || [];
+            if (userFirms.length === 0) {
+                setHistoryTableData([]);
+                return;
             }
+            query = query.in('firm_name', userFirms);
 
             const { data, error } = await query.order('indent_number', { ascending: false });
 
@@ -166,7 +173,7 @@ export default () => {
     useEffect(() => {
         fetchPendingPoDecisions();
         fetchPoDecisionHistory();
-    }, [user.firmNameMatch]);
+    }, [user.firm_access]);
 
     const handlePoRequired = async (response: 'Yes' | 'No') => {
         if (!selectedIndent) return;

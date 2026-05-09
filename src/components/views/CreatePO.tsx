@@ -273,7 +273,7 @@ const CreatePO = () => {
 
         try {
             setDataLoading(true);
-            const permittedFirms = user?.administrate ? undefined : (user?.firm_access || []);
+            const permittedFirms = user?.firm_access || [];
             const [indents, poMaster, masterData] = await Promise.all([
                 fetchIndents(permittedFirms),
                 fetchPoMaster(permittedFirms),

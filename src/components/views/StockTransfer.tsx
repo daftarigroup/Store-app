@@ -202,7 +202,7 @@ export default () => {
                                                         </FormControl>
                                                         <SelectContent>
                                                             {(masterSheet?.firms || [])
-                                                                .filter(f => user?.administrate || (user?.firm_access || []).includes(f))
+                                                                .filter(f => (user?.firm_access || []).includes(f))
                                                                 .map(firm => (
                                                                     <SelectItem key={firm} value={firm}>{firm}</SelectItem>
                                                                 ))}
@@ -230,7 +230,7 @@ export default () => {
                                                         </FormControl>
                                                         <SelectContent>
                                                             {(masterSheet?.firms || [])
-                                                                .filter(f => f !== fromProject && (user?.administrate || (user?.firm_access || []).includes(f)))
+                                                                .filter(f => f !== fromProject && (user?.firm_access || []).includes(f))
                                                                 .map(firm => (
                                                                     <SelectItem key={firm} value={firm}>{firm}</SelectItem>
                                                                 ))}

@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { hasNoFirmAccess, normalizeFirmAccess } from '@/lib/firmAccess';
 
 /**
  * Indent Service
@@ -79,14 +80,16 @@ export interface IndentRecord {
  */
 export async function fetchIndentRecords(permittedFirms?: string[]): Promise<IndentRecord[]> {
     try {
+        if (hasNoFirmAccess(permittedFirms)) return [];
+        const firms = normalizeFirmAccess(permittedFirms);
+
         let query = supabase
             .from('indent')
             .select('*')
             .order('indent_number', { ascending: false });
 
-        // Apply firm-based filtering if permittedFirms is provided and not empty
-        if (permittedFirms && permittedFirms.length > 0) {
-            query = query.in('firm_name', permittedFirms);
+        if (firms) {
+            query = query.in('firm_name', firms);
         }
 
         const { data, error } = await query;

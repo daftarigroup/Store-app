@@ -430,7 +430,7 @@ export default () => {
                                         </FormControl>
                                         <SelectContent>
                                             {(options?.firms || [])
-                                                .filter(f => user?.administrate || (user?.firm_access || []).includes(f))
+                                                .filter(f => (user?.firm_access || []).includes(f))
                                                 .map((firm, i) => (
                                                     <SelectItem key={i} value={firm}>
                                                         {firm}

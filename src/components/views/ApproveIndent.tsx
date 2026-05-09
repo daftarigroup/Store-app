@@ -66,7 +66,7 @@ export default function ApproveIndent() {
         setDataLoading(true);
         try {
             // Pass permitted firms to the service for backend-level filtering
-            const permittedFirms = user?.administrate ? undefined : (user?.firm_access || []);
+            const permittedFirms = user?.firm_access || [];
             const records = await fetchIndentRecords(permittedFirms);
             setAllData(records);
         } catch (error) {
@@ -79,7 +79,7 @@ export default function ApproveIndent() {
 
     useEffect(() => {
         fetchData();
-    }, [user?.firm_access, user?.administrate]);
+    }, [user?.firm_access]);
 
     const pendingData = useMemo(() => {
         return allData.filter(i => i.planned1 && !i.actual1);

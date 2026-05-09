@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { normalizeFirmAccess } from '@/lib/firmAccess';
 
 /**
  * Master Service
@@ -45,7 +46,7 @@ export interface MasterData {
 /**
  * Fetch all master data options for dropdowns
  */
-export async function fetchMasterOptions(): Promise<MasterData> {
+export async function fetchMasterOptions(permittedFirms?: string[]): Promise<MasterData> {
     try {
         const { data, error } = await supabase
             .from('master')
@@ -53,11 +54,22 @@ export async function fetchMasterOptions(): Promise<MasterData> {
 
         if (error) throw error;
 
-        const records = data || [];
+        const allowedFirms = normalizeFirmAccess(permittedFirms);
+        const records = allowedFirms === undefined
+            ? data || []
+            : (data || []).filter((r: any) => {
+                const firm = String(r.firm_name || '').trim().toLowerCase();
+                return !firm || allowedFirms.map((allowed) => allowed.toLowerCase()).includes(firm);
+            });
 
         // const departments = Array.from(new Set(records.map(r => r.department).filter(Boolean)));
         const uoms = Array.from(new Set(records.map(r => r.uom).filter(Boolean)));
-        const firms = Array.from(new Set(records.map(r => r.firm_name).filter(Boolean)));
+        const firms = Array.from(new Map(
+            records
+                .map(r => String(r.firm_name || '').trim())
+                .filter(Boolean)
+                .map(firm => [firm.toLowerCase(), firm])
+        ).values()).sort((a, b) => a.localeCompare(b));
         const fmsNames = Array.from(new Set(records.map(r => r.fms_name).filter(Boolean)));
         const paymentTerms = Array.from(new Set(records.map(r => r.payment_term).filter(Boolean)));
         const locations = Array.from(new Set(records.map(r => r.where).filter(Boolean)));

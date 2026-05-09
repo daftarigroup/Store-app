@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { hasNoFirmAccess, normalizeFirmAccess } from '@/lib/firmAccess';
 
 /**
  * TallyEntry Service
@@ -74,13 +75,16 @@ export interface TallyEntryRecord {
  */
 export async function fetchTallyEntryRecords(permittedFirms?: string[]): Promise<TallyEntryRecord[]> {
     try {
+        if (hasNoFirmAccess(permittedFirms)) return [];
+        const firms = normalizeFirmAccess(permittedFirms);
+
         let query = supabase
             .from('tally_entry')
             .select('*')
             .order('lift_number', { ascending: false });
 
-        if (permittedFirms && permittedFirms.length > 0) {
-            query = query.in('firm_name', permittedFirms);
+        if (firms) {
+            query = query.in('firm_name', firms);
         }
 
         const { data: tallyData, error: tallyError } = await query;

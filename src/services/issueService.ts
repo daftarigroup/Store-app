@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { hasNoFirmAccess, normalizeFirmAccess } from '@/lib/firmAccess';
 
 /**
  * Issue Service
@@ -42,13 +43,16 @@ export interface IssueRecord {
  */
 export async function fetchIssueRecords(permittedFirms?: string[]): Promise<IssueRecord[]> {
     try {
+        if (hasNoFirmAccess(permittedFirms)) return [];
+        const firms = normalizeFirmAccess(permittedFirms);
+
         let query = supabase
             .from('issue')
             .select('*')
             .order('issue_no', { ascending: false });
 
-        if (permittedFirms && permittedFirms.length > 0) {
-            query = query.in('firm_name', permittedFirms);
+        if (firms) {
+            query = query.in('firm_name', firms);
         }
 
         const { data, error } = await query;

@@ -237,7 +237,7 @@ export default () => {
         setReceivedLoading(true);
         try {
             // Pass permitted firms to the service for backend-level filtering
-            const permittedFirms = user?.administrate ? undefined : (user?.firm_access || []);
+            const permittedFirms = user?.firm_access || [];
             const [storeIns, directIns, masterData] = await Promise.all([
                 fetchStoreInRecords(permittedFirms),
                 fetchDirectRecords(permittedFirms),
@@ -741,7 +741,7 @@ export default () => {
             receivingQty: 0,
             challanNo: '',
             challanImage: undefined,
-            firmName: user?.firmNameMatch === 'all' ? '' : (user?.firmNameMatch || ''),
+            firmName: '',
         },
     });
 
@@ -866,7 +866,7 @@ export default () => {
                                                                 </FormControl>
                                                                 <SelectContent>
                                                                     {(options?.firms || [])
-                                                                        .filter(f => user?.administrate || (user?.firm_access || []).includes(f))
+                                                                        .filter(f => (user?.firm_access || []).includes(f))
                                                                         .map((f) => (
                                                                             <SelectItem key={f} value={f}>
                                                                                 {f}

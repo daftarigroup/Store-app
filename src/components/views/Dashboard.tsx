@@ -80,12 +80,12 @@ export default function Dashboard() {
         const loadData = async () => {
             try {
                 setIsLoading(true);
-                const permittedFirms = user?.administrate ? undefined : (user?.firm_access || []);
+                const permittedFirms = user?.firm_access || [];
                 const [iData, sData, issueData, mData, poData, invData] = await Promise.all([
                     fetchIndentRecords(permittedFirms),
                     fetchStoreInRecords(permittedFirms),
                     fetchIssueRecords(permittedFirms),
-                    fetchMasterOptions(),
+                    fetchMasterOptions(permittedFirms),
                     fetchPoMaster(permittedFirms),
                     fetchInventoryRecords(permittedFirms)
                 ]);
@@ -96,13 +96,10 @@ export default function Dashboard() {
                 let filteredPoData = poData;
                 let filteredAllProjects = mData.firms;
 
-                if (!user?.administrate) {
-                    const permittedFirms = user?.firm_access || [];
-                    filteredSData = sData.filter((item: StoreInRecord) => item.firmNameMatch && permittedFirms.includes(item.firmNameMatch));
-                    filteredIssueData = issueData.filter((item: IssueRecord) => item.firm_name && permittedFirms.includes(item.firm_name));
-                    filteredPoData = poData.filter((item: PoMasterRecord) => item.firmNameMatch && permittedFirms.includes(item.firmNameMatch));
-                    filteredAllProjects = mData.firms.filter((f: string) => permittedFirms.includes(f));
-                }
+                filteredSData = sData.filter((item: StoreInRecord) => item.firmNameMatch && permittedFirms.includes(item.firmNameMatch));
+                filteredIssueData = issueData.filter((item: IssueRecord) => item.firm_name && permittedFirms.includes(item.firm_name));
+                filteredPoData = poData.filter((item: PoMasterRecord) => item.firmNameMatch && permittedFirms.includes(item.firmNameMatch));
+                filteredAllProjects = mData.firms.filter((f: string) => permittedFirms.includes(f));
 
                 setIndents(filteredIData);
                 setStoreIns(filteredSData);

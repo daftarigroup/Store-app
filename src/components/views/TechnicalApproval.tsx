@@ -26,6 +26,7 @@ import Heading from '../element/Heading';
 import { formatDate, formatDateTime } from '@/lib/utils';
 import { Input } from '../ui/input';
 import { supabase, supabaseEnabled } from '@/lib/supabase';
+import { normalizeFirmAccess } from '@/lib/firmAccess';
 
 interface RateApprovalData {
     id: number;
@@ -73,6 +74,7 @@ type HistoryUpdateValues = z.infer<typeof historyUpdateSchema>;
 
 export default () => {
     const { user } = useAuth();
+    const userFirms = normalizeFirmAccess(user.firm_access) || [];
 
     const [selectedIndent, setSelectedIndent] = useState<RateApprovalData | null>(null);
     const [selectedHistory, setSelectedHistory] = useState<HistoryData | null>(null);
@@ -94,8 +96,11 @@ export default () => {
                 .is('actual3', null)
                 .in('vendor_type', ['Three Party', 'Regular']);
 
-            if (user.firmNameMatch.toLowerCase() !== 'all') {
-                query = query.eq('firm_name', user.firmNameMatch);
+            if (userFirms.length > 0) {
+                query = query.in('firm_name', userFirms);
+            } else {
+                setTableData([]);
+                return;
             }
 
             const { data, error } = await query.order('indent_number', { ascending: false });
@@ -168,7 +173,7 @@ export default () => {
 
     useEffect(() => {
         fetchPendingApprovals();
-    }, [user.firmNameMatch]);
+    }, [user.firm_access]);
 
 
     // Fetch completed three party approvals from Supabase
@@ -183,8 +188,11 @@ export default () => {
                 .not('planned3', 'is', null)
                 .in('vendor_type', ['Three Party', 'Regular']);
 
-            if (user.firmNameMatch.toLowerCase() !== 'all') {
-                query = query.eq('firm_name', user.firmNameMatch);
+            if (userFirms.length > 0) {
+                query = query.in('firm_name', userFirms);
+            } else {
+                setHistoryData([]);
+                return;
             }
 
             const { data, error } = await query.order('indent_number', { ascending: false });
@@ -256,7 +264,7 @@ export default () => {
     useEffect(() => {
         fetchPendingApprovals();
         fetchCompletedApprovals();
-    }, [user.firmNameMatch]);
+    }, [user.firm_access]);
 
     const columns: ColumnDef<RateApprovalData>[] = [
         ...(user.threePartyApprovalAction

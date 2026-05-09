@@ -70,15 +70,18 @@ function filterUniqueQuotationNumbers(data: PoMasterSheet[]): string[] {
 
 // Generate next quotation number based on existing numbers
 function generateNextQuotationNumber(existingNumbers: string[]): string {
-  const numbers = existingNumbers
-    .map(num => {
-      const match = num.match(/QT-(\d+)/);
-      return match ? parseInt(match[1]) : 0;
-    })
-    .filter(num => num > 0);
-
-  const maxNumber = numbers.length > 0 ? Math.max(...numbers) : 0;
+  const maxNumber = getMaxQuotationNumber(existingNumbers);
   return `QT-${String(maxNumber + 1).padStart(3, '0')}`;
+}
+
+function getMaxQuotationNumber(existingNumbers: string[]): number {
+  return existingNumbers
+    .map(num => {
+      const match = String(num || '').trim().match(/^QT-(\d+)$/i);
+      return match ? parseInt(match[1], 10) : 0;
+    })
+    .filter(num => num > 0)
+    .reduce((max, num) => Math.max(max, num), 0);
 }
 
 
@@ -257,7 +260,7 @@ export default function QuotationPage() {
       // The backend IndentController adds a 'status' field: 'Approved' if approvedIndents.length > 0
       const isApproved = item.status === 'Approved' || item.indentStatus === 'Approved' || !isEmpty(item.actual1);
 
-      // 4. Identify if it already has a quotation
+      // 4. Identify if it already has an enquiry
       const hasQuotationInHistory = allHistory.some(h => h.indentNo === item.indentNumber);
 
       // 5. Stage check: Identify if it already moved to Stage 3 (HOD Approval) or beyond
@@ -413,13 +416,7 @@ export default function QuotationPage() {
 
       // Get all existing quotation numbers to generate unique ones - FIXED
       const allNumbers = [...filterUniqueQuotationNumbers(poMasterSheet), ...latestQuotationNumbers];
-      let currentMaxNumber = allNumbers
-        .map(num => {
-          const match = num.match(/QT-(\d+)/);
-          return match ? parseInt(match[1]) : 0;
-        })
-        .filter(num => num > 0)
-        .reduce((max, num) => Math.max(max, num), 0);
+      let currentMaxNumber = getMaxQuotationNumber(allNumbers);
 
       const suppliersToProcess = supplierInfos; 
 
@@ -431,6 +428,7 @@ export default function QuotationPage() {
       for (let i = 0; i < suppliersToProcess.length; i++) {
         const supplierInfo = suppliersToProcess[i];
 
+        currentMaxNumber += 1;
         const uniqueQuotationNumber = `QT-${String(currentMaxNumber).padStart(3, '0')}`;
         const sessionToken = crypto.randomUUID(); // Unique token for this vendor session
 
@@ -473,7 +471,7 @@ export default function QuotationPage() {
         };
 
         const blob = await pdf(<POPdf {...pdfProps} />).toBlob();
-        const file = new File([blob], `QUOTATION-${uniqueQuotationNumber}-${supplierInfo.name}.pdf`, { type: 'application/pdf' });
+        const file = new File([blob], `ENQUIRY-${uniqueQuotationNumber}-${supplierInfo.name}.pdf`, { type: 'application/pdf' });
 
         if (!supplierInfo.email) {
           toast.error(`Email not found for ${supplierInfo.name}!`);
@@ -512,13 +510,13 @@ export default function QuotationPage() {
           const emailHtml = generateBiddingEmailHtml(supplierInfo.name, selectedItemsData[0]?.firmNameMatch || details?.companyName || 'Our Firm', sessionToken);
           await sendEmail({
             to: supplierInfo.email,
-            subject: `Quotation Request: ${uniqueQuotationNumber}`,
+            subject: `Enquiry Request: ${uniqueQuotationNumber}`,
             html: emailHtml
           });
           console.log(`Email sent to ${supplierInfo.name} (${supplierInfo.email})`);
         } catch (emailError) {
           console.error(`Failed to send email to ${supplierInfo.name}:`, emailError);
-          toast.error(`Quotation created, but email failed for ${supplierInfo.name}.`);
+          toast.error(`Enquiry created, but email failed for ${supplierInfo.name}.`);
         }
       }
 
@@ -529,7 +527,7 @@ export default function QuotationPage() {
       // Post to history - inserting multiple rows
       await insertQuotationHistory(allQuotationRows);
 
-      toast.success(`Successfully created ${selectedSuppliers.length} unique quotation(s) for ${selectedSuppliers.length} supplier(s)`);
+      toast.success(`Successfully created ${selectedSuppliers.length} unique enquiry(s) for ${selectedSuppliers.length} supplier(s)`);
       form.reset();
       setSelectedItems([]);
       setSelectedSuppliers([]);
@@ -542,7 +540,7 @@ export default function QuotationPage() {
       }, 1000);
     } catch (e) {
       console.error('Submit error:', e);
-      toast.error('Failed to create quotation: ' + (e as Error).message);
+      toast.error('Failed to create enquiry: ' + (e as Error).message);
     }
   }
 
@@ -602,7 +600,7 @@ export default function QuotationPage() {
           />
         </div>
         <div className="text-sm text-muted-foreground">
-          Showing {groupedHistory.length} unique quotations
+          Showing {groupedHistory.length} unique enquiries
         </div>
       </div>
 
@@ -612,7 +610,7 @@ export default function QuotationPage() {
             <TableRow className="bg-muted/50">
               <TableHead className="w-10"></TableHead>
               <TableHead className="font-bold">Date</TableHead>
-              <TableHead className="font-bold">Quotation No</TableHead>
+              <TableHead className="font-bold">Enquiry No</TableHead>
               <TableHead className="font-bold">Supplier</TableHead>
               <TableHead className="font-bold">Firm</TableHead>
               <TableHead className="font-bold">Items Count</TableHead>
@@ -727,7 +725,7 @@ export default function QuotationPage() {
             </div>
           </div>
           <hr />
-          <h2 className="text-center font-bold text-lg">Create New Quotation</h2>
+          <h2 className="text-center font-bold text-lg">Create New Enquiry</h2>
           <hr />
 
           <div className="grid gap-5 px-4 py-2 text-foreground/80">
@@ -909,7 +907,7 @@ export default function QuotationPage() {
           }}>Reset</Button>
           <Button type="submit" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting && <Loader size={20} color="white" />}
-            Save And Send Quotation
+            Save And Send Enquiry
           </Button>
         </div>
       </form>
@@ -927,8 +925,8 @@ export default function QuotationPage() {
         form.reset();
       }}>
         <Heading
-          heading="Quotation / Enquiry"
-          subtext="Create a quotation from eligible indents or view history"
+          heading="Enquiry"
+          subtext="Create an enquiry from eligible indents or view history"
           tabs
           pendingLabel="Create"
           pendingValue="create"
@@ -957,4 +955,4 @@ export default function QuotationPage() {
       </Tabs>
     </div>
   );
-}
+}

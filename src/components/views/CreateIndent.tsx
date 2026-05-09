@@ -115,7 +115,7 @@ export default () => {
         setHistoryLoading(true);
         try {
             // Pass permitted firms to the service for backend-level filtering
-            const permittedFirms = user?.administrate ? undefined : (user?.firm_access || []);
+            const permittedFirms = user?.firm_access || [];
             const data = await fetchIndentRecords(permittedFirms);
             setHistoryData(data);
         } catch (error) {
@@ -592,8 +592,6 @@ export default () => {
                                                     {(options?.firms || [])
                                                         .filter((firm) => {
                                                             const matchesSearch = firm.toLowerCase().includes(searchTermFirmName.toLowerCase());
-                                                            // If admin, show all. If not, only show permitted firms.
-                                                            if (user?.administrate) return matchesSearch;
                                                             return matchesSearch && (user?.firm_access || []).includes(firm);
                                                         })
                                                         .map((firm, i) => (
@@ -602,7 +600,8 @@ export default () => {
                                                             </SelectItem>
                                                         ))}
 
-                                                    {searchTermFirmName.trim() !== '' &&
+                                                    {user?.administrate &&
+                                                        searchTermFirmName.trim() !== '' &&
                                                         !(options?.firms || []).some(f => f.toLowerCase() === searchTermFirmName.toLowerCase()) && (
                                                             <div className="p-2 border-t mt-1">
                                                                 <Button

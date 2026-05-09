@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { hasNoFirmAccess, normalizeFirmAccess } from '@/lib/firmAccess';
 
 /**
  * StoreIn Service
@@ -99,14 +100,17 @@ export interface LocationOption {
  */
 export async function fetchStoreInRecords(permittedFirms?: string[]) {
     try {
+        if (hasNoFirmAccess(permittedFirms)) return [];
+        const firms = normalizeFirmAccess(permittedFirms);
+
         let query = supabase
             .from('store_in')
             .select('*')
             .order('indent_no', { ascending: false })
             .order('timestamp', { ascending: false });
 
-        if (permittedFirms && permittedFirms.length > 0) {
-            query = query.in('firm_name', permittedFirms);
+        if (firms) {
+            query = query.in('firm_name', firms);
         }
 
         const { data, error } = await query;
@@ -205,13 +209,16 @@ export async function fetchStoreInRecords(permittedFirms?: string[]) {
  */
 export async function fetchDirectRecords(permittedFirms?: string[]) {
     try {
+        if (hasNoFirmAccess(permittedFirms)) return [];
+        const firms = normalizeFirmAccess(permittedFirms);
+
         let query = supabase
             .from('store_in_direct')
             .select('*')
             .order('timestamp', { ascending: false });
 
-        if (permittedFirms && permittedFirms.length > 0) {
-            query = query.in('firm_name_match', permittedFirms);
+        if (firms) {
+            query = query.in('firm_name_match', firms);
         }
 
         const { data, error } = await query;

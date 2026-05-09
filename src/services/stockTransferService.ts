@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { hasNoFirmAccess, normalizeFirmAccess } from '@/lib/firmAccess';
 
 export interface StockTransferRecord {
     id?: number;
@@ -20,14 +21,17 @@ export interface StockTransferRecord {
  */
 export async function fetchStockTransferRecords(permittedFirms?: string[]) {
     try {
+        if (hasNoFirmAccess(permittedFirms)) return [];
+        const firms = normalizeFirmAccess(permittedFirms);
+
         let query = supabase
             .from('stock_transfers')
             .select('*')
             .order('timestamp', { ascending: false });
 
-        if (permittedFirms && permittedFirms.length > 0) {
+        if (firms) {
             // Filter if user is either the sender or receiver project
-            const firmsString = permittedFirms.map(f => `"${f}"`).join(',');
+            const firmsString = firms.map(f => `"${f}"`).join(',');
             query = query.or(`from_project.in.(${firmsString}),to_project.in.(${firmsString})`);
         }
 

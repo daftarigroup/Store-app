@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { hasNoFirmAccess, normalizeFirmAccess } from '@/lib/firmAccess';
 
 /**
  * Inventory Service
@@ -59,13 +60,16 @@ function toTextNumber(value: number): string {
  */
 export async function fetchInventoryRecords(permittedFirms?: string[]): Promise<InventoryRecord[]> {
     try {
+        if (hasNoFirmAccess(permittedFirms)) return [];
+        const firms = normalizeFirmAccess(permittedFirms);
+
         let query = supabase
             .from('inventory')
             .select('*')
             .order('item_name', { ascending: true });
 
-        if (permittedFirms && permittedFirms.length > 0) {
-            query = query.in('firm_name', permittedFirms);
+        if (firms) {
+            query = query.in('firm_name', firms);
         }
 
         const { data, error } = await query;

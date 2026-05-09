@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { hasNoFirmAccess, normalizeFirmAccess } from '@/lib/firmAccess';
 
 /**
  * Fullkitting Service
@@ -41,14 +42,17 @@ export interface FullkittingRecord {
  */
 export async function fetchFullkittingRecords(permittedFirms?: string[]): Promise<FullkittingRecord[]> {
     try {
+        if (hasNoFirmAccess(permittedFirms)) return [];
+        const firms = normalizeFirmAccess(permittedFirms);
+
         let query = supabase
             .from('fullkitting')
             .select('*')
             .order('indent_number', { ascending: false })
             .order('timestamp', { ascending: false });
 
-        if (permittedFirms && permittedFirms.length > 0) {
-            query = query.in('firm_name', permittedFirms);
+        if (firms) {
+            query = query.in('firm_name', firms);
         }
 
         const { data, error } = await query;

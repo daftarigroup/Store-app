@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import type { PaymentsSheet, PaymentHistory } from '@/types/sheets';
+import { hasNoFirmAccess, normalizeFirmAccess } from '@/lib/firmAccess';
 
 /**
  * Payment Service
@@ -12,13 +13,16 @@ import type { PaymentsSheet, PaymentHistory } from '@/types/sheets';
  */
 export async function fetchPayments(permittedFirms?: string[]): Promise<PaymentsSheet[]> {
     try {
+        if (hasNoFirmAccess(permittedFirms)) return [];
+        const firms = normalizeFirmAccess(permittedFirms);
+
         let query = supabase
             .from('payments')
             .select('*')
             .order('id', { ascending: false });
 
-        if (permittedFirms && permittedFirms.length > 0) {
-            query = query.in('firm_name', permittedFirms);
+        if (firms) {
+            query = query.in('firm_name', firms);
         }
 
         const { data, error } = await query;
@@ -64,14 +68,17 @@ export async function fetchPayments(permittedFirms?: string[]): Promise<Payments
  */
 export async function fetchPaymentHistory(permittedFirms?: string[]): Promise<PaymentHistory[]> {
     try {
+        if (hasNoFirmAccess(permittedFirms)) return [];
+        const firms = normalizeFirmAccess(permittedFirms);
+
         let query = supabase
             .from('payments')
             .select('*')
             .eq('payment_done', true)
             .order('id', { ascending: false });
 
-        if (permittedFirms && permittedFirms.length > 0) {
-            query = query.in('firm_name', permittedFirms);
+        if (firms) {
+            query = query.in('firm_name', firms);
         }
 
         const { data, error } = await query;

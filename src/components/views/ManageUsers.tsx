@@ -1,6 +1,6 @@
 import { Building, ShieldCheck, User as UserIcon, Eye, EyeClosed, MoreHorizontal, Pencil, ShieldUser, Trash, UserPlus, Fingerprint, Lock, Shield, Settings, CheckSquare, ListTodo, ClipboardCheck, Truck, BarChart3, Receipt, Box, Users } from 'lucide-react';
 import Heading from '../element/Heading';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { allPermissionKeys, type UserPermissions } from '@/types/sheets';
 import type { ColumnDef } from '@tanstack/react-table';
 import DataTable from '../element/DataTable';
@@ -12,7 +12,6 @@ import {
 } from '../ui/dropdown-menu';
 import { Button } from '../ui/button';
 import { useAuth } from '@/context/AuthContext';
-import { useSheets } from '@/context/SheetsContext';
 import {
     Dialog,
     DialogClose,
@@ -33,6 +32,7 @@ import { toast } from 'sonner';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '../ui/hover-card';
 import { Pill } from '../ui/pill';
 import { fetchUsers, createUser, updateUser, deleteUser } from '@/services/userService';
+import { fetchMasterOptions } from '@/services/masterService';
 import { Card, CardContent } from '../ui/card';
 import { Separator } from '../ui/separator';
 import { cn } from '@/lib/utils';
@@ -128,13 +128,30 @@ const permissionGroups = [
 
 export default function ManageUsers() {
     const { user: currentUser } = useAuth();
-    const { masterSheet: options } = useSheets();
 
     const [tableData, setTableData] = useState<UsersTableData[]>([]);
     const [dataLoading, setDataLoading] = useState(true);
     const [openDialog, setOpenDialog] = useState(false);
     const [selectedUser, setSelectedUser] = useState<UsersTableData | null>(null);
     const [showPassword, setShowPassword] = useState(false);
+    const [allProjectOptions, setAllProjectOptions] = useState<string[]>([]);
+    const permittedProjects = useMemo(() => {
+        const projects = allProjectOptions
+            .map((firm) => String(firm || '').trim())
+            .filter(Boolean);
+
+        return Array.from(new Map(projects.map((firm) => [firm.toLowerCase(), firm])).values())
+            .sort((a, b) => a.localeCompare(b));
+    }, [allProjectOptions]);
+
+    useEffect(() => {
+        fetchMasterOptions()
+            .then((masterOptions) => setAllProjectOptions(masterOptions.firms || []))
+            .catch((error) => {
+                console.error('Failed to fetch project options:', error);
+                toast.error('Failed to load project options');
+            });
+    }, []);
 
     useEffect(() => {
         if (!openDialog) {
@@ -203,14 +220,12 @@ export default function ManageUsers() {
                     <span className={cn(
                         "px-2 py-0.5 rounded-full text-xs font-medium",
                         row.original.permissions.includes('administrate')
-                        ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" 
-                        : "bg-muted text-muted-foreground border border-border"
+                            ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                            : "bg-muted text-muted-foreground border border-border"
                     )}>
-                        {row.original.permissions.includes('administrate') 
-                            ? "Full Access (Admin)" 
-                            : row.original.firm_access.length > 0 
-                                ? `${row.original.firm_access.length} Project(s)` 
-                                : "No Access"}
+                        {row.original.firm_access.length > 0
+                            ? `${row.original.firm_access.length} Project(s)`
+                            : "No Access"}
                     </span>
                 </div>
             )
@@ -375,7 +390,7 @@ export default function ManageUsers() {
                 password: selectedUser.password,
                 modify_access: selectedUser.modify_access || 'EDIT',
                 firmNameMatch: selectedUser.firmNameMatch,
-                firm_access: selectedUser.firm_access,
+                        firm_access: selectedUser.firm_access.map((firm) => firm.trim()).filter(Boolean),
                 permissions: selectedUser.permissions,
             });
             return;
@@ -406,7 +421,7 @@ export default function ManageUsers() {
             password: value.password,
             modify_access: value.modify_access,
             firmNameMatch: value.firmNameMatch || '',
-            firm_access: value.firm_access,
+            firm_access: value.firm_access.map((firm) => firm.trim()).filter(Boolean),
         };
 
         allPermissionKeys.forEach((perm) => {
@@ -576,38 +591,77 @@ export default function ManageUsers() {
                                         <FormLabel className="flex items-center gap-2">
                                             <Building size={14} className="text-primary" /> Permitted Projects (Firm Access)
                                         </FormLabel>
+                                        {permittedProjects.length > 0 && (
+                                            <FormField
+                                                control={form.control}
+                                                name="firm_access"
+                                                render={({ field }) => {
+                                                    const selected = (field.value || []).map((firm) => firm.trim()).filter(Boolean);
+                                                    const allSelected = permittedProjects.length > 0 && permittedProjects.every((firm) => selected.includes(firm));
+
+                                                    return (
+                                                        <FormItem className="flex items-center justify-between rounded-xl border bg-background p-3">
+                                                            <div className="space-y-0.5">
+                                                                <FormLabel htmlFor="select-all-projects" className="text-sm font-bold cursor-pointer">
+                                                                    Select All Projects
+                                                                </FormLabel>
+                                                                <p className="text-[10px] text-muted-foreground">
+                                                                    Grant access to every project listed in the Master Registry.
+                                                                </p>
+                                                            </div>
+                                                            <FormControl>
+                                                                <Checkbox
+                                                                    id="select-all-projects"
+                                                                    checked={allSelected}
+                                                                    onCheckedChange={(checked) => {
+                                                                        field.onChange(checked ? [...permittedProjects] : []);
+                                                                    }}
+                                                                />
+                                                            </FormControl>
+                                                        </FormItem>
+                                                    );
+                                                }}
+                                            />
+                                        )}
                                         <div className="bg-background border rounded-xl p-4 max-h-48 overflow-y-auto custom-scrollbar grid sm:grid-cols-2 gap-3">
-                                            {(options?.firms || []).map((firm) => (
+                                            {permittedProjects.map((firm) => (
                                                 <FormField
                                                     key={firm}
                                                     control={form.control}
                                                     name="firm_access"
-                                                    render={({ field }) => (
-                                                        <FormItem className="flex items-center space-x-2 space-y-0 p-2 rounded-lg hover:bg-muted/50 transition-colors">
-                                                            <FormControl>
-                                                                <Checkbox
-                                                                    checked={field.value?.includes(firm)}
-                                                                    onCheckedChange={(checked) => {
-                                                                        const values = field.value || [];
-                                                                        checked
-                                                                            ? field.onChange([...values, firm])
-                                                                            : field.onChange(values.filter((f) => f !== firm));
-                                                                    }}
-                                                                />
-                                                            </FormControl>
-                                                            <FormLabel className="text-sm font-medium leading-none cursor-pointer select-none">
-                                                                {firm}
-                                                            </FormLabel>
-                                                        </FormItem>
-                                                    )}
+                                                    render={({ field }) => {
+                                                        const values = (field.value || []).map((value) => value.trim()).filter(Boolean);
+                                                        const checked = values.includes(firm);
+
+                                                        return (
+                                                            <FormItem className="flex items-center space-x-2 space-y-0 p-2 rounded-lg hover:bg-muted/50 transition-colors">
+                                                                <FormControl>
+                                                                    <Checkbox
+                                                                        id={`firm-access-${firm}`}
+                                                                        checked={checked}
+                                                                        onCheckedChange={(isChecked) => {
+                                                                            field.onChange(
+                                                                                isChecked
+                                                                                    ? Array.from(new Set([...values, firm]))
+                                                                                    : values.filter((f) => f !== firm)
+                                                                            );
+                                                                        }}
+                                                                    />
+                                                                </FormControl>
+                                                                <FormLabel htmlFor={`firm-access-${firm}`} className="text-sm font-medium leading-none cursor-pointer select-none">
+                                                                    {firm}
+                                                                </FormLabel>
+                                                            </FormItem>
+                                                        );
+                                                    }}
                                                 />
                                             ))}
-                                            {(options?.firms || []).length === 0 && (
+                                            {permittedProjects.length === 0 && (
                                                 <p className="text-sm text-muted-foreground italic col-span-2 text-center py-4">No projects found in Master Registry</p>
                                             )}
                                         </div>
                                         <p className="text-[10px] text-muted-foreground pl-1 italic">
-                                            * Administrators automatically have access to all projects.
+                                            * Project access is controlled only by selected firms, including administrators.
                                         </p>
                                     </div>
                                 </div>

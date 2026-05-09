@@ -72,7 +72,7 @@ export default function VendorBidding() {
                 }
             } catch (error) {
                 console.error('Error loading quotation:', error);
-                toast.error('Failed to load quotation details.');
+                toast.error('Failed to load enquiry details.');
             } finally {
                 setLoading(false);
             }
@@ -116,7 +116,7 @@ export default function VendorBidding() {
             <div className="min-h-screen flex items-center justify-center bg-slate-50">
                 <div className="text-center space-y-4">
                     <Loader2 className="w-10 h-10 animate-spin text-indigo-600 mx-auto" />
-                    <p className="text-slate-600 font-medium">Loading quotation details...</p>
+                    <p className="text-slate-600 font-medium">Loading enquiry details...</p>
                 </div>
             </div>
         );
@@ -131,7 +131,7 @@ export default function VendorBidding() {
                             <AlertCircle className="w-8 h-8" />
                         </div>
                         <h2 className="text-2xl font-bold text-slate-900">Invalid Link</h2>
-                        <p className="text-slate-600">This quotation link is invalid or has expired. Please contact the administrator.</p>
+                        <p className="text-slate-600">This enquiry link is invalid or has expired. Please contact the administrator.</p>
                         <Button variant="outline" onClick={() => window.close()} className="mt-4">Close Tab</Button>
                     </CardContent>
                 </Card>
@@ -154,8 +154,8 @@ export default function VendorBidding() {
                             </h2>
                             <p className="text-lg text-slate-600">
                                 {alreadySubmitted 
-                                    ? 'A response for this quotation has already been recorded in our system.' 
-                                    : 'Your quotation rates have been successfully recorded in our system.'}
+                                    ? 'A response for this enquiry has already been recorded in our system.' 
+                                    : 'Your enquiry rates have been successfully recorded in our system.'}
                             </p>
                         </div>
                         <p className="text-sm text-slate-400 italic">You may now close this window.</p>
@@ -185,9 +185,9 @@ export default function VendorBidding() {
                     
                     <hr className="border-slate-100" />
                     <div className="text-center space-y-1">
-                        <h2 className="font-bold text-xl text-slate-800 uppercase tracking-wide">Quotation Bidding Portal</h2>
+                        <h2 className="font-bold text-xl text-slate-800 uppercase tracking-wide">Enquiry Bidding Portal</h2>
                         <div className="flex justify-center gap-4 text-sm text-slate-500">
-                            <span>Quotation No: <span className="font-bold text-indigo-600">{firstItem.quatationNo}</span></span>
+                            <span>Enquiry No: <span className="font-bold text-indigo-600">{firstItem.quatationNo}</span></span>
                             <span>|</span>
                             <span>Date: <span className="font-bold">{new Date(firstItem.timestamp).toLocaleDateString()}</span></span>
                         </div>

@@ -116,7 +116,7 @@ export default function IssueData() {
         setDataLoading(true);
         try {
             // Pass permitted firms to the service for backend-level filtering
-            const permittedFirms = user?.administrate ? undefined : (user?.firm_access || []);
+            const permittedFirms = user?.firm_access || [];
             const records = await fetchIssueRecords(permittedFirms);
             setAllData(records);
         } catch (error) {

@@ -46,14 +46,9 @@ export default function AgainAuditingTable() {
   const fetchData = async () => {
     setDataLoading(true);
     try {
-      const records = await fetchTallyEntryRecords();
+      const records = await fetchTallyEntryRecords(user?.firm_access || []);
 
-      // Filter by Project Name and status (planned5 exists, actual5 is empty)
-      const filtered = records.filter(item => {
-        const firmMatch = (user.firmNameMatch || '').trim().toLowerCase() === "all" || (item.firmNameMatch || '').trim() === (user.firmNameMatch || '').trim();
-        const stageMatch = item.planned5 && !item.actual5;
-        return firmMatch && stageMatch;
-      });
+      const filtered = records.filter(item => item.planned5 && !item.actual5);
 
       setData(filtered);
     } catch (error) {
@@ -66,7 +61,7 @@ export default function AgainAuditingTable() {
 
   useEffect(() => {
     fetchData();
-  }, [user.firmNameMatch]);
+  }, [user.firm_access]);
 
   // Validation schema
   const schema = z.object({
