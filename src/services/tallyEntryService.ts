@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { hasNoFirmAccess, normalizeFirmAccess } from '@/lib/firmAccess';
+import { hasNoFirmAccess, filterByFirmAccess } from '@/lib/firmAccess';
 
 /**
  * TallyEntry Service
@@ -65,6 +65,7 @@ export interface TallyEntryRecord {
     hodRemark?: string;
     receivingStatus?: string;
     receivedQuantity?: number;
+    firm_id?: number;
 }
 
 // ==================== FETCH FUNCTIONS ====================
@@ -76,16 +77,13 @@ export interface TallyEntryRecord {
 export async function fetchTallyEntryRecords(permittedFirms?: string[]): Promise<TallyEntryRecord[]> {
     try {
         if (hasNoFirmAccess(permittedFirms)) return [];
-        const firms = normalizeFirmAccess(permittedFirms);
+        const allowed = (permittedFirms || []).map((f) => String(f || '').trim()).filter(Boolean);
+        const allowedIds = allowed.filter((v) => /^\d+$/.test(v)).map(Number);
 
-        let query = supabase
+        const query = supabase
             .from('tally_entry')
             .select('*')
             .order('lift_number', { ascending: false });
-
-        if (firms) {
-            query = query.in('firm_name', firms);
-        }
 
         const { data: tallyData, error: tallyError } = await query;
 
@@ -94,7 +92,7 @@ export async function fetchTallyEntryRecords(permittedFirms?: string[]): Promise
         // Fetch additional details from store_in table
         const { data: storeData, error: storeError } = await supabase
             .from('store_in')
-            .select('lift_number, indent_no, hod_status, hod_remark, damage_order, quantity_as_per_bill, bill_received2, receiving_status, received_quantity');
+            .select('lift_number, indent_no, hod_status, hod_remark, damage_order, quantity_as_per_bill, bill_received2, receiving_status, received_quantity, firm_id');
 
         if (storeError) {
             console.warn('⚠️ Error fetching supplementary store_in data:', storeError);
@@ -109,7 +107,7 @@ export async function fetchTallyEntryRecords(permittedFirms?: string[]): Promise
 
         console.log(`📊 Fetched ${tallyData?.length || 0} tally entries and ${storeData?.length || 0} store_in records for join.`);
 
-        return (tallyData || []).map((r: any) => {
+        const mapped = (tallyData || []).map((r: any) => {
             const liftKey = String(r.lift_number || '').trim();
             const indentKey = String(r.indent_number || '').trim();
             const storeInfo = storeMap.get(`${liftKey}-${indentKey}`);
@@ -172,8 +170,48 @@ export async function fetchTallyEntryRecords(permittedFirms?: string[]): Promise
                 hodRemark: storeInfo?.hod_remark || r.hod_remark || '',
                 receivingStatus: storeInfo?.receiving_status || r.receiving_status || '',
                 receivedQuantity: Number(storeInfo?.received_quantity) || 0,
+                firm_id: r.firm_id || storeInfo?.firm_id,
             };
         });
+
+        // Transitional fallback: when users have ID-only access and some legacy rows
+        // still miss firm_id, allow name-match against names of those permitted IDs.
+        let fallbackAllowedNames = new Set<string>();
+        if (allowedIds.length > 0) {
+            const { data: firmRows } = await supabase
+                .from('firm')
+                .select('id, firm_name')
+                .in('id', allowedIds);
+
+            fallbackAllowedNames = new Set(
+                (firmRows || [])
+                    .map((f: any) => String(f.firm_name || '').trim().toLowerCase())
+                    .filter(Boolean)
+            );
+        }
+
+        // Apply firm access AFTER enrichment so legacy rows without tally_entry.firm_id
+        // can still be matched via store_in.firm_id during migration.
+        const idFirstFiltered = filterByFirmAccess(mapped, permittedFirms, {
+            id: (row) => row.firm_id,
+            name: (row) => row.firmNameMatch,
+        });
+
+        if (allowedIds.length === 0 || fallbackAllowedNames.size === 0) {
+            return idFirstFiltered;
+        }
+
+        const mergedById = new Map<number, TallyEntryRecord>();
+        idFirstFiltered.forEach((row) => mergedById.set(row.id, row));
+
+        mapped.forEach((row) => {
+            const name = String(row.firmNameMatch || '').trim().toLowerCase();
+            if (!row.firm_id && fallbackAllowedNames.has(name)) {
+                mergedById.set(row.id, row);
+            }
+        });
+
+        return Array.from(mergedById.values());
     } catch (error) {
         console.error('Error fetching tally entry records:', error);
         throw error;
@@ -228,6 +266,7 @@ export async function createTallyEntryRecord(record: any) {
             planned1: record.planned1,
             firm_name: record.firmNameMatch || record.firm_name,
             firm_name_match: record.firmNameMatch || record.firm_name,
+            firm_id: record.firm_id || record.firmId,
         };
 
         const { error } = await supabase

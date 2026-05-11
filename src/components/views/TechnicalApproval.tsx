@@ -28,6 +28,7 @@ import { Input } from '../ui/input';
 import { supabase, supabaseEnabled } from '@/lib/supabase';
 import { normalizeFirmAccess } from '@/lib/firmAccess';
 
+
 interface RateApprovalData {
     id: number;
     indentNo: string;
@@ -74,7 +75,15 @@ type HistoryUpdateValues = z.infer<typeof historyUpdateSchema>;
 
 export default () => {
     const { user } = useAuth();
-    const userFirms = normalizeFirmAccess(user?.firm_access) || [];
+    const applyFirmAccessFilter = (query: any) => {
+        const userFirms = normalizeFirmAccess(user?.firm_access);
+        if (userFirms === undefined) return query;
+        if (userFirms.length === 0) return null;
+
+        const firmIds = userFirms.filter((firm) => /^\d+$/.test(firm)).map(Number);
+        if (firmIds.length === 0) return null;
+        return query.in('firm_id', firmIds);
+    };
 
     const [selectedIndent, setSelectedIndent] = useState<RateApprovalData | null>(null);
     const [selectedHistory, setSelectedHistory] = useState<HistoryData | null>(null);
@@ -96,20 +105,21 @@ export default () => {
                 .is('actual3', null)
                 .in('vendor_type', ['Three Party', 'Regular']);
 
-            if (userFirms.length > 0) {
-                query = query.in('firm_name', userFirms);
-            } else {
+            const filteredQuery = applyFirmAccessFilter(query);
+            if (!filteredQuery) {
                 setTableData([]);
                 return;
             }
 
-            const { data, error } = await query.order('indent_number', { ascending: false });
+            const { data, error } = await filteredQuery.order('indent_number', { ascending: false });
 
             if (error) throw error;
 
             const rows = (data ?? []) as any[];
+
             setTableData(
                 rows.filter(r => !r.vendor1_rank && !r.vendor2_rank && !r.vendor3_rank)
+
                     .map((r): RateApprovalData => ({
                         id: r.id,
                         indentNo: r.indent_number || '',
@@ -190,20 +200,21 @@ export default () => {
                 .not('planned3', 'is', null)
                 .in('vendor_type', ['Three Party', 'Regular']);
 
-            if (userFirms.length > 0) {
-                query = query.in('firm_name', userFirms);
-            } else {
+            const filteredQuery = applyFirmAccessFilter(query);
+            if (!filteredQuery) {
                 setHistoryData([]);
                 return;
             }
 
-            const { data, error } = await query.order('indent_number', { ascending: false });
+            const { data, error } = await filteredQuery.order('indent_number', { ascending: false });
 
             if (error) throw error;
 
             const rows = (data ?? []) as any[];
+
             setHistoryData(
                 rows.filter(r => r.vendor1_rank || r.vendor2_rank || r.vendor3_rank)
+
                     .map((r): HistoryData => ({
                         id: r.id,
                         indentNo: r.indent_number || '',

@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { hasNoFirmAccess, normalizeFirmAccess } from '@/lib/firmAccess';
+import { hasNoFirmAccess, normalizeFirmAccess, applyFirmAccessFilter } from '@/lib/firmAccess';
 
 /**
  * StoreIn Service
@@ -57,6 +57,9 @@ export interface StoreInRecord {
     billCopyAttached: string;
     reason: string;
     sendDebitNote: string;
+    // Stage 8 fields
+    planned8: string;
+    actual8: string;
     // Stage 9 fields
     planned9: string;
     actual9: string;
@@ -86,7 +89,9 @@ export interface StoreInRecord {
     challanNo: string;
     challanImage: string;
     receiverName: string;
+    firm_id?: number;
 }
+
 
 export interface LocationOption {
     location: string;
@@ -97,12 +102,11 @@ export interface LocationOption {
 /**
  * Fetch all store-in records from Supabase
  * Used for displaying pending and completed store-in items
- * @param permittedFirms Optional array of firm names to filter by
+ * @param permittedFirms Optional array of firm IDs to filter by
  */
-export async function fetchStoreInRecords(permittedFirms?: string[]) {
+export async function fetchStoreInRecords(permittedFirms?: string[]): Promise<StoreInRecord[]> {
     try {
         if (hasNoFirmAccess(permittedFirms)) return [];
-        const firms = normalizeFirmAccess(permittedFirms);
 
         let query = supabase
             .from('store_in')
@@ -110,11 +114,10 @@ export async function fetchStoreInRecords(permittedFirms?: string[]) {
             .order('indent_no', { ascending: false })
             .order('timestamp', { ascending: false });
 
-        if (firms) {
-            query = query.in('firm_name', firms);
-        }
+        const filteredQuery = applyFirmAccessFilter(query, permittedFirms);
+        if (!filteredQuery) return [];
 
-        const { data, error } = await query;
+        const { data, error } = await filteredQuery;
 
         if (error) throw error;
 
@@ -198,7 +201,9 @@ export async function fetchStoreInRecords(permittedFirms?: string[]) {
             challanNo: r.challan_no || '',
             challanImage: r.challan_image || '',
             receiverName: r.receiver_name || '',
+            firm_id: r.firm_id,
         }));
+
     } catch (error) {
         console.error('Error fetching store-in records:', error);
         throw error;
@@ -207,23 +212,21 @@ export async function fetchStoreInRecords(permittedFirms?: string[]) {
 
 /**
  * Fetch all direct store-in records from the specialized table
- * @param permittedFirms Optional array of firm names to filter by
+ * @param permittedFirms Optional array of firm IDs to filter by
  */
 export async function fetchDirectRecords(permittedFirms?: string[]) {
     try {
         if (hasNoFirmAccess(permittedFirms)) return [];
-        const firms = normalizeFirmAccess(permittedFirms);
 
         let query = supabase
             .from('store_in_direct')
             .select('*')
             .order('timestamp', { ascending: false });
 
-        if (firms) {
-            query = query.in('firm_name_match', firms);
-        }
+        const filteredQuery = applyFirmAccessFilter(query, permittedFirms);
+        if (!filteredQuery) return [];
 
-        const { data, error } = await query;
+        const { data, error } = await filteredQuery;
 
         if (error) throw error;
 
@@ -248,7 +251,9 @@ export async function fetchDirectRecords(permittedFirms?: string[]) {
             firmNameMatch: r.firm_name_match || '',
             vehicleNo: r.vehicle_no || '',
             hodStatus: r.hod_status || 'Pending',
+            firm_id: r.firm_id,
         }));
+
     } catch (error) {
         console.error('Error fetching direct records:', error);
         throw error;
@@ -256,25 +261,25 @@ export async function fetchDirectRecords(permittedFirms?: string[]) {
 }
 
 /**
- * Fetch location options from master table
+ * Fetch location options from site location table
  * Used for populating location dropdown
  */
 /**
- * Fetch location options from master table
+ * Fetch location options from site location table
  * Used for populating location dropdown
  */
 export async function fetchLocationOptions(): Promise<string[]> {
     try {
         const { data, error } = await supabase
-            .from('master')
-            .select('where');
+            .from('site_location_details')
+            .select('location')
+            .order('location');
 
         if (error) throw error;
 
-        // Extract unique, non-null 'where' values
         const locations = Array.from(new Set(
             (data || [])
-                .map((r: any) => r.where)
+                .map((r: any) => r.location)
                 .filter(Boolean)
         )).sort();
 
@@ -584,12 +589,18 @@ export async function createPaymentEntry(storeInData: {
     product_name: string;
     firm_name: string;
     firmNameMatch?: string;
+    firm_id?: number;
     payment_form?: string;
     prefix?: string;
     remark?: string;
     payment_terms?: string;
 }, billPhotoUrl: string = '') {
+
     try {
+        if (!storeInData.firm_id) {
+            throw new Error('Project ID is required for payment entry');
+        }
+
         const nowIso = new Date().toISOString();
 
         // 1. Fetch latest unique_no to continue sequence (format: PAY-XXXX)
@@ -618,6 +629,9 @@ export async function createPaymentEntry(storeInData: {
             unique_no: uniqueNo,
             party_name: storeInData.vendor_name,
             po_number: storeInData.po_number,
+            firm_name: storeInData.firmNameMatch || storeInData.firm_name,
+            firm_id: storeInData.firm_id,
+
             total_po_amount: String(storeInData.bill_amount),
             internal_code: storeInData.indent_number,
             product: storeInData.product_name,
@@ -635,7 +649,6 @@ export async function createPaymentEntry(storeInData: {
             actual: null,
             status1: 'hod_approval_pending',
             payment_form: storeInData.payment_form || 'store_in',
-            firm_name: storeInData.firm_name || storeInData.firmNameMatch,
         };
 
         const { data, error } = await supabase
@@ -782,13 +795,13 @@ export async function uploadDebitNoteCopy(file: File, liftNumber: string): Promi
         const filePath = `debit-notes/${fileName}`;
 
         const { error: uploadError } = await supabase.storage
-            .from('store_in_images')
+            .from('bill_image_status')
             .upload(filePath, file);
 
         if (uploadError) throw uploadError;
 
         const { data: { publicUrl } } = supabase.storage
-            .from('store_in_images')
+            .from('bill_image_status')
             .getPublicUrl(filePath);
 
         return publicUrl;
@@ -807,7 +820,7 @@ export async function uploadChallanImage(file: File, liftNumber: string): Promis
     try {
         const fileExt = file.name.split('.').pop();
         const fileName = `${liftNumber.replace(/\//g, '-')}_challan_${Date.now()}.${fileExt}`;
-        const filePath = `Payment Images/${fileName}`;
+        const filePath = `challan-images/${fileName}`;
 
         const { error: uploadError } = await supabase.storage
             .from('bill_image_status')
@@ -825,36 +838,38 @@ export async function uploadChallanImage(file: File, liftNumber: string): Promis
         throw error;
     }
 }
+
 /**
- * Create a new direct store_in record in the specialized table
- * @param record - Partial record to insert
+ * Create a direct store-in record in the specialized table
+ * Used when items are received without a formal bill (using challan)
+ * @param recordData - Direct store-in record data
  */
-export async function createDirectRecord(record: Partial<StoreInRecord>) {
+export async function createDirectRecord(recordData: any) {
     try {
         const { data, error } = await supabase
             .from('store_in_direct')
-            .insert([{
-                lift_number: record.liftNumber,
-                indent_no: record.indentNo,
-                bill_no: record.billNo,
-                vendor_name: record.vendorName,
-                product_name: record.productName,
-                qty: record.qty,
-                receiving_status: record.receivingStatus,
-                received_quantity: record.receivedQuantity,
-                photo_of_bill: record.photoOfBill,
-                photo_of_product: record.photoOfProduct,
-                transportation_include: record.transportationInclude,
-                transporter_name: record.transporterName,
-                amount: record.amount,
-                vehicle_no: record.vehicleNo,
-                bill_amount: record.billAmount,
-                receiver_name: record.receiverName,
-                firm_name_match: record.firmNameMatch,
-                timestamp: record.timestamp || new Date().toISOString(),
-                actual6: new Date().toISOString(),
-                hod_status: 'Pending',
-            }])
+            .insert([
+                {
+                    lift_number: recordData.liftNumber,
+                    indent_no: recordData.indentNo,
+                    vendor_name: recordData.vendorName,
+                    product_name: recordData.productName,
+                    qty: recordData.qty,
+                    received_quantity: recordData.receivedQuantity,
+                    receiving_status: recordData.receivingStatus,
+                    bill_no: recordData.billNo,
+                    bill_amount: recordData.billAmount,
+                    photo_of_product: recordData.photoOfProduct,
+                    photo_of_bill: recordData.photoOfBill,
+                    receiver_name: recordData.receiverName,
+                    transportation_include: recordData.transportationInclude,
+                    firm_name_match: recordData.firmNameMatch,
+                    firm_id: recordData.firm_id,
+                    timestamp: recordData.timestamp,
+                    vehicle_no: recordData.vehicleNo,
+                    hod_status: 'Pending',
+                },
+            ])
             .select();
 
         if (error) throw error;
@@ -864,4 +879,3 @@ export async function createDirectRecord(record: Partial<StoreInRecord>) {
         throw error;
     }
 }
-

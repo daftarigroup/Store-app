@@ -36,6 +36,7 @@ import {
     updateIssueApproval,
     type IssueRecord
 } from '@/services/issueService';
+import { filterByFirmAccess } from '@/lib/firmAccess';
 
 export default function IssueData() {
     const { user } = useAuth();
@@ -132,16 +133,43 @@ export default function IssueData() {
     }, [user?.firm_access]);
 
     const returnData = useMemo(() => {
-        return allData.filter(i => i.return_slip || i.return_person_name || (i.rejected_damage_qty && i.rejected_damage_qty !== '0' && i.rejected_damage_qty !== ''));
-    }, [allData]);
+        const filtered = allData.filter(i => i.return_slip || i.return_person_name || (i.rejected_damage_qty && i.rejected_damage_qty !== '0' && i.rejected_damage_qty !== ''));
+        return filterByFirmAccess(
+            filtered,
+            user?.firm_access || [],
+            { id: (i) => i.firm_id, name: (i) => i.firm_name }
+        );
+    }, [allData, user?.firm_access]);
 
     const pendingData = useMemo(() => {
-        return allData.filter(i => i.planned1 && !i.actual1);
-    }, [allData]);
+        const filteredData = filterByFirmAccess(
+            allData.filter((item) => item.status === 'Pending'),
+            user?.firm_access || [],
+            { id: (i) => i.firm_id, name: (i) => i.firm_name }
+        );
+
+       return filteredData;
+    }, [allData, user?.firm_access]);
 
     const historyData = useMemo(() => {
-        return allData.filter(i => i.planned1 && i.actual1);
-    }, [allData]);
+        const filteredData = filterByFirmAccess(
+            allData.filter((item) => item.status === 'Approved'),
+            user?.firm_access || [],
+            { id: (i) => i.firm_id, name: (i) => i.firm_name }
+        );
+
+        return filteredData;
+    }, [allData, user?.firm_access]);
+
+    const damageData = useMemo(() => {
+        const filteredData = filterByFirmAccess(
+            allData.filter((item) => item.status === 'Damage'),
+            user?.firm_access || [],
+            { id: (i) => i.firm_id, name: (i) => i.firm_name }
+
+        );
+        return filteredData;
+    }, [allData, user?.firm_access]);
 
     const handleDownload = (data: any[]) => {
         if (!data || data.length === 0) {

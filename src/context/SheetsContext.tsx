@@ -196,7 +196,9 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                     status: r.status,
                     givenQty: r.given_qty,
                     projectName: r.firm_name,
+                    firmId: r.firm_id,
                     constructorName: r.constructor_name,
+
                     siteLocation: r.site_location,
                     rejected_damage_qty: r.rejected_damage_qty,
                     returnPersonName: r.return_person_name,
@@ -232,6 +234,7 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                     planned1: r.planned1,
                     actual1: r.actual1,
                     firmName: r.firm_name,
+                    firmId: r.firm_id,
                     firmNameMatch: r.firm_name,
                     approvedQuantity: r.approved_quantity,
                     timestamp: r.timestamp,
@@ -497,6 +500,7 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                     hodRemark: r.hodRemark,
                     receivingStatus: r.receivingStatus,
                     receivedQuantity: r.receivedQuantity,
+                    firm_id: r.firm_id,
                 }));
                 setTallyEntrySheet(mapped as unknown as TallyEntrySheet[]);
                 setTallyEntryLoading(false);

@@ -28,6 +28,7 @@ export interface InventoryRecord {
     fromProject: string;
     toProject: string;
     firmName: string;
+    firm_id?: number;
     current: number;
     totalPrice: number;
     status: string;
@@ -39,6 +40,7 @@ export interface InventoryItemInput {
     uom?: string;
     quantity: number;
     firmName?: string;
+    firmId?: number;
 }
 
 function toNumber(value: unknown): number {
@@ -58,7 +60,7 @@ function toTextNumber(value: number): string {
 
 /**
  * Fetch all inventory records from Supabase
- * @param permittedFirms Optional array of firm names to filter by
+ * @param permittedFirms Optional array of firm IDs to filter by
  */
 export async function fetchInventoryRecords(permittedFirms?: string[]): Promise<InventoryRecord[]> {
     try {
@@ -67,11 +69,13 @@ export async function fetchInventoryRecords(permittedFirms?: string[]): Promise<
 
         let query = supabase
             .from('inventory')
-            .select('*')
+            .select('*, firm:firm_id(firm_name)')
             .order('item_name', { ascending: true });
 
         if (firms) {
-            query = query.in('firm_name', firms);
+            const ids = firms.filter(f => /^\d+$/.test(f)).map(Number);
+            if (ids.length === 0) return [];
+            query = query.in('firm_id', ids);
         }
 
         const { data, error } = await query;
@@ -81,6 +85,7 @@ export async function fetchInventoryRecords(permittedFirms?: string[]): Promise<
         return (data || []).map((r: any) => {
             const purQty = Number(r.purchase_quantity) || 0;
             const liftQty = Number(r.received_quantity) || 0;
+            const firmName = r.firm?.firm_name || r.firm_name || '';
             
             return {
                 itemName: r.item_name || '',
@@ -103,8 +108,9 @@ export async function fetchInventoryRecords(permittedFirms?: string[]): Promise<
                 stockTransferReceiving: Number(r.stock_transfer) || 0,
                 fromProject: '',
                 toProject: '',
-                firmName: r.firm_name || '',
-                firmNameMatch: r.firm_name || '',
+                firmName: firmName,
+                firmNameMatch: firmName,
+                firm_id: r.firm_id,
                 current: Number(r.current) || 0,
                 totalPrice: Number(r.total_price) || 0,
                 status: r.color_code || '',
@@ -125,11 +131,15 @@ export async function addItemToInventory(input: InventoryItemInput): Promise<{ s
             return { success: false, error: new Error('Quantity must be greater than 0') };
         }
 
+        if (!input.firmId) {
+            return { success: false, error: new Error('Project ID is required for inventory') };
+        }
+
         const { data: existingRecord, error: fetchError } = await supabase
             .from('inventory')
             .select('*')
             .eq('item_name', input.itemName)
-            .eq('firm_name', input.firmName || '')
+            .eq('firm_id', input.firmId)
             .maybeSingle();
 
         if (fetchError) throw fetchError;
@@ -149,9 +159,10 @@ export async function addItemToInventory(input: InventoryItemInput): Promise<{ s
                     total_price: toTextNumber(nextCurrent * rate),
                     color_code: getInventoryStatus(nextCurrent),
                     firm_name: existingRecord.firm_name || input.firmName || '',
+                    firm_id: existingRecord.firm_id || input.firmId || null,
                 })
                 .eq('item_name', input.itemName)
-                .eq('firm_name', existingRecord.firm_name || input.firmName || '');
+                .eq('firm_id', input.firmId);
 
             if (updateError) throw updateError;
         } else {
@@ -173,6 +184,7 @@ export async function addItemToInventory(input: InventoryItemInput): Promise<{ s
                 return_quantity: '0',
                 request_quantity: '0',
                 firm_name: input.firmName || '',
+                firm_id: input.firmId || null,
             };
 
             const { error: insertError } = await supabase

@@ -33,6 +33,7 @@ import {
   updateTallyEntryRecord,
   type TallyEntryRecord
 } from '@/services/tallyEntryService';
+import { filterByFirmAccess } from '@/lib/firmAccess';
 
 // Stage configurations
 
@@ -48,9 +49,15 @@ export default function AgainAuditingTable() {
     try {
       const records = await fetchTallyEntryRecords(user?.firm_access || []);
 
-      const filtered = records.filter(item => item.planned5 && !item.actual5);
+      const filteredByFirm = filterByFirmAccess(records, user?.firm_access || [], {
+        id: (i) => i.firm_id,
+        name: (i) => i.firmNameMatch
+      });
+
+      const filtered = filteredByFirm.filter(item => item.planned5 && !item.actual5);
 
       setData(filtered);
+
     } catch (error) {
       console.error('Failed to fetch tally entry records:', error);
       toast.error('Failed to load data');

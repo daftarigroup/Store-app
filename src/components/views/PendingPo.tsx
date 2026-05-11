@@ -69,7 +69,13 @@ export default function ApprovedPOs() {
                 setApprovedTableData([]);
                 return;
             }
-            query = query.in('firm_name', userFirms);
+
+            const firmIds = userFirms.filter((firm) => /^\d+$/.test(firm)).map(Number);
+            if (firmIds.length === 0) {
+                setApprovedTableData([]);
+                return;
+            }
+            query = query.in('firm_id', firmIds);
 
             const { data: indentData, error: indentError } = await query;
 

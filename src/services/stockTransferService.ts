@@ -6,7 +6,9 @@ export interface StockTransferRecord {
     timestamp: string;
     transfer_no: string;
     from_project: string;
+    from_firm_id?: number;
     to_project: string;
+    to_firm_id?: number;
     product_name: string;
     uom: string;
     group_head: string;
@@ -17,7 +19,7 @@ export interface StockTransferRecord {
 
 /**
  * Fetch all stock transfer records from Supabase
- * @param permittedFirms Optional array of firm names to filter by
+ * @param permittedFirms Optional array of firm IDs to filter by
  */
 export async function fetchStockTransferRecords(permittedFirms?: string[]) {
     try {
@@ -30,9 +32,9 @@ export async function fetchStockTransferRecords(permittedFirms?: string[]) {
             .order('timestamp', { ascending: false });
 
         if (firms) {
-            // Filter if user is either the sender or receiver project
-            const firmsString = firms.map(f => `"${f}"`).join(',');
-            query = query.or(`from_project.in.(${firmsString}),to_project.in.(${firmsString})`);
+            const ids = firms.filter(f => /^\d+$/.test(f)).map(Number);
+            if (ids.length === 0) return [];
+            query = query.or(`from_firm_id.in.(${ids.join(',')}),to_firm_id.in.(${ids.join(',')})`);
         }
 
         const { data, error } = await query;
@@ -44,7 +46,9 @@ export async function fetchStockTransferRecords(permittedFirms?: string[]) {
             timestamp: r.timestamp,
             transferNo: r.transfer_no,
             fromProject: r.from_project,
+            fromFirmId: r.from_firm_id,
             toProject: r.to_project,
+            toFirmId: r.to_firm_id,
             productName: r.product_name,
             uom: r.uom,
             groupHead: r.group_head,

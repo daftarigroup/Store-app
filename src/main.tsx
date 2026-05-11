@@ -89,6 +89,7 @@ import HodStoreApproval from './components/views/HodStoreApproval';
 import MasterManagement from './components/views/MasterManagement';
 import QuotationPage from './components/views/Quotation';
 import VendorBidding from './components/views/VendorBidding';
+import { isAllowedFirm } from '@/lib/firmAccess';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
     const { loggedIn, loading } = useAuth();
@@ -124,14 +125,13 @@ function GatedRoute({
 }
 
 function firmMatchesAccess(record: any, user: any) {
-    const allowedFirms = Array.isArray(user?.firm_access)
-        ? user.firm_access.map((firm: string) => String(firm || '').trim().toLowerCase()).filter(Boolean)
-        : [];
-
-    if (allowedFirms.length === 0) return false;
-
-    const recordFirm = String(record?.firmNameMatch || record?.firm_name || record?.firmName || '').trim().toLowerCase();
-    return allowedFirms.includes(recordFirm);
+    return isAllowedFirm(
+        { 
+            id: record?.firm_id, 
+            name: record?.firmNameMatch || record?.firm_name || record?.firmName || record?.firm 
+        }, 
+        user?.firm_access
+    );
 }
 
 const routes: RouteAttributes[] = [
@@ -592,8 +592,10 @@ const routes: RouteAttributes[] = [
 
                 // Check payment terms: Only count if Partly Advance or Partly PI
                 const terms = String(payment?.paymentTerms || payment?.payment_terms || '').toLowerCase();
+                const paymentForm = String(payment?.paymentForm || payment?.payment_form || '').toLowerCase();
                 const isPartlyTerms = terms.includes('partly') && (terms.includes('advance') || terms.includes('pi'));
-                if (!isPartlyTerms) return false;
+                const isDirectPayment = paymentForm === 'store_in' || paymentForm === 'freight';
+                if (!isPartlyTerms && !isDirectPayment) return false;
 
                 // Check linked Store In for HOD status: Only count if Approved
                 const linkedStoreIn = storeInSheet.find((s: any) =>

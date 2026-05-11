@@ -27,6 +27,8 @@ import Heading from '../element/Heading';
 import { formatDate } from '@/lib/utils';
 import { Pill } from '../ui/pill';
 import { fetchIndentRecords, updateIndentStoreOutApproval, type IndentRecord } from '@/services/indentService';
+import { filterByFirmAccess } from '@/lib/firmAccess';
+
 
 interface StoreOutTableData {
     id: number;
@@ -70,10 +72,12 @@ export default () => {
             setDataLoading(true);
             const data = await fetchIndentRecords();
 
-            // Filter by Project Name match
-            const filteredByFirm = data.filter(item =>
-                (user.firmNameMatch || '').trim().toLowerCase() === "all" || (item.firm_name || '').trim() === (user.firmNameMatch || '').trim()
-            );
+            // Filter by Project Name match using global utility
+            const filteredByFirm = filterByFirmAccess(data, user?.firm_access || [], {
+                id: (i) => (i as any).firm_id,
+                name: (i) => (i as any).firm_name
+            });
+
 
             // Filter where indentType is 'Store Out'
             // Pending: Not approved yet (no approved_date) and not rejected

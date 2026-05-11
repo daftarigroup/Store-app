@@ -50,23 +50,15 @@ export default function FullKiting() {
     const fetchData = async () => {
         try {
             setDataLoading(true);
-            const data = await fetchFullkittingRecords();
-
-            const permittedFirms = (user?.firm_access || []).map((f: string) => f.trim().toLowerCase());
-            const hasNoAccess = permittedFirms.length === 0;
+            const data = await fetchFullkittingRecords(user?.firm_access);
 
             // Fetch store_in records to check HOD status
             const { data: storeInData } = await supabase
                 .from('store_in')
                 .select('indent_no, lift_number, hod_status');
 
-            // Filter by Project Name match AND HOD status
-            const filteredData = hasNoAccess ? [] : data.filter(item => {
-                const itemFirm = (item.firmNameMatch || '').trim().toLowerCase();
-                const matchesFirm = permittedFirms.includes('all') || permittedFirms.includes(itemFirm);
-                
-                if (!matchesFirm) return false;
-
+            // Records are already firm-filtered by the service using firm_id first.
+            const filteredData = data.filter(item => {
                 // Only show if HOD check is complete (Approved)
                 const linkedStoreIn = (storeInData || []).find(s => 
                     s.indent_no === item.indentNumber || s.lift_number === item.indentNumber
@@ -229,6 +221,10 @@ export default function FullKiting() {
 
     async function onSubmit(values: z.infer<typeof schema>) {
         if (!selectedIndent) return;
+        if (!selectedIndent.firm_id) {
+            toast.error('Project ID is missing for this freight record. Please run the firm_id backfill SQL first.');
+            return;
+        }
 
         try {
             setIsSubmitting(true);
@@ -261,6 +257,7 @@ export default function FullKiting() {
                 photo_of_bill: biltyImageUrl,
                 product_name: `Freight for ${selectedIndent.productName}`,
                 firm_name: selectedIndent.firmNameMatch,
+                firm_id: selectedIndent.firm_id,
                 payment_form: 'freight',
                 payment_terms: 'Advance', // Set as Advance so it bypasses some filters if needed
                 remark: `Freight for Indent ${selectedIndent.indentNumber} - ${selectedIndent.productName}`,

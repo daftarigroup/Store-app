@@ -28,6 +28,8 @@ import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
 import { formatDate, formatDateTime, parseCustomDate } from '@/lib/utils';
 import { Pill } from '../ui/pill';
+import { filterByFirmAccess, isAllowedFirm } from '@/lib/firmAccess';
+
 import { fetchMasterOptions, type MasterData } from '@/services/masterService';
 import {
     fetchStoreInRecords,
@@ -69,6 +71,7 @@ interface StoreInPendingData {
     leadTimeToLiftMaterial: number;
     discountAmount: number;
     firmNameMatch: string;
+    firm_id?: number;
     planned6Date: string;
     timestamp: string;
     products?: string[];
@@ -115,6 +118,7 @@ interface StoreInHistoryData {
     billReceived: string;
     billImage: string;
     firmNameMatch: string;
+    firm_id?: number;
     planned6Date: string;
     hodStatus: string;
     hodRemark: string;
@@ -278,9 +282,10 @@ export default () => {
     // Process pending table data
     useEffect(() => {
         const permittedFirms = user?.firm_access || [];
-        const filteredByFirm = storeInRecords.filter((item) =>
-            (user?.firmNameMatch || '').toLowerCase() === "all" ||
-            permittedFirms.includes(item.firmNameMatch)
+        const filteredByFirm = filterByFirmAccess(
+            storeInRecords,
+            permittedFirms,
+            { id: (i: any) => i.firm_id, name: (i: any) => i.firmNameMatch }
         );
 
         // Filter for pending items (planned6 set, actual6 empty)
@@ -306,9 +311,10 @@ export default () => {
     // Process history data
     useEffect(() => {
         const permittedFirms = user?.firm_access || [];
-        const filteredByFirm = storeInRecords.filter((item) =>
-            (user?.firmNameMatch || '').toLowerCase() === "all" ||
-            permittedFirms.includes(item.firmNameMatch)
+        const filteredByFirm = filterByFirmAccess(
+            storeInRecords,
+            permittedFirms,
+            { id: (i: any) => i.firm_id, name: (i: any) => i.firmNameMatch }
         );
 
         // Display standard procurement records (actual6 set, NO Direct prefix)
@@ -363,7 +369,7 @@ export default () => {
         })));
 
         // Note: directData is now set directly in fetchAllData from the new table
-    }, [storeInRecords, user?.firmNameMatch]);
+    }, [storeInRecords, user?.firmNameMatch, user?.firm_access]);
 
     const textWrapCell = ({ getValue }: { getValue: () => any }) => {
         const value = getValue();
@@ -700,8 +706,10 @@ export default () => {
                         receiverName: user?.name || 'Store User',
                         transportationInclude: 'No',
                         firmNameMatch: selectedIndent.firmNameMatch,
+                        firm_id: selectedIndent.firm_id,
                         timestamp: currentDateTime,
                     });
+
                 }
             }
 
@@ -732,7 +740,9 @@ export default () => {
         challanNo: z.string().optional(),
         challanImage: z.instanceof(File).optional(),
         firmName: z.string().min(1, 'Project name is required'),
+        firmId: z.coerce.number().optional(),
     });
+
 
     const directSchema = directSchemaBase.superRefine((val, ctx) => {
         if (val.status === 'Received') {
@@ -764,7 +774,9 @@ export default () => {
             challanNo: '',
             challanImage: undefined,
             firmName: '',
+            firmId: undefined,
         },
+
     });
 
     const watchAnyTransport = directForm.watch('anyTransport');
@@ -772,6 +784,12 @@ export default () => {
 
     async function onDirectSubmit(values: DirectFormValues) {
         try {
+            const firmId = values.firmId || options?.firmObjects?.find((firm) => firm.name === values.firmName)?.id;
+            if (!firmId) {
+                toast.error('Project ID is required for direct entry');
+                return;
+            }
+
             const timestamp = Date.now();
             const liftId = `DIRECT-${timestamp}`;
             const indentId = `DIRECT-${timestamp}`;
@@ -807,7 +825,9 @@ export default () => {
                 amount: values.transportAmount || 0,
                 vehicleNo: values.vehicleNo || '',
                 firmNameMatch: values.firmName,
+                firm_id: firmId,
                 timestamp: new Date().toISOString(),
+
                 challanNo: values.challanNo,
                 challanImage: challanUrl,
             });
@@ -822,7 +842,9 @@ export default () => {
                     photo_of_bill: billUrl,
                     product_name: values.productName,
                     firm_name: values.firmName,
+                    firm_id: firmId,
                     payment_terms: 'Advance', // Default to advance to show up in Make Payment
+
                     prefix: 'DIRECT'
                 });
             }
@@ -880,18 +902,19 @@ export default () => {
                                                     render={({ field }) => (
                                                         <FormItem>
                                                             <FormLabel>Project Name</FormLabel>
-                                                            <Select onValueChange={field.onChange} value={field.value || ""}>
+                                                             <Select onValueChange={(val) => { field.onChange(val); const firmObj = options?.firmObjects?.find(f => f.name === val); if (firmObj) directForm.setValue('firmId', firmObj.id); }} value={field.value || ""}>
                                                                 <FormControl>
                                                                     <SelectTrigger className="w-full">
                                                                         <SelectValue placeholder="Select project" />
                                                                     </SelectTrigger>
                                                                 </FormControl>
                                                                 <SelectContent>
-                                                                    {(options?.firms || [])
-                                                                        .filter(f => (user?.firm_access || []).includes(f))
-                                                                        .map((f) => (
-                                                                            <SelectItem key={f} value={f}>
-                                                                                {f}
+                                                                    {(options?.firmObjects || [])
+                                                                        .filter((f: { id: number; name: string }) => isAllowedFirm({ id: f.id, name: f.name }, user?.firm_access || []))
+
+                                                                        .map((firm) => (
+                                                                            <SelectItem key={firm.id} value={firm.name}>
+                                                                                {firm.name}
                                                                             </SelectItem>
                                                                         ))}
                                                                 </SelectContent>
@@ -1506,3 +1529,5 @@ export default () => {
         </div>
     );
 };
+
+

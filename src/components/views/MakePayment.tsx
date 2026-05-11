@@ -24,6 +24,7 @@ import { Textarea } from "../ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Input } from "../ui/input";
 import { uploadPaymentImage } from '@/services/storeInService';
+import { applyFirmAccessFilter, isAllowedFirm } from '@/lib/firmAccess';
 
 interface PaymentsRecord {
     rowIndex?: number;
@@ -50,6 +51,7 @@ interface PaymentsRecord {
     status1?: string;
     paymentForm?: string;
     firmNameMatch?: string;
+    firm_id?: number;
     paymentDone?: boolean;
     billImageStatus?: string;
     billNo?: string;
@@ -67,6 +69,7 @@ interface PaymentHistoryRecord {
     amountToBePaid?: string | number;
     remarks?: string;
     anyAttachments?: string;
+    firm_id?: number;
 }
 
 interface DisplayPayment {
@@ -93,6 +96,7 @@ interface DisplayPayment {
     status1: string;
     paymentForm: string;
     firmNameMatch: string;
+    firm_id?: number;
     billImageStatus?: string;
     billNo?: string;
     rowIds: number[];
@@ -194,10 +198,14 @@ export default function MakePayment() {
                 setPaymentsLoading(true);
                 setPaymentHistoryLoading(true);
 
-                const { data: paymentsData, error: paymentsError } = await supabase
+                let paymentsQuery = supabase
                     .from('payments')
                     .select('*')
                     .order('id', { ascending: false });
+                const filteredPaymentsQuery = applyFirmAccessFilter(paymentsQuery, user?.firm_access);
+                const { data: paymentsData, error: paymentsError } = filteredPaymentsQuery
+                    ? await filteredPaymentsQuery
+                    : { data: [], error: null };
 
                 const { data: storeInData, error: storeInError } = await supabase
                     .from('store_in')
@@ -253,6 +261,7 @@ export default function MakePayment() {
                     delay: r.delay,
                     paymentForm: r.payment_form,
                     firmNameMatch: r.firm_name,
+                    firm_id: r.firm_id,
                     paymentDone: r.payment_done || false,
                     billImageStatus: storeInMap.get(r.internal_code)?.billImageStatus || '',
                     billNo: storeInMap.get(r.internal_code)?.billNo || '',
@@ -268,10 +277,7 @@ export default function MakePayment() {
                 // Filter Pending: Has planned date, status is not 'Completed', and firm access matches
                 const pendingBasic = mappedPayments
                     .filter((sheet: PaymentsRecord) => {
-                        // Firm Access Filter
-                        const itemFirm = (sheet.firmNameMatch || '').trim().toLowerCase();
-                        const hasFirmAccess = hasAllAccess || permittedFirms.includes(itemFirm);
-                        if (!hasFirmAccess) return false;
+                        if (!isAllowedFirm({ id: sheet.firm_id, name: sheet.firmNameMatch }, user?.firm_access)) return false;
                         const status = String(sheet?.status || '').toLowerCase();
                         const isCompleted = status === 'completed';
 
@@ -325,6 +331,7 @@ export default function MakePayment() {
                     status1: sheet?.status1 || '',
                     paymentForm: sheet?.paymentForm || '',
                     firmNameMatch: sheet?.firmNameMatch || '',
+                    firm_id: sheet?.firm_id,
                     billImageStatus: sheet?.billImageStatus || '',
                     billNo: sheet?.billNo || '',
                     rowIds: sheet?.rowIds || [],
@@ -333,7 +340,7 @@ export default function MakePayment() {
                 // Group by Bill No + Party Name
                 const groupedPendingMap = new Map<string, DisplayPayment>();
                 pendingItems.forEach(item => {
-                    const billKey = item.billNo || 'NoBill';
+                    const billKey = item.billNo || item.uniqueNo || item.poNumber || String(item.rowIndex);
                     const uniqueKey = `${item.partyName || 'NoVendor'}-${billKey}`;
 
                     if (!groupedPendingMap.has(uniqueKey)) {
@@ -362,10 +369,7 @@ export default function MakePayment() {
                 // 2. Fetch History directly from payment_history table
                 const historyItemsFromDb = (historyDbData || [])
                     .filter((r: any) => {
-                        const itemFirm = (r.fms_name || '').trim().toLowerCase();
-                        // If user has all access, show everything (even empty firms)
-                        if (hasAllAccess) return true;
-                        return permittedFirms.includes(itemFirm);
+                        return isAllowedFirm({ id: r.firm_id, name: r.fms_name }, user?.firm_access);
                     })
                     .map((r: any, index: number) => ({
                         rowIndex: r.id || index,
@@ -378,6 +382,7 @@ export default function MakePayment() {
                         amountToBePaid: Number(r.amount_to_be_paid) || 0,
                         remarks: r.remarks || '',
                         anyAttachments: r.any_attachments || '',
+                        firm_id: r.firm_id,
                         planned: r.planned || '',
                         paymentTerms: r.payment_terms || r.paymentTerms || '',
                         billImage: r.photo_of_bill || r.any_attachments || '',
@@ -393,7 +398,7 @@ export default function MakePayment() {
 
                 // 3. Merge History: items from payment_history table + completed items from payments table
                 const completedPaymentsFromTable = mappedPayments
-                    .filter(p => p.paymentDone)
+                    .filter(p => p.paymentDone && isAllowedFirm({ id: p.firm_id, name: p.firmNameMatch }, user?.firm_access))
                     .map((p) => ({
                         rowIndex: p.rowIndex || 0,
                         timestamp: p.actual || p.timestamp || '',
@@ -405,6 +410,7 @@ export default function MakePayment() {
                         amountToBePaid: Number(p.payAmount) || 0,
                         remarks: p.remark || 'Payment Completed',
                         anyAttachments: p.file || p.pdf || '',
+                        firm_id: p.firm_id,
                         planned: p.planned || '',
                         paymentTerms: p.paymentTerms || '',
                         billImage: p.file || p.pdf || '',
@@ -551,6 +557,7 @@ export default function MakePayment() {
                     po_number: item.poNumber,
                     product_name: item.product,
                     bill_no: item.billNo || '',
+                    firm_id: item.firm_id || null,
                 };
             });
 
@@ -612,6 +619,7 @@ export default function MakePayment() {
                 status: paymentModalStatus,
                 unique_number: selectedPaymentItem.uniqueNo,
                 fms_name: selectedPaymentItem.firmNameMatch,
+                firm_id: selectedPaymentItem.firm_id || null,
                 pay_to: selectedPaymentItem.partyName,
                 amount_to_be_paid: String(paymentModalAmount),
                 remarks: paymentModalRemark || `Payment completed for ${selectedPaymentItem.uniqueNo}`,

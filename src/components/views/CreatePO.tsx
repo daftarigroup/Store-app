@@ -156,6 +156,7 @@ interface IndentSheetItem {
     approvedVendorName?: string | number; // ✅ Allow both string and number
     firmName?: string;
     firmNameMatch?: string;
+    firm_id?: number;
     indentNumber?: string;
     productName?: string;
     specifications?: string;
@@ -898,6 +899,15 @@ const CreatePO = () => {
 
             const url = await uploadFile(uploadParams);
 
+            const missingFirmId = values.indents.some((v) => {
+                const indent = indentSheet.find((i: IndentSheetItem) => i.indentNumber === v.indentNumber);
+                return !indent?.firm_id;
+            });
+            if (missingFirmId) {
+                toast.error('Project ID is required to create a PO');
+                return;
+            }
+
             const rows: PoMasterSheet[] = values.indents.map((v) => {
                 const indent = indentSheet.find((i: IndentSheetItem) => i.indentNumber === v.indentNumber);
 
@@ -944,6 +954,7 @@ const CreatePO = () => {
                     deliveryDays: values.deliveryDays || 0,
                     deliveryType: values.deliveryType || '',
                     firmNameMatch: (indent as any)?.firmNameMatch ?? '',
+                    firm_id: indent?.firm_id,
                     advancePercent: (v.paymentTerm?.toLowerCase().includes('partly') && (v.paymentTerm?.toLowerCase().includes('advance') || v.paymentTerm?.toLowerCase().includes('pi'))) ? (v.numberOfDays || 0) : 0,
                     advanceAmount: (v.paymentTerm?.toLowerCase().includes('partly') && (v.paymentTerm?.toLowerCase().includes('advance') || v.paymentTerm?.toLowerCase().includes('pi'))) ? (calculateTotal(v.rate || 0, v.gst, v.discount || 0, v.quantity || 0) * (v.numberOfDays || 0)) / 100 : 0,
                     termsObject: values.terms.reduce((acc, term, idx) => {
@@ -973,9 +984,10 @@ const CreatePO = () => {
             form.reset();
 
             // Refresh data from Supabase
+            const permittedFirms = user?.firm_access || [];
             const [indents, poMaster] = await Promise.all([
-                fetchIndents(),
-                fetchPoMaster(),
+                fetchIndents(permittedFirms),
+                fetchPoMaster(permittedFirms),
             ]);
             setIndentSheet(indents);
             setPoMasterSheet(poMaster);

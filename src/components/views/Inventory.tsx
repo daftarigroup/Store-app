@@ -17,6 +17,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { filterByFirmAccess } from '@/lib/firmAccess';
 import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
@@ -90,8 +91,14 @@ export default () => {
     const tableData = useMemo(() => {
         const inventoryBase = inventorySheet || [];
 
+        const permittedFirms = user?.firm_access || [];
+        const filteredInventory = filterByFirmAccess(inventoryBase, permittedFirms, {
+            id: (i: any) => i.firm_id,
+            name: (i: any) => i.firmName
+        });
+
         const calculated = calculateRealInventory(
-            inventoryBase,
+            filteredInventory,
             filteredIndents,
             filteredStoreIns,
             filteredIssues,
@@ -410,11 +417,12 @@ export default () => {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="All">All Projects</SelectItem>
-                                    {masterSheet?.firms?.map((firm) => (
-                                        <SelectItem key={firm} value={firm}>
-                                            {firm}
-                                        </SelectItem>
-                                    ))}
+                                    {(masterSheet?.firms || [])
+                                        .map((firm) => (
+                                            <SelectItem key={firm} value={firm}>
+                                                {firm}
+                                            </SelectItem>
+                                        ))}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -560,7 +568,10 @@ export default () => {
                                     >
                                         <SelectTrigger><SelectValue placeholder="Destination" /></SelectTrigger>
                                         <SelectContent>
-                                            {masterSheet?.firms?.filter(f => f !== transferDialog.fromProject).map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                                            {(masterSheet?.firms || [])
+                                                .filter(f => f !== transferDialog.fromProject)
+                                                .map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)
+                                            }
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -627,12 +638,21 @@ export default () => {
 
                                                 const timestamp = new Date().toISOString();
                                                 const ref = `TRF-${Date.now()}`;
+                                                const fromFirmId = masterSheet?.firmObjects?.find((f) => f.name === transferDialog.fromProject)?.id;
+                                                const toFirmId = masterSheet?.firmObjects?.find((f) => f.name === transferDialog.toProject)?.id;
+
+                                                if (!fromFirmId || !toFirmId) {
+                                                    toast.error("Project ID is missing for this transfer.");
+                                                    return;
+                                                }
 
                                                 // Insert into dedicated stock_transfers table
                                                 const { error } = await supabase.from('stock_transfers').insert([{
                                                     transfer_no: ref,
                                                     from_project: transferDialog.fromProject,
+                                                    from_firm_id: fromFirmId,
                                                     to_project: transferDialog.toProject,
+                                                    to_firm_id: toFirmId,
                                                     product_name: transferDialog.itemName,
                                                     uom: selected?.uom,
                                                     group_head: selected?.groupHead || '',

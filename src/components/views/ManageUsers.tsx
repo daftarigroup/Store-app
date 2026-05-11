@@ -127,31 +127,27 @@ const permissionGroups = [
 ];
 
 export default function ManageUsers() {
-    const { user: currentUser } = useAuth();
+    const { user: currentUser, refreshUser } = useAuth();
 
     const [tableData, setTableData] = useState<UsersTableData[]>([]);
     const [dataLoading, setDataLoading] = useState(true);
     const [openDialog, setOpenDialog] = useState(false);
     const [selectedUser, setSelectedUser] = useState<UsersTableData | null>(null);
     const [showPassword, setShowPassword] = useState(false);
-    const [allProjectOptions, setAllProjectOptions] = useState<string[]>([]);
+    const [allProjectOptions, setAllProjectOptions] = useState<{ id: number; name: string }[]>([]);
     const permittedProjects = useMemo(() => {
-        const projects = allProjectOptions
-            .map((firm) => String(firm || '').trim())
-            .filter(Boolean);
-
-        return Array.from(new Map(projects.map((firm) => [firm.toLowerCase(), firm])).values())
-            .sort((a, b) => a.localeCompare(b));
+        return [...allProjectOptions].sort((a, b) => a.name.localeCompare(b.name));
     }, [allProjectOptions]);
 
     useEffect(() => {
         fetchMasterOptions()
-            .then((masterOptions) => setAllProjectOptions(masterOptions.firms || []))
+            .then((masterOptions) => setAllProjectOptions(masterOptions.firmObjects || []))
             .catch((error) => {
                 console.error('Failed to fetch project options:', error);
                 toast.error('Failed to load project options');
             });
     }, []);
+
 
     useEffect(() => {
         if (!openDialog) {
@@ -431,6 +427,9 @@ export default function ManageUsers() {
         try {
             if (selectedUser) {
                 await updateUser(selectedUser.id, userData);
+                if (selectedUser.username === currentUser.username) {
+                    await refreshUser();
+                }
                 toast.success('User updated successfully');
             } else {
                 await createUser(userData);
@@ -592,12 +591,13 @@ export default function ManageUsers() {
                                             <Building size={14} className="text-primary" /> Permitted Projects (Firm Access)
                                         </FormLabel>
                                         {permittedProjects.length > 0 && (
+
                                             <FormField
                                                 control={form.control}
                                                 name="firm_access"
                                                 render={({ field }) => {
-                                                    const selected = (field.value || []).map((firm) => firm.trim()).filter(Boolean);
-                                                    const allSelected = permittedProjects.length > 0 && permittedProjects.every((firm) => selected.includes(firm));
+                                                    const selected = (field.value || []).map((v) => String(v).trim()).filter(Boolean);
+                                                    const allSelected = permittedProjects.length > 0 && permittedProjects.every((p) => selected.includes(String(p.id)));
 
                                                     return (
                                                         <FormItem className="flex items-center justify-between rounded-xl border bg-background p-3">
@@ -614,7 +614,7 @@ export default function ManageUsers() {
                                                                     id="select-all-projects"
                                                                     checked={allSelected}
                                                                     onCheckedChange={(checked) => {
-                                                                        field.onChange(checked ? [...permittedProjects] : []);
+                                                                        field.onChange(checked ? permittedProjects.map(p => String(p.id)) : []);
                                                                     }}
                                                                 />
                                                             </FormControl>
@@ -626,30 +626,31 @@ export default function ManageUsers() {
                                         <div className="bg-background border rounded-xl p-4 max-h-48 overflow-y-auto custom-scrollbar grid sm:grid-cols-2 gap-3">
                                             {permittedProjects.map((firm) => (
                                                 <FormField
-                                                    key={firm}
+                                                    key={firm.id}
                                                     control={form.control}
                                                     name="firm_access"
                                                     render={({ field }) => {
-                                                        const values = (field.value || []).map((value) => value.trim()).filter(Boolean);
-                                                        const checked = values.includes(firm);
+                                                        const values = (field.value || []).map((v) => String(v).trim()).filter(Boolean);
+                                                        const firmIdStr = String(firm.id);
+                                                        const checked = values.includes(firmIdStr) || values.includes(firm.name); // Support both for transition
 
                                                         return (
                                                             <FormItem className="flex items-center space-x-2 space-y-0 p-2 rounded-lg hover:bg-muted/50 transition-colors">
                                                                 <FormControl>
                                                                     <Checkbox
-                                                                        id={`firm-access-${firm}`}
+                                                                        id={`firm-access-${firm.id}`}
                                                                         checked={checked}
                                                                         onCheckedChange={(isChecked) => {
                                                                             field.onChange(
                                                                                 isChecked
-                                                                                    ? Array.from(new Set([...values, firm]))
-                                                                                    : values.filter((f) => f !== firm)
+                                                                                    ? Array.from(new Set([...values.filter(v => v !== firm.name), firmIdStr])) // Prefer ID when selecting
+                                                                                    : values.filter((v) => v !== firmIdStr && v !== firm.name)
                                                                             );
                                                                         }}
                                                                     />
                                                                 </FormControl>
-                                                                <FormLabel htmlFor={`firm-access-${firm}`} className="text-sm font-medium leading-none cursor-pointer select-none">
-                                                                    {firm}
+                                                                <FormLabel htmlFor={`firm-access-${firm.id}`} className="text-sm font-medium leading-none cursor-pointer select-none">
+                                                                    {firm.name}
                                                                 </FormLabel>
                                                             </FormItem>
                                                         );
@@ -661,9 +662,10 @@ export default function ManageUsers() {
                                             )}
                                         </div>
                                         <p className="text-[10px] text-muted-foreground pl-1 italic">
-                                            * Project access is controlled only by selected firms, including administrators.
+                                            * Project access is controlled by selected firm IDs. Administrator with 'All' still has full access.
                                         </p>
                                     </div>
+
                                 </div>
 
                                 <div className="space-y-4">

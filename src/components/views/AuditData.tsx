@@ -6,6 +6,7 @@ import DataTable from '../element/DataTable';
 import { useAuth } from '@/context/AuthContext';
 import { useSheets } from '@/context/SheetsContext';
 import { formatDateTime, parseCustomDate, formatDate } from '@/lib/utils';
+import { isAllowedFirm } from '@/lib/firmAccess';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Button } from '../ui/button';
 import {
@@ -220,10 +221,13 @@ export default function PcReportTable() {
     const records = Array.isArray(tallyEntrySheet) ? tallyEntrySheet : [];
 
     const filteredByFirm = records.filter((item) => {
-      const permittedFirms = (user?.firm_access || []).map(f => f.trim().toLowerCase());
-      const itemFirm = (item.firmNameMatch || '').trim().toLowerCase();
-      const matchesFirm = permittedFirms.includes('all') || permittedFirms.includes(itemFirm);
-      return matchesFirm;
+      return isAllowedFirm(
+        {
+          id: (item as any).firm_id,
+          name: item.firmNameMatch
+        },
+        user?.firm_access
+      );
     });
 
     return filteredByFirm.map((item): ProcessedTallyData | null => {

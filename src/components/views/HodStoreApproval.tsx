@@ -14,6 +14,8 @@ import {
 import { supabase } from '@/lib/supabase';
 import { createTallyEntryRecord } from '@/services/tallyEntryService';
 import { useSheets } from '@/context/SheetsContext';
+import { filterByFirmAccess } from '@/lib/firmAccess';
+
 
 import {
     Dialog,
@@ -71,6 +73,7 @@ interface HodPendingData {
     billRemark: string;
     transporterName: string;
     freightAmount: number;
+    firm_id?: number;
 }
 
 interface HodHistoryData {
@@ -132,13 +135,12 @@ export default () => {
     }, [user?.username, user?.firm_access]);
 
     useEffect(() => {
-        const permittedFirms = user?.firm_access || [];
-        const filteredByFirm = storeInRecords.filter((item) => {
-            const itemFirm = (item.firmNameMatch || '').trim();
-            return (user?.firmNameMatch || '').trim().toLowerCase() === "all" ||
-                permittedFirms.includes('all') ||
-                permittedFirms.some(f => f.toLowerCase() === itemFirm.toLowerCase());
-        });
+        const filteredByFirm = filterByFirmAccess(
+            storeInRecords,
+            user?.firm_access || [],
+            { id: (i: any) => i.firm_id, name: (i: any) => i.firmNameMatch }
+        );
+
 
         setPendingData(
             filteredByFirm
@@ -176,7 +178,9 @@ export default () => {
                     billRemark: i.billRemark || '',
                     transporterName: i.transporterName || '',
                     freightAmount: Number(i.amount) || 0,
+                    firm_id: i.firm_id,
                 }))
+
         );
 
         setHistoryData(
@@ -236,7 +240,9 @@ export default () => {
                         product_name: selectedItem.productName,
                         firm_name: selectedItem.firmNameMatch,
                         payment_terms: selectedItem.paymentTerms,
+                        firm_id: selectedItem.firm_id,
                     });
+
                 }
 
                 // ✅ Sync with Audit Data (Tally Entry)
@@ -258,7 +264,9 @@ export default () => {
                         bill_no: selectedItem.billNo || '',
                         planned1: formattedDateOnly, // Start Audit stage
                         firmNameMatch: selectedItem.firmNameMatch,
+                        firm_id: selectedItem.firm_id,
                     });
+
                 } catch (auditError) {
                     console.error('Failed to create audit entry during HOD Approval:', auditError);
                 }

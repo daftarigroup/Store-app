@@ -97,6 +97,16 @@ export default () => {
     const [historySearchQuery, setHistorySearchQuery] = useState<string>('');
     const [searchTermVendor, setSearchTermVendor] = useState('');
 
+    const applyFirmAccessFilter = (query: any) => {
+        const userFirms = normalizeFirmAccess(user.firm_access);
+        if (userFirms === undefined) return query;
+        if (userFirms.length === 0) return null;
+
+        const ids = userFirms.filter((firm) => /^\d+$/.test(firm)).map(Number);
+        if (ids.length === 0) return null;
+        return query.in('firm_id', ids);
+    };
+
     // Fetch pending vendor updates from Supabase
     const fetchPendingVendorUpdates = async () => {
         if (!supabaseEnabled) return;
@@ -108,15 +118,14 @@ export default () => {
                 .not('planned2', 'is', null)
                 .is('actual2', null);
 
-            const userFirms = normalizeFirmAccess(user.firm_access) || [];
-            if (userFirms.length === 0) {
+            const filteredQuery = applyFirmAccessFilter(query);
+            if (!filteredQuery) {
                 setTableData([]);
                 setFilteredTableData([]);
                 return;
             }
-            query = query.in('firm_name', userFirms);
 
-            const { data, error } = await query.order('indent_number', { ascending: false });
+            const { data, error } = await filteredQuery.order('indent_number', { ascending: false });
 
             if (error) throw error;
 
@@ -158,15 +167,14 @@ export default () => {
                 .not('planned2', 'is', null)
                 .not('actual2', 'is', null);
 
-            const userFirms = normalizeFirmAccess(user.firm_access) || [];
-            if (userFirms.length === 0) {
+            const filteredQuery = applyFirmAccessFilter(query);
+            if (!filteredQuery) {
                 setHistoryData([]);
                 setFilteredHistoryData([]);
                 return;
             }
-            query = query.in('firm_name', userFirms);
 
-            const { data, error } = await query.order('indent_number', { ascending: false });
+            const { data, error } = await filteredQuery.order('indent_number', { ascending: false });
 
             if (error) throw error;
 

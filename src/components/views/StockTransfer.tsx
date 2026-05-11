@@ -104,6 +104,14 @@ export default () => {
             return;
         }
 
+        const fromFirmId = masterSheet?.firmObjects?.find((firm) => firm.name === values.fromProject)?.id;
+        const toFirmId = masterSheet?.firmObjects?.find((firm) => firm.name === values.toProject)?.id;
+
+        if (!fromFirmId || !toFirmId) {
+            toast.error('Project ID is missing for this transfer.');
+            return;
+        }
+
         setIsSubmitting(true);
         const timestamp = new Date().toISOString();
         const transferNo = `TRF-${Date.now()}`;
@@ -124,6 +132,7 @@ export default () => {
                 status: 'Approved',
                 given_qty: values.quantity,
                 firm_name: values.fromProject,
+                firm_id: fromFirmId,
                 issue_person_name: user?.name || 'System',
                 remark: values.remark || 'Internal Stock Transfer',
             };
@@ -144,6 +153,7 @@ export default () => {
                 received_quantity: values.quantity,
                 actual6: timestamp,
                 firm_name: values.toProject,
+                firm_id: toFirmId,
                 unit_of_measurement: selectedItem?.uom || '',
                 remark: values.remark || 'Internal Stock Transfer',
                 hod_status: 'Approved',
@@ -221,10 +231,6 @@ export default () => {
                                                             </div>
                                                             {(masterSheet?.firms || [])
                                                                 .filter(f => f.toLowerCase().includes(searchTermFrom.toLowerCase()))
-                                                                .filter(f => {
-                                                                    const permitted = (user?.firm_access || []).map(p => p.trim().toLowerCase());
-                                                                    return permitted.includes('all') || permitted.includes(f.trim().toLowerCase());
-                                                                })
                                                                 .map(firm => (
                                                                     <SelectItem key={firm} value={firm}>{firm}</SelectItem>
                                                                 ))}
@@ -263,11 +269,7 @@ export default () => {
                                                             </div>
                                                             {(masterSheet?.firms || [])
                                                                 .filter(f => f.toLowerCase().includes(searchTermTo.toLowerCase()))
-                                                                .filter(f => {
-                                                                    const permitted = (user?.firm_access || []).map(p => p.trim().toLowerCase());
-                                                                    const hasAccess = permitted.includes('all') || permitted.includes(f.trim().toLowerCase());
-                                                                    return f !== fromProject && hasAccess;
-                                                                })
+                                                                .filter(f => f !== fromProject)
                                                                 .map(firm => (
                                                                     <SelectItem key={firm} value={firm}>{firm}</SelectItem>
                                                                 ))}

@@ -64,7 +64,12 @@ export default function POHistory() {
                     setHistoryData([]);
                     return;
                 }
-                poQuery = poQuery.in('firm_name', userFirms);
+                const firmIds = userFirms.filter((firm) => /^\d+$/.test(firm)).map(Number);
+                if (firmIds.length === 0) {
+                    setHistoryData([]);
+                    return;
+                }
+                poQuery = poQuery.in('firm_id', firmIds);
 
                 const { data: poMasterData, error: poError } = await poQuery;
                 if (poError) throw poError;

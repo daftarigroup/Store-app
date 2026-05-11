@@ -17,6 +17,8 @@ import { ClipLoader as Loader } from 'react-spinners';
 import { ClipboardList, Trash, Search, RotateCcw } from 'lucide-react';
 import { pdf } from '@react-pdf/renderer';
 import IssuePdf from '../element/IssuePdf';
+import { isAllowedFirm } from '@/lib/firmAccess';
+
 const logo = "/logo.png";
 
 import {
@@ -82,7 +84,9 @@ export default () => {
         constructorName: z.string().nonempty('Contractor Name is required'),
         siteLocation: z.string().nonempty('Site Location is required'),
         projectName: z.string().nonempty('Project Name is required'),
+        firmId: z.coerce.number().optional(),
         remarks: z.string().optional(),
+
         issuePersonName: z.string().optional(),
         returnPersonName: z.string().optional(),
         damageRemark: z.string().optional(),
@@ -108,7 +112,9 @@ export default () => {
             constructorName: '',
             siteLocation: '',
             projectName: '',
+            firmId: undefined,
             remarks: '',
+
             issuePersonName: '',
             returnPersonName: '',
             damageRemark: '',
@@ -259,7 +265,10 @@ export default () => {
                     constructor_name: data.constructorName,
                     site_location: data.siteLocation,
                     firm_name: data.projectName,
+                    firm_id: data.firmId || options?.firmObjects?.find(f => f.name === data.projectName)?.id,
                     issue_person_name: data.issuePersonName,
+
+
                     return_person_name: data.returnPersonName,
                     damage_remark: data.damageRemark,
                     rejected_damage_qty: String(data.rejectedDamageQty || 0),
@@ -296,7 +305,9 @@ export default () => {
                 constructorName: '',
                 siteLocation: '',
                 projectName: '',
+                firmId: undefined,
                 remarks: '',
+
                 issuePersonName: '',
                 returnPersonName: '',
                 damageRemark: '',
@@ -424,22 +435,30 @@ export default () => {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Project Name <span className="text-destructive">*</span></FormLabel>
-                                    <Select onValueChange={field.onChange} value={field.value}>
+                                    <Select 
+                                        onValueChange={(val) => {
+                                            field.onChange(val);
+                                            const firmObj = options?.firmObjects?.find(f => f.name === val);
+                                            if (firmObj) form.setValue('firmId', firmObj.id);
+                                        }} 
+                                        value={field.value}
+                                    >
                                         <FormControl>
                                             <SelectTrigger className="w-full h-10">
                                                 <SelectValue placeholder="Select project" />
                                             </SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                            {(options?.firms || [])
-                                                .filter(f => (user?.firm_access || []).includes(f))
-                                                .map((firm, i) => (
-                                                    <SelectItem key={i} value={firm}>
-                                                        {firm}
+                                            {(options?.firmObjects || [])
+                                                .filter(f => isAllowedFirm({ id: f.id, name: f.name }, user?.firm_access || []))
+                                                .map((firm) => (
+                                                    <SelectItem key={firm.id} value={firm.name}>
+                                                        {firm.name}
                                                     </SelectItem>
                                                 ))}
                                         </SelectContent>
                                     </Select>
+
                                 </FormItem>
                             )}
                         />

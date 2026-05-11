@@ -88,10 +88,7 @@ export type IndentSheet = {
     // advanceIfAny: string;
     paymentype: string;
     cancelOty?: number; // "Cancel Oty" column becomes "cancelOty" in camelCase
-
-
-
-
+    firm_id?: number;
 };
 export type PaymentHistory = {
     timestamp: string;
@@ -122,8 +119,8 @@ export type PaymentHistory = {
     product_name?: string;
     indent_no?: string;
     vendor_name?: string;
+    firm_id?: number;
 };
-
 
 export type ReceivedSheet = {
     timestamp: string;
@@ -173,6 +170,7 @@ export type InventorySheet = {
     fromProject: string;
     toProject: string;
     firmName: string;
+    firm_id?: number;
     current: number;
     totalPrice: number;
     colorCode: string;
@@ -256,7 +254,7 @@ export type MasterSheet = {
     vendors: Vendor[];
     vendorNames: string[];
     paymentTerms: string[];
-    // departments: string[];
+    departments: string[];
     groupHeads: Record<string, string[]>; // category: items[]
     products: Record<string, string[]>;
     companyName: string;
@@ -270,6 +268,7 @@ export type MasterSheet = {
     uoms: string[];
     firmsnames: string[];
     firms: string[];
+    firmObjects: { id: number; name: string }[];
     fmsNames: string[];
     location: string[];
     locations: string[];
@@ -359,6 +358,7 @@ export interface PaymentsSheet {
     rowIndex?: number;
     po_number?: string;
     bill_no?: string;
+    firm_id?: number;
 }
 
 export const allPermissionKeys = [
@@ -431,9 +431,8 @@ export type IssueSheet = {
     return_person_name?: string;
     return_slip?: string;
     issuePersonName?: string;
+    firm_id?: number;
 }
-
-
 
 export type StoreInSheet = {
     rowIndex?: number;
@@ -529,7 +528,9 @@ export type StoreInSheet = {
     billRemark: string;
 
     firmNameMatch: string;
+    firm_id?: number;
     location: string;
+
     hodStatus: string;
     hodRemark: string;
     plannedHod: string;
@@ -592,7 +593,9 @@ export type TallyEntrySheet = {
     rowIndex: string;
     firmNameMatch: string;
     firmName: string;
+    firm_id?: number;
     id: number;
+
     hodStatus?: string;
     hodRemark?: string;
     damageOrder?: string;

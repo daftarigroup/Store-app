@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import type { PaymentsSheet, PaymentHistory } from '@/types/sheets';
-import { hasNoFirmAccess, normalizeFirmAccess } from '@/lib/firmAccess';
+import { hasNoFirmAccess, applyFirmAccessFilter } from '@/lib/firmAccess';
 
 /**
  * Payment Service
@@ -14,18 +14,17 @@ import { hasNoFirmAccess, normalizeFirmAccess } from '@/lib/firmAccess';
 export async function fetchPayments(permittedFirms?: string[]): Promise<PaymentsSheet[]> {
     try {
         if (hasNoFirmAccess(permittedFirms)) return [];
-        const firms = normalizeFirmAccess(permittedFirms);
 
         let query = supabase
             .from('payments')
             .select('*')
-            .order('id', { ascending: false });
+            .order('timestamp', { ascending: false });
 
-        if (firms) {
-            query = query.in('firm_name', firms);
-        }
+        // ID-first: firm_id when IDs present, firm_name only for legacy
+        const filteredQuery = applyFirmAccessFilter(query, permittedFirms);
+        if (!filteredQuery) return [];
 
-        const { data, error } = await query;
+        const { data, error } = await filteredQuery;
 
         if (error) throw error;
 
@@ -54,6 +53,7 @@ export async function fetchPayments(permittedFirms?: string[]): Promise<Payments
             paymentForm: p.payment_form || '',
             paymentDone: p.payment_done || false,
             firmNameMatch: p.firm_name || '',
+            firm_id: p.firm_id,
             id: p.id,
         })) as unknown as PaymentsSheet[];
     } catch (error) {
@@ -69,19 +69,19 @@ export async function fetchPayments(permittedFirms?: string[]): Promise<Payments
 export async function fetchPaymentHistory(permittedFirms?: string[]): Promise<PaymentHistory[]> {
     try {
         if (hasNoFirmAccess(permittedFirms)) return [];
-        const firms = normalizeFirmAccess(permittedFirms);
 
         let query = supabase
             .from('payments')
             .select('*')
             .eq('payment_done', true)
-            .order('id', { ascending: false });
+            .order('actual', { ascending: false, nullsFirst: false })
+            .order('timestamp', { ascending: false });
 
-        if (firms) {
-            query = query.in('firm_name', firms);
-        }
+        // ID-first: firm_id when IDs present, firm_name only for legacy
+        const filteredQuery = applyFirmAccessFilter(query, permittedFirms);
+        if (!filteredQuery) return [];
 
-        const { data, error } = await query;
+        const { data, error } = await filteredQuery;
 
         if (error) throw error;
 
@@ -100,6 +100,7 @@ export async function fetchPaymentHistory(permittedFirms?: string[]): Promise<Pa
             vendor_name: h.party_name || '',
             product_name: h.product || '',
             firmNameMatch: h.firm_name || '',
+            firm_id: h.firm_id,
         })) as unknown as PaymentHistory[];
     } catch (error) {
         console.error('Error fetching payment history from payments table:', error);

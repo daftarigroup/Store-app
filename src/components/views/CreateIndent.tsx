@@ -16,6 +16,8 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import DataTable from '../element/DataTable';
 import { fetchIndentRecords, type IndentRecord } from '@/services/indentService';
+import { filterByFirmAccess } from '@/lib/firmAccess';
+
 import { formatDate, formatDateTimeFull } from '@/lib/utils';
 import { type ColumnDef } from '@tanstack/react-table';
 import { Pill } from '../ui/pill';
@@ -46,6 +48,7 @@ export default () => {
     const [searchTermGroupHead, setSearchTermGroupHead] = useState('');
     const [searchTermProductName, setSearchTermProductName] = useState('');
     const [searchTermUOM, setSearchTermUOM] = useState('');
+    const [searchTermAreaOfUse, setSearchTermAreaOfUse] = useState('');
     const [searchTermFirmName, setSearchTermFirmName] = useState('');
     const [historyData, setHistoryData] = useState<IndentRecord[]>([]);
     const [historyLoading, setHistoryLoading] = useState(false);
@@ -61,6 +64,8 @@ export default () => {
     const schema = z.object({
         indenterName: z.string().nonempty(),
         firmName: z.string().nonempty({ message: 'Select Project Name' }),
+        firmId: z.coerce.number().optional(),
+
         indentStatus: z.enum(['Critical', 'Non-Critical'], {
             required_error: 'Select indent status',
         }),
@@ -87,6 +92,8 @@ export default () => {
         defaultValues: {
             indenterName: '',
             firmName: '',
+            firmId: undefined,
+
             indentStatus: undefined,
             products: [
                 {
@@ -123,7 +130,16 @@ export default () => {
             // Pass permitted firms to the service for backend-level filtering
             const permittedFirms = user?.firm_access || [];
             const data = await fetchIndentRecords(permittedFirms);
-            setHistoryData(data);
+            
+            // Secondary frontend check for absolute security/robustness
+            const filtered = filterByFirmAccess(data, permittedFirms, {
+                id: (i) => i.firm_id,
+                name: (i) => i.firm_name
+            });
+            
+            setHistoryData(filtered);
+
+
         } catch (error) {
             console.error('Error fetching history:', error);
         } finally {
@@ -187,15 +203,15 @@ export default () => {
         setIndenterLoading(true);
         try {
             const { data, error } = await supabase
-                .from('master')
-                .select('indenter_name')
+                .from('firm')
+                .select('contact_person')
                 .eq('firm_name', val);
 
             if (!error && data) {
                 const unique = Array.from(
                     new Set(
                         data
-                            .map((r: any) => r.indenter_name)
+                            .map((r: any) => r.contact_person)
                             .filter(Boolean)
                     )
                 ) as string[];
@@ -215,9 +231,11 @@ export default () => {
         if (!searchTermFirmName.trim()) return;
         setIsAddingProject(true);
         try {
-            const { error } = await supabase
-                .from('master')
-                .insert([{ firm_name: searchTermFirmName.trim() }]);
+            const { data, error } = await supabase
+                .from('firm')
+                .insert([{ firm_name: searchTermFirmName.trim() }])
+                .select('id')
+                .single();
 
             if (error) throw error;
 
@@ -226,8 +244,10 @@ export default () => {
             updateAll();
             // Automatically select the newly added project
             form.setValue('firmName', searchTermFirmName.trim());
+            if (data) form.setValue('firmId', data.id);
             handleFirmNameSelect(searchTermFirmName.trim());
             setSearchTermFirmName('');
+
         } catch (error) {
             console.error('Error adding project:', error);
             toast.error('Failed to add project. It might already exist.');
@@ -236,8 +256,9 @@ export default () => {
         }
     };
 
-    const handleAddAreaOfUse = async (index: number) => {
-        const value = form.getValues(`products.${index}.areaOfUse`);
+
+    const handleAddAreaOfUse = async (index: number, areaValue?: string) => {
+        const value = areaValue || form.getValues(`products.${index}.areaOfUse`);
         if (!value || !value.trim()) {
             toast.error("Please enter a value to add");
             return;
@@ -245,12 +266,14 @@ export default () => {
         setIsAddingAreaOfUse(true);
         try {
             const { error } = await supabase
-                .from('master')
-                .insert([{ area_of_use: value.trim() }]);
+                .from('area_of_use')
+                .insert([{ name: value.trim() }]);
 
             if (error) throw error;
 
             toast.success(`Area "${value}" added successfully!`);
+            form.setValue(`products.${index}.areaOfUse`, value.trim());
+            setSearchTermAreaOfUse('');
             updateAll();
         } catch (error) {
             console.error('Error adding area of use:', error);
@@ -260,13 +283,14 @@ export default () => {
         }
     };
 
+
     const handleAddDept = async () => {
         if (!searchTerm.trim()) return;
         setIsAddingDept(true);
         try {
             const { error } = await supabase
-                .from('master')
-                .insert([{ department: searchTerm.trim() }]);
+                .from('department')
+                .insert([{ name: searchTerm.trim() }]);
 
             if (error) throw error;
 
@@ -284,11 +308,79 @@ export default () => {
         }
     };
 
+    // Function to handle Group Head selection
+    const handleGroupHeadChange = async (index: number, groupHead: string) => {
+        form.setValue(`products.${index}.groupHead`, groupHead);
+        
+        // Filter products for this group head
+        const productOptions = options?.products[groupHead] || [];
+        
+        // If only one product exists, auto-select it
+        if (productOptions.length === 1) {
+            handleItemChange(index, productOptions[0]);
+        } else {
+            // Reset product and UOM if group head changed and multiple products exist
+            form.setValue(`products.${index}.productName`, '');
+            form.setValue(`products.${index}.uom`, '');
+        }
+
+        // Auto-select area of use if possible (e.g., if there's only one used with this group head in history, or from master)
+        // For now, if there's only one area of use in options, we could pick it, but usually area of use is site-specific.
+        if (options?.areaOfUses.length === 1) {
+            form.setValue(`products.${index}.areaOfUse`, options.areaOfUses[0]);
+        }
+    };
+
+    // Function to handle Item selection
+    const handleItemChange = async (index: number, itemName: string) => {
+        form.setValue(`products.${index}.productName`, itemName);
+        
+        try {
+            // Fetch item details to auto-fill Group Head and UOM
+            const { data, error } = await supabase
+                .from('item')
+                .select(`
+                    id,
+                    item_name,
+                    group_head:group_head_id ( name ),
+                    uom:uom_id ( name )
+                `)
+                .eq('item_name', itemName)
+                .maybeSingle();
+
+            if (!error && data) {
+                const itemData = data as any;
+                const groupHeadName = Array.isArray(itemData.group_head) ? itemData.group_head[0]?.name : itemData.group_head?.name;
+                const uomName = Array.isArray(itemData.uom) ? itemData.uom[0]?.name : itemData.uom?.name;
+
+                if (groupHeadName) {
+                    form.setValue(`products.${index}.groupHead`, groupHeadName);
+                }
+                if (uomName) {
+                    form.setValue(`products.${index}.uom`, uomName);
+                }
+                
+                // Trigger inventory check
+                handleProductSelect(index, itemName, groupHeadName || '');
+            }
+        } catch (err) {
+            console.error('Error fetching item details:', err);
+        }
+    };
+
     // Function to fetch and update inventory when product is clicked/selected
     const handleProductSelect = async (index: number, productName: string, groupHead: string) => {
         try {
+            const firmName = form.getValues('firmName');
+            const firmId = form.getValues('firmId') || options?.firmObjects?.find((f: { name: string; id: number }) => f.name === firmName)?.id;
+
             if (!supabaseEnabled) {
                 toast.error('Supabase is not enabled');
+                return;
+            }
+
+            if (!firmId) {
+                toast.error('Project ID is required for inventory');
                 return;
             }
 
@@ -317,6 +409,7 @@ export default () => {
                 .select('indented')
                 .eq('item_name', productName)
                 .eq('group_head', groupHead)
+                .eq('firm_id', firmId)
                 .maybeSingle();
 
             if (fetchError) {
@@ -333,9 +426,10 @@ export default () => {
 
                 const { error: updateError } = await supabase
                     .from('inventory')
-                    .update({ indented: newIndented })
+                    .update({ indented: newIndented, firm_id: firmId || null, firm_name: firmName || '' })
                     .eq('item_name', productName)
-                    .eq('group_head', groupHead);
+                    .eq('group_head', groupHead)
+                    .eq('firm_id', firmId);
 
                 if (updateError) {
                     console.error('Error updating inventory:', updateError);
@@ -351,6 +445,8 @@ export default () => {
                         item_name: productName,
                         group_head: groupHead,
                         indented: 1,
+                        firm_name: firmName || '',
+                        firm_id: firmId || null,
                         timestamp: new Date().toISOString(),
                     });
 
@@ -463,6 +559,12 @@ export default () => {
             }
 
             // Prepare rows for insertion (with snake_case for database)
+            const firmId = data.firmId || options?.firmObjects?.find((f: { name: string; id: number }) => f.name === data.firmName)?.id;
+            if (!firmId) {
+                toast.error('Project ID is required to create an indent');
+                return;
+            }
+
             const rows = [];
             for (const product of data.products) {
                 let attachmentUrl = '';
@@ -493,7 +595,11 @@ export default () => {
                     min_stock_qty: product.minStockQty || 0,
                     uom: product.uom,
                     firm_name: data.firmName,
+                    firm_id: firmId,
+
                     specifications: product.specifications || '',
+
+
                     indent_status: data.indentStatus,
                     expected_req_date: product.expectedRequirementDate,
                     attachment: attachmentUrl,
@@ -516,7 +622,9 @@ export default () => {
             form.reset({
                 indenterName: '',
                 firmName: '',
+                firmId: undefined,
                 indentStatus: '' as any,
+
                 products: [
                     {
                         attachment: undefined,
@@ -575,6 +683,8 @@ export default () => {
                                             <Select
                                                 onValueChange={(val) => {
                                                     field.onChange(val);
+                                                    const firmObj = options?.firmObjects?.find(f => f.name === val);
+                                                    if (firmObj) form.setValue('firmId', firmObj.id);
                                                     handleFirmNameSelect(val);
                                                 }}
                                                 value={field.value}
@@ -595,16 +705,18 @@ export default () => {
                                                             className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
                                                         />
                                                     </div>
-                                                    {(options?.firms || [])
-                                                        .filter((firm) => {
-                                                            const matchesSearch = firm.toLowerCase().includes(searchTermFirmName.toLowerCase());
-                                                            return matchesSearch && (user?.firm_access || []).includes(firm);
-                                                        })
-                                                        .map((firm, i) => (
-                                                            <SelectItem key={i} value={firm}>
-                                                                {firm}
+                                                    {(options?.firmObjects || [])
+                                                        .filter((f: { name: string; id: number }) => 
+                                                            f.name.toLowerCase().includes(searchTermFirmName.toLowerCase())
+                                                        )
+
+                                                        .map((firm: { name: string; id: number }) => (
+                                                            <SelectItem key={firm.id} value={firm.name} onClick={() => form.setValue('firmId', firm.id)}>
+
+                                                                {firm.name}
                                                             </SelectItem>
                                                         ))}
+
 
                                                     {user?.administrate &&
                                                         searchTermFirmName.trim() !== '' &&
@@ -751,7 +863,9 @@ export default () => {
                                     // const currentDept = products[index]?.department;
                                     const currentGroupHead = products[index]?.groupHead;
                                     const groupHeadOptions = options?.allGroupHeads || [];
-                                    const productOptions = options?.products[currentGroupHead] || [];
+                                    const productOptions = currentGroupHead
+                                        ? options?.products[currentGroupHead] || []
+                                        : Array.from(new Set(Object.values(options?.products || {}).flat())).sort();
 
                                     return (
                                         <div
@@ -786,7 +900,7 @@ export default () => {
                                                                 </FormLabel>
                                                                 <Select
                                                                     onValueChange={(val) => {
-                                                                        field.onChange(val);
+                                                                        handleGroupHeadChange(index, val);
                                                                     }}
                                                                     value={field.value}
                                                                 >
@@ -925,36 +1039,63 @@ export default () => {
                                                                         *
                                                                     </span>
                                                                 </FormLabel>
-                                                                <div className="flex gap-2">
+                                                                <Select
+                                                                    onValueChange={field.onChange}
+                                                                    value={field.value}
+                                                                >
                                                                     <FormControl>
-                                                                        <>
-                                                                            <Input
-                                                                                placeholder="Enter or select area of use"
-                                                                                {...field}
-                                                                                list={`area-options-${index}`}
-                                                                            />
-                                                                            <datalist id={`area-options-${index}`}>
-                                                                                {(options?.areaOfUses || []).map((area, i) => (
-                                                                                    <option key={i} value={area} />
-                                                                                ))}
-                                                                            </datalist>
-                                                                        </>
+                                                                        <SelectTrigger className="w-full">
+                                                                            <SelectValue placeholder="Select Area of Use" />
+                                                                        </SelectTrigger>
                                                                     </FormControl>
-                                                                    <Button
-                                                                        type="button"
-                                                                        variant="outline"
-                                                                        size="icon"
-                                                                        onClick={() => handleAddAreaOfUse(index)}
-                                                                        disabled={isAddingAreaOfUse || !field.value?.trim()}
-                                                                        className="shrink-0"
-                                                                    >
-                                                                        {isAddingAreaOfUse ? (
-                                                                            <Loader size={14} color="currentColor" />
-                                                                        ) : (
-                                                                            <PlusCircle size={16} />
-                                                                        )}
-                                                                    </Button>
-                                                                </div>
+                                                                    <SelectContent>
+                                                                        <div className="flex items-center border-b px-3 pb-3">
+                                                                            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                                                                            <input
+                                                                                placeholder="Search Area of Use..."
+                                                                                value={searchTermAreaOfUse}
+                                                                                onChange={(e) => setSearchTermAreaOfUse(e.target.value)}
+                                                                                onKeyDown={(e) => e.stopPropagation()}
+                                                                                className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
+                                                                            />
+                                                                        </div>
+                                                                        {(options?.areaOfUses || [])
+                                                                            .filter((area) =>
+                                                                                area
+                                                                                    .toLowerCase()
+                                                                                    .includes(searchTermAreaOfUse.toLowerCase())
+                                                                            )
+                                                                            .map((area, i) => (
+                                                                                <SelectItem key={i} value={area}>
+                                                                                    {area}
+                                                                                </SelectItem>
+                                                                            ))}
+
+                                                                        {searchTermAreaOfUse.trim() !== '' &&
+                                                                            !(options?.areaOfUses || []).some(area => area.toLowerCase() === searchTermAreaOfUse.trim().toLowerCase()) && (
+                                                                                <div className="p-2 border-t mt-1">
+                                                                                    <Button
+                                                                                        type="button"
+                                                                                        variant="ghost"
+                                                                                        size="sm"
+                                                                                        className="w-full justify-start text-primary gap-2 h-8"
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            handleAddAreaOfUse(index, searchTermAreaOfUse.trim());
+                                                                                        }}
+                                                                                        disabled={isAddingAreaOfUse}
+                                                                                    >
+                                                                                        {isAddingAreaOfUse ? (
+                                                                                            <Loader size={14} color="currentColor" />
+                                                                                        ) : (
+                                                                                            <PlusCircle size={14} />
+                                                                                        )}
+                                                                                        Add "{searchTermAreaOfUse}" as new Area
+                                                                                    </Button>
+                                                                                </div>
+                                                                            )}
+                                                                    </SelectContent>
+                                                                </Select>
                                                             </FormItem>
                                                         )}
                                                     />
@@ -973,15 +1114,9 @@ export default () => {
                                                                 </FormLabel>
                                                                 <Select
                                                                     onValueChange={(val) => {
-                                                                        field.onChange(val);
-                                                                        handleProductSelect(
-                                                                            index,
-                                                                            val,
-                                                                            currentGroupHead
-                                                                        );
+                                                                        handleItemChange(index, val);
                                                                     }}
                                                                     value={field.value}
-                                                                    disabled={!currentGroupHead}
                                                                 >
                                                                     <FormControl>
                                                                         <SelectTrigger className="w-full">

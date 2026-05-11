@@ -47,6 +47,8 @@ import IndentPdf from '../element/IndentPdf';
 import { pdf } from '@react-pdf/renderer';
 const logo = "/logo.png";
 import { supabase } from '@/lib/supabase';
+import { filterByFirmAccess } from '@/lib/firmAccess';
+
 
 export default function ApproveIndent() {
     const { user } = useAuth();
@@ -65,10 +67,17 @@ export default function ApproveIndent() {
     const fetchData = async () => {
         setDataLoading(true);
         try {
-            // Pass permitted firms to the service for backend-level filtering
             const permittedFirms = user?.firm_access || [];
             const records = await fetchIndentRecords(permittedFirms);
-            setAllData(records);
+            
+            // Secondary frontend check for absolute security/robustness
+            const filtered = filterByFirmAccess(records, permittedFirms, {
+                id: (i) => i.firm_id,
+                name: (i) => i.firm_name
+            });
+            
+            setAllData(filtered);
+
         } catch (error) {
             console.error('Failed to fetch indent records:', error);
             toast.error('Failed to load data');

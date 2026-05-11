@@ -4,7 +4,7 @@ import { hasNoFirmAccess, normalizeFirmAccess } from '@/lib/firmAccess';
 /**
  * Fetch all indent data from Supabase
  * Used for populating PO creation form with indent details
- * @param permittedFirms Optional array of firm names to filter by
+ * @param permittedFirms Optional array of firm IDs to filter by
  */
 
 export interface PoMasterRecord {
@@ -59,6 +59,7 @@ export interface PoMasterRecord {
     firmNameMatch: string;
     emailSendStatus: string;
     preparedBy: string;
+    firm_id?: number;
 }
 
 export async function fetchIndents(permittedFirms?: string[]) {
@@ -72,7 +73,9 @@ export async function fetchIndents(permittedFirms?: string[]) {
             .order('indent_number', { ascending: false });
 
         if (firms) {
-            query = query.in('firm_name', firms);
+            const ids = firms.filter((firm) => /^\d+$/.test(firm)).map(Number);
+            if (ids.length === 0) return [];
+            query = query.in('firm_id', ids);
         }
 
         const { data, error } = await query;
@@ -94,6 +97,7 @@ export async function fetchIndents(permittedFirms?: string[]) {
                 approvedVendorName: r.approved_vendor_name || '',
                 firmName: r.firm_name || '',
                 firmNameMatch: r.firm_name || '',
+                firm_id: r.firm_id,
                 indentNumber: r.indent_number || '',
                 productName: r.product_name || '',
                 specifications: r.specifications || '',
@@ -120,7 +124,7 @@ export async function fetchIndents(permittedFirms?: string[]) {
 /**
  * Fetch all PO Master records from Supabase
  * Used for generating PO numbers and revising existing POs
- * @param permittedFirms Optional array of firm names to filter by
+ * @param permittedFirms Optional array of firm IDs to filter by
  */
 export async function fetchPoMaster(permittedFirms?: string[]) {
     try {
@@ -133,8 +137,18 @@ export async function fetchPoMaster(permittedFirms?: string[]) {
             .order('timestamp', { ascending: false });
 
         if (firms) {
-            query = query.in('firm_name', firms);
+            const ids = firms.filter((firm) => /^\d+$/.test(firm)).map(Number);
+            const names = firms.filter((firm) => !/^\d+$/.test(firm));
+            
+            if (ids.length > 0) {
+                query = query.in('firm_id', ids);
+            } else if (names.length > 0) {
+                query = query.in('firm_name', names);
+            } else {
+                return [];
+            }
         }
+
 
         const { data, error } = await query;
 
@@ -190,6 +204,7 @@ export async function fetchPoMaster(permittedFirms?: string[]) {
             deliveryDays: Number(r.delivery_days) || 0,
             deliveryType: r.delivery_type || '',
             firmNameMatch: r.firm_name || '',
+            firm_id: r.firm_id,
             emailSendStatus: r.email_send_status || '',
             preparedBy: r.prepared_by || '',
             approvedBy: r.approved_by || '',
@@ -215,101 +230,81 @@ export async function fetchPoMaster(permittedFirms?: string[]) {
  */
 export async function fetchMasterData() {
     try {
-        const { data: records, error } = await supabase
-            .from('master')
-            .select('*');
+        const [
+            companiesResult,
+            firmsResult,
+            vendorsResult,
+            itemsResult,
+            termsResult,
+            seResult,
+        ] = await Promise.all([
+            supabase.from('company').select('*').order('company_name'),
+            supabase.from('firm').select('*, company:company_id(*)').order('firm_name'),
+            supabase.from('vendors').select('*').order('vendor_name'),
+            supabase.from('item').select('*, group_head:group_head_id(name), uom:uom_id(name)').order('item_name'),
+            supabase.from('default_po_terms').select('*').eq('active', true).order('sort_order', { ascending: true }),
+            supabase.from('site_engineer_details').select('*'),
+        ]);
 
-        if (error) throw error;
+        const firstError = [companiesResult, firmsResult, vendorsResult, itemsResult, termsResult, seResult].find(result => result.error)?.error;
+        if (firstError) throw firstError;
 
-        if (!records || records.length === 0) {
-            return {
-                destinationAddress: '',
-                defaultTerms: [],
-                vendors: [],
-                firmCompanyMap: {},
-                companyName: '',
-                companyPhone: '',
-                companyGstin: '',
-                companyPan: '',
-                companyAddress: '',
-                billingAddress: '',
-                paymentTerms: [],
-                siteEngineers: [],
-            };
-        }
+        const companies = companiesResult.data || [];
+        const firms = firmsResult.data || [];
+        const vendorRows = vendorsResult.data || [];
+        const itemRows = itemsResult.data || [];
+        const termRows = termsResult.data || [];
+        const firstCompany: any = companies[0] || {};
+        const siteEngineers = seResult.data || [];
 
-        // Fetch site engineers from the other table
-        const { data: seData } = await supabase.from('site_engineer_details').select('*');
-        const siteEngineers = seData || [];
-
-        // Aggregate vendors
-        const vendors = records
-            .filter((r: any) => r.vendor_name)
-            .map((r: any) => ({
-                vendorName: r.vendor_name,
-                gstin: r.vendor_gstin || '',
-                address: r.vendor_address || '',
-                vendorEmail: r.vendor_email || '',
-            }));
+        const vendors = vendorRows.map((r: any) => ({
+            vendorName: r.vendor_name,
+            gstin: r.gstin || '',
+            address: r.address || '',
+            vendorEmail: r.email || '',
+        }));
 
         // Deduplicate vendors by name
         const uniqueVendors = Array.from(new Map(vendors.map((v: any) => [v.vendorName, v])).values());
 
         // Extract payment terms
-        const paymentTerms = Array.from(new Set(records.map((r: any) => r.payment_term).filter(Boolean)));
+        const paymentTerms = Array.from(new Set(vendorRows.map((r: any) => r.payment_term).filter(Boolean)));
 
         // Firm to Company Mapping
         const firmCompanyMap: Record<string, any> = {};
-        records.forEach((r: any) => {
-            if (r.firm_name && r.company_name) {
+        firms.forEach((r: any) => {
+            const company = r.company || {};
+            if (r.firm_name) {
                 firmCompanyMap[r.firm_name] = {
-                    companyName: r.company_name,
-                    companyAddress: r.company_address || '',
-                    destinationAddress: r.destination_address || '',
-                    companyGstin: r.company_gstin || '',
-                    companyPan: r.company_pan || '',
+                    companyName: company.company_name || '',
+                    companyAddress: company.address || '',
+                    destinationAddress: r.destination_address || company.destination_address || '',
+                    companyGstin: company.gstin || '',
+                    companyPan: company.pan || '',
                 };
             }
         });
 
-        // Company info (usually the first record or common values)
-        const firstWithCompany = records.find((r: any) => r.company_name) || {};
-
-        // Collect ALL default terms from ALL records (not just the first one)
-        const allDefaultTerms = new Set<string>();
-        records.forEach((r: any) => {
-            if (r.default_terms) {
-                allDefaultTerms.add(r.default_terms);
-            }
-        });
-
-        // Aggregate Items (Products)
-        const items = records
-            .filter((r: any) => r.item_name)
-            .map((r: any) => ({
-                itemName: r.item_name,
-                regularConditions: Array.isArray(r.regular_conditions)
-                    ? r.regular_conditions
-                    : (typeof r.regular_conditions === 'string' ? JSON.parse(r.regular_conditions || '[]') : []),
-                thirdPartyConditions: Array.isArray(r.third_party_conditions)
-                    ? r.third_party_conditions
-                    : (typeof r.third_party_conditions === 'string' ? JSON.parse(r.third_party_conditions || '[]') : []),
-            }));
+        const items = itemRows.map((r: any) => ({
+            itemName: r.item_name,
+            regularConditions: r.regular_pay_condition || [],
+            thirdPartyConditions: r.third_party_pay_condition || [],
+        }));
 
         return {
-            destinationAddress: firstWithCompany.destination_address || '',
-            defaultTerms: Array.from(allDefaultTerms),
+            destinationAddress: firstCompany.destination_address || '',
+            defaultTerms: termRows.map((term: any) => term.term_text).filter(Boolean),
             vendors: uniqueVendors,
             items,
             firmCompanyMap,
-            companyName: firstWithCompany.company_name || '',
-            companyPhone: firstWithCompany.company_phone || '',
-            companyGstin: firstWithCompany.company_gstin || '',
-            companyPan: firstWithCompany.company_pan || '',
-            companyEmail: firstWithCompany.company_email || '',
-            companyAddress: firstWithCompany.company_address || '',
-            billingAddress: firstWithCompany.billing_address || '',
-            companyContactPerson: firstWithCompany.company_contact_person || '',
+            companyName: firstCompany.company_name || '',
+            companyPhone: firstCompany.phone || '',
+            companyGstin: firstCompany.gstin || '',
+            companyPan: firstCompany.pan || '',
+            companyEmail: firstCompany.email || '',
+            companyAddress: firstCompany.address || '',
+            billingAddress: firstCompany.billing_address || '',
+            companyContactPerson: firstCompany.contact_person || '',
             paymentTerms,
             siteEngineers,
         };
@@ -339,6 +334,10 @@ export async function fetchMasterData() {
  */
 export async function insertPoRecords(poRecords: any[]) {
     try {
+        if (poRecords.some((record) => !record.firm_id)) {
+            throw new Error('Project ID is required for PO records');
+        }
+
         // Map the records to Supabase schema (snake_case)
         // Note: Most fields in po_master are text type, so we convert numbers to strings
         const mappedRecords = poRecords.map((record) => ({
@@ -376,6 +375,7 @@ export async function insertPoRecords(poRecords: any[]) {
             delivery_days: String(record.deliveryDays || 0),
             delivery_type: record.deliveryType || '',
             firm_name: record.firmNameMatch || '',
+            firm_id: record.firm_id,
             company_email: record.companyEmail || '',
             advance_percent: record.advancePercent || 0,
             advance_amount: record.advanceAmount || 0,

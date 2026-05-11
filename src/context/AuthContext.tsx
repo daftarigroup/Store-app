@@ -7,6 +7,7 @@ interface AuthState {
     loggedIn: boolean;
     login: (username: string, password: string) => Promise<boolean>;
     logout: () => void;
+    refreshUser: () => Promise<void>;
     loading: boolean;
     user: UserPermissions;
 }
@@ -65,6 +66,24 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
     }
 
+    async function refreshUser() {
+        const stored = localStorage.getItem('auth');
+        if (!stored) return;
+
+        try {
+            const { username } = JSON.parse(stored);
+            const user = await getUserByUsername(username);
+            if (user) {
+                setUserPermissions(user);
+                setLoggedIn(true);
+            } else {
+                logout();
+            }
+        } catch (error) {
+            console.error('Error refreshing user data:', error);
+        }
+    }
+
     function logout() {
         localStorage.removeItem('auth');
         setLoggedIn(false);
@@ -79,6 +98,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             login,
             loggedIn,
             logout,
+            refreshUser,
             user: defaultUser,
             loading
         }}>

@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { hasNoFirmAccess, normalizeFirmAccess } from '@/lib/firmAccess';
+import { hasNoFirmAccess, normalizeFirmAccess, applyFirmAccessFilter } from '@/lib/firmAccess';
 
 /**
  * GetLift Service
@@ -12,6 +12,7 @@ import { hasNoFirmAccess, normalizeFirmAccess } from '@/lib/firmAccess';
 export interface GetLiftIndentRecord {
     indentNumber: string;
     firmNameMatch: string;
+    firm_id?: number;
     approvedVendorName: string;
     poNumber: string;
     actual4: string;
@@ -40,6 +41,7 @@ export interface GetLiftStoreInRecord {
     liftNumber: string;
     indentNo: string;
     firmNameMatch: string;
+    firm_id?: number;
     vendorName: string;
     productName: string;
     poNumber: string;
@@ -85,6 +87,7 @@ export interface StoreInInsertData {
     billRemark: string;
     receivedQuantity?: number;
     firmNameMatch: string;
+    firm_id?: number | null;
     rate: string;
     // department?: string;
     areaOfUse?: string;
@@ -105,24 +108,23 @@ export interface StoreInInsertData {
 export async function fetchIndentRecords(permittedFirms?: string[]) {
     try {
         if (hasNoFirmAccess(permittedFirms)) return [];
-        const firms = normalizeFirmAccess(permittedFirms);
 
         let query = supabase
             .from('indent')
             .select('*')
             .order('indent_number', { ascending: false });
 
-        if (firms) {
-            query = query.in('firm_name', firms);
-        }
+        const filteredQuery = applyFirmAccessFilter(query, permittedFirms);
+        if (!filteredQuery) return [];
 
-        const { data, error } = await query;
+        const { data, error } = await filteredQuery;
 
         if (error) throw error;
         console.log("fetchIndentRecords", data);
         return (data || []).map((r: any) => ({
             indentNumber: r.indent_number || '',
             firmNameMatch: r.firm_name,
+            firm_id: r.firm_id,
             approvedVendorName: r.approved_vendor_name || '',
             poNumber: r.po_number || '',
             actual4: r.actual4 || '',
@@ -159,18 +161,16 @@ export async function fetchIndentRecords(permittedFirms?: string[]) {
 export async function fetchStoreInRecords(permittedFirms?: string[]) {
     try {
         if (hasNoFirmAccess(permittedFirms)) return [];
-        const firms = normalizeFirmAccess(permittedFirms);
 
         let query = supabase
             .from('store_in')
             .select('*')
             .order('timestamp', { ascending: false });
 
-        if (firms) {
-            query = query.in('firm_name', firms);
-        }
+        const filteredQuery = applyFirmAccessFilter(query, permittedFirms);
+        if (!filteredQuery) return [];
 
-        const { data, error } = await query;
+        const { data, error } = await filteredQuery;
 
         if (error) throw error;
 
@@ -178,6 +178,7 @@ export async function fetchStoreInRecords(permittedFirms?: string[]) {
             liftNumber: r.lift_number || '',
             indentNo: r.indent_no || '',
             firmNameMatch: r.firm_name,
+            firm_id: r.firm_id ?? null,
             vendorName: r.vendor_name || '',
             productName: r.product_name || '',
             poNumber: r.po_number || '',
@@ -200,7 +201,7 @@ export async function fetchStoreInRecords(permittedFirms?: string[]) {
 export const fetchVendorOptions = async (): Promise<string[]> => {
     try {
         const { data, error } = await supabase
-            .from('master')
+            .from('vendors')
             .select('vendor_name')
             .not('vendor_name', 'is', null)
             .order('vendor_name');
@@ -297,6 +298,7 @@ export async function insertStoreInRecord(storeInData: StoreInInsertData) {
             debit_note_copy: null,
             debit_note_number: null,
             firm_name: storeInData.firmNameMatch || null,
+            firm_id: storeInData.firm_id ?? null,
             lifting_status: storeInData.liftingStatus || 'Pending',
             planned11: null,
             actual11: null,

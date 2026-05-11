@@ -79,12 +79,21 @@ export default () => {
                 .neq('approved_vendor_name', '')
                 .or('po_requred.is.null,po_requred.eq.');
 
-            const userFirms = normalizeFirmAccess(user.firm_access) || [];
+            const userFirms = user.firm_access || [];
             if (userFirms.length === 0) {
                 setPendingTableData([]);
                 return;
             }
-            query = query.in('firm_name', userFirms);
+
+            const ids   = userFirms.filter(f => /^\d+$/.test(f)).map(Number);
+            const names = userFirms.filter(f => !/^\d+$/.test(f));
+            // ID-first: use firm_id only when IDs are present (secure)
+            if (ids.length > 0) {
+                query = query.in('firm_id', ids);
+            } else {
+                query = query.in('firm_name', names); // legacy fallback
+            }
+
 
             const { data, error } = await query.order('indent_number', { ascending: false });
 
@@ -132,12 +141,21 @@ export default () => {
                 .neq('po_requred', '')
                 .in('po_requred', ['Yes', 'No']);
 
-            const userFirms = normalizeFirmAccess(user.firm_access) || [];
+            const userFirms = user.firm_access || [];
             if (userFirms.length === 0) {
                 setHistoryTableData([]);
                 return;
             }
-            query = query.in('firm_name', userFirms);
+
+            const ids   = userFirms.filter(f => /^\d+$/.test(f)).map(Number);
+            const names = userFirms.filter(f => !/^\d+$/.test(f));
+            // ID-first: use firm_id only when IDs are present (secure)
+            if (ids.length > 0) {
+                query = query.in('firm_id', ids);
+            } else {
+                query = query.in('firm_name', names); // legacy fallback
+            }
+
 
             const { data, error } = await query.order('indent_number', { ascending: false });
 

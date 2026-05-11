@@ -30,6 +30,7 @@ import { Database, Plus, Save } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { isAllowedFirm } from '@/lib/firmAccess';
 
 interface ChartDataItem {
     name: string;
@@ -76,6 +77,28 @@ export default function Dashboard() {
     const [masterValue, setMasterValue] = useState('');
     const [isInserting, setIsInserting] = useState(false);
 
+    const hasFirmAccess = (row: any) =>
+        isAllowedFirm(
+            {
+                id: row?.firm_id ?? row?.firmId,
+                name: row?.firmNameMatch ?? row?.firm_name ?? row?.firmName ?? row?.projectName,
+            },
+            user?.firm_access
+        );
+
+    // Number formatting helpers
+    const formatCurrency = (val: number) => {
+        if (val >= 10000000) return `₹${(val / 10000000).toFixed(2)}Cr`;
+        if (val >= 100000) return `₹${(val / 100000).toFixed(2)}L`;
+        return `₹${val.toLocaleString()}`;
+    };
+
+    const formatQty = (val: number) => {
+        if (val >= 100000) return `${(val / 100000).toFixed(2)}L`;
+        if (val >= 1000) return `${(val / 1000).toFixed(1)}K`;
+        return val.toLocaleString();
+    };
+
     useEffect(() => {
         const loadData = async () => {
             try {
@@ -89,17 +112,14 @@ export default function Dashboard() {
                     fetchPoMaster(permittedFirms),
                     fetchInventoryRecords(permittedFirms)
                 ]);
-                // Filter data based on user permissions
-                let filteredIData = iData;
-                let filteredSData = sData;
-                let filteredIssueData = issueData;
-                let filteredPoData = poData;
-                let filteredAllProjects = mData.firms;
-
-                filteredSData = sData.filter((item: StoreInRecord) => item.firmNameMatch && permittedFirms.includes(item.firmNameMatch));
-                filteredIssueData = issueData.filter((item: IssueRecord) => item.firm_name && permittedFirms.includes(item.firm_name));
-                filteredPoData = poData.filter((item: PoMasterRecord) => item.firmNameMatch && permittedFirms.includes(item.firmNameMatch));
-                filteredAllProjects = mData.firms.filter((f: string) => permittedFirms.includes(f));
+                // Service calls already apply firm_id access filtering.
+                // Keep a defensive local gate so dashboard remains correct
+                // even if any upstream query regresses during migration.
+                const filteredIData = iData.filter((r: any) => hasFirmAccess(r));
+                const filteredSData = sData.filter((r: any) => hasFirmAccess(r));
+                const filteredIssueData = issueData.filter((r: any) => hasFirmAccess(r));
+                const filteredPoData = poData.filter((r: any) => hasFirmAccess(r));
+                const filteredAllProjects = mData.firms;
 
                 setIndents(filteredIData);
                 setStoreIns(filteredSData);
@@ -432,10 +452,10 @@ export default function Dashboard() {
                                 <p className="font-semibold">Procurement Indents</p>
                                 <ClipboardList size={22} />
                             </div>
-                            <p className="text-4xl font-black text-blue-900 mt-2">{indent.count}</p>
+                            <p className="text-4xl font-black text-blue-900 mt-2" title={indent.count.toLocaleString()}>{formatQty(indent.count)}</p>
                             <div className="text-blue-600 flex justify-between mt-2 border-t border-blue-200 pt-2">
                                 <p className="text-xs font-medium uppercase tracking-wider">Quantity</p>
-                                <p className="font-bold">{indent.quantity}</p>
+                                <p className="font-bold" title={indent.quantity.toLocaleString()}>{formatQty(indent.quantity)}</p>
                             </div>
                         </CardContent>
                     </Card>
@@ -445,12 +465,14 @@ export default function Dashboard() {
                                 <p className="font-semibold">Total PO Value</p>
                                 <CreditCard size={22} className="text-indigo-600" />
                             </div>
-                            <p className="text-4xl font-black text-indigo-900 mt-2 text-ellipsis overflow-hidden">
-                                ₹{poTotal > 100000 ? (poTotal / 100000).toFixed(2) + 'L' : poTotal.toLocaleString()}
+                            <p className="text-4xl font-black text-indigo-900 mt-2 whitespace-nowrap overflow-hidden text-ellipsis" title={`₹${poTotal.toLocaleString()}`}>
+                                {formatCurrency(poTotal)}
                             </p>
                             <div className="text-indigo-600 flex justify-between mt-2 border-t border-indigo-200 pt-2">
                                 <p className="text-xs font-medium uppercase tracking-wider">Avg/PO</p>
-                                <p className="font-bold">₹{indent.count > 0 ? (poTotal / indent.count).toFixed(0) : 0}</p>
+                                <p className="font-bold" title={`₹${(indent.count > 0 ? poTotal / indent.count : 0).toLocaleString()}`}>
+                                    {formatCurrency(indent.count > 0 ? poTotal / indent.count : 0)}
+                                </p>
                             </div>
                         </CardContent>
                     </Card>
@@ -460,10 +482,10 @@ export default function Dashboard() {
                                 <p className="font-semibold">Items Received</p>
                                 <Truck size={22} />
                             </div>
-                            <p className="text-4xl font-black text-green-900 mt-2">{purchase.count}</p>
+                            <p className="text-4xl font-black text-green-900 mt-2" title={purchase.count.toLocaleString()}>{formatQty(purchase.count)}</p>
                             <div className="text-green-600 flex justify-between mt-2 border-t border-green-200 pt-2">
                                 <p className="text-xs font-medium uppercase tracking-wider">Total Qty</p>
-                                <p className="font-bold">{purchase.quantity}</p>
+                                <p className="font-bold" title={purchase.quantity.toLocaleString()}>{formatQty(purchase.quantity)}</p>
                             </div>
                         </CardContent>
                     </Card>
@@ -473,10 +495,10 @@ export default function Dashboard() {
                                 <p className="font-semibold">Stock Issued</p>
                                 <PackageCheck size={22} />
                             </div>
-                            <p className="text-4xl font-black text-orange-900 mt-2">{out.count}</p>
+                            <p className="text-4xl font-black text-orange-900 mt-2" title={out.count.toLocaleString()}>{formatQty(out.count)}</p>
                             <div className="text-orange-600 flex justify-between mt-2 border-t border-orange-200 pt-2">
                                 <p className="text-xs font-medium uppercase tracking-wider">Issue Qty</p>
-                                <p className="font-bold">{out.quantity}</p>
+                                <p className="font-bold" title={out.quantity.toLocaleString()}>{formatQty(out.quantity)}</p>
                             </div>
                         </CardContent>
                     </Card>
@@ -595,12 +617,12 @@ export default function Dashboard() {
                                                 {i + 1}
                                             </div>
                                             <div className="flex-1">
-                                                <p className="text-sm font-semibold text-slate-700 leading-none">{vendor.name}</p>
+                                                <p className="text-sm font-semibold text-slate-700 leading-none truncate max-w-[150px]" title={vendor.name}>{vendor.name}</p>
                                                 <p className="text-xs text-slate-500 mt-1">{vendor.orders} Orders processed</p>
                                             </div>
                                             <div className="text-right">
-                                                <p className="text-sm font-bold text-slate-900">
-                                                    ₹{vendor.quantity > 100000 ? (vendor.quantity / 100000).toFixed(1) + 'L' : vendor.quantity.toLocaleString()}
+                                                <p className="text-sm font-bold text-slate-900" title={`₹${vendor.quantity.toLocaleString()}`}>
+                                                    {formatCurrency(vendor.quantity)}
                                                 </p>
                                                 <p className="text-[10px] text-slate-400 uppercase font-medium">Value</p>
                                             </div>

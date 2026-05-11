@@ -33,6 +33,7 @@ export interface IssueRecord {
     return_slip?: string;
     firmNameMatch?: string;
     firm_name?: string;
+    firm_id?: number;
 }
 
 // ==================== FETCH FUNCTIONS ====================
@@ -52,7 +53,14 @@ export async function fetchIssueRecords(permittedFirms?: string[]): Promise<Issu
             .order('issue_no', { ascending: false });
 
         if (firms) {
-            query = query.in('firm_name', firms);
+            const ids   = firms.filter(f => /^\d+$/.test(f)).map(Number);
+            const names = firms.filter(f => !/^\d+$/.test(f));
+            // ID-first: when firm_access contains IDs, use firm_id only (secure)
+            if (ids.length > 0) {
+                query = query.in('firm_id', ids);
+            } else {
+                query = query.in('firm_name', names); // legacy fallback
+            }
         }
 
         const { data, error } = await query;
@@ -77,6 +85,7 @@ export async function fetchIssueRecords(permittedFirms?: string[]): Promise<Issu
             constructor_name: r.constructor_name || '',
             site_location: r.site_location || '',
             firm_name: r.firm_name || '',
+            firm_id: r.firm_id,
             rejected_damage_qty: r.rejected_damage_qty || '',
             damage_remark: r.damage_remark || '',
             return_person_name: r.return_person_name || '',
@@ -168,6 +177,7 @@ export async function createIssueRecords(rows: Partial<IssueRecord>[]) {
             constructor_name: r.constructor_name || '',
             site_location: r.site_location || '',
             firm_name: r.firm_name || '',
+            firm_id: r.firm_id,
             rejected_damage_qty: r.rejected_damage_qty || '',
             damage_remark: r.damage_remark || '',
             return_person_name: r.return_person_name || '',

@@ -16,7 +16,7 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Input } from '../ui/input';
 import { toast } from 'sonner';
-import { fetchMasterRecords, insertMasterData, updateMasterData, deleteMasterData, fetchSiteEngineers, insertSiteEngineer, updateSiteEngineer, deleteSiteEngineer, fetchContractors, insertContractor, updateContractor, deleteContractor, fetchSiteLocations, insertSiteLocation, updateSiteLocation, deleteSiteLocation } from '@/services/masterService';
+import { fetchMasterRecords, insertMasterData, insertNormalizedMasterData, updateMasterData, deleteMasterData, fetchSiteEngineers, insertSiteEngineer, updateSiteEngineer, deleteSiteEngineer, fetchContractors, insertContractor, updateContractor, deleteContractor, fetchSiteLocations, insertSiteLocation, updateSiteLocation, deleteSiteLocation } from '@/services/masterService';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { ScrollArea } from '../ui/scroll-area';
 import { cn } from '@/lib/utils';
@@ -49,6 +49,7 @@ const vendorSchema = z.object({
     vendor_gstin: optionalText(),
     vendor_address: optionalText(),
     vendor_email: optionalEmail(),
+    payment_term: optionalText(),
     responsible_person: optionalText(),
     location: optionalText(),
     phone: optionalText(),
@@ -58,6 +59,7 @@ type VendorFormValues = {
     vendor_gstin: string;
     vendor_address: string;
     vendor_email: string;
+    payment_term: string;
     responsible_person: string;
     location: string;
     phone: string;
@@ -189,6 +191,7 @@ export default function MasterManagement() {
             vendor_gstin: '',
             vendor_address: '',
             vendor_email: '',
+            payment_term: '',
             responsible_person: '',
             location: '',
             phone: '',
@@ -244,6 +247,7 @@ export default function MasterManagement() {
                 vendor_gstin: editingRecord.vendor_gstin ?? '',
                 vendor_address: editingRecord.vendor_address ?? '',
                 vendor_email: editingRecord.vendor_email ?? '',
+                payment_term: editingRecord.payment_term ?? '',
                 responsible_person: editingRecord.responsible_person ?? '',
                 location: editingRecord.location ?? '',
                 phone: editingRecord.phone ?? '',
@@ -265,7 +269,7 @@ export default function MasterManagement() {
             if (openDialog === 'contractor') conForm.reset(normalized);
             if (openDialog === 'site_location') slForm.reset(normalized);
         } else if (openDialog) {
-            if (openDialog === 'vendor') vForm.reset({ vendor_name: '', vendor_gstin: '', vendor_address: '', vendor_email: '', responsible_person: '', location: '', phone: '' });
+            if (openDialog === 'vendor') vForm.reset({ vendor_name: '', vendor_gstin: '', vendor_address: '', vendor_email: '', payment_term: '', responsible_person: '', location: '', phone: '' });
             if (openDialog === 'item') iForm.reset({ item_name: '', group_head: '', uom: '', include_in_inventory: false, inventory_quantity: 0, firm_name: '', regular_conditions: [{ value: '' }], third_party_conditions: [{ value: '' }] });
             if (openDialog === 'dept') dForm.reset({ department: '' });
             if (openDialog === 'project') pForm.reset({ firm_name: '' });
@@ -300,15 +304,15 @@ export default function MasterManagement() {
 
     const handleDeleteGHUom = async (record: any) => {
         if (confirm(`Remove this record?`)) {
-            const res = await deleteMasterData(record.id);
+            const res = await deleteMasterData(record.id, record.__table);
             if (res.success) { toast.success('Deleted'); loadData(); updateAll(); } else toast.error('Delete failed');
         }
     };
 
     const handleDeleteByDept = async (deptName: string) => {
-        if (confirm(`Remove department "${deptName}"? (Standalone entries deleted, Item entries cleared)`)) {
+        if (confirm(`Remove department "${deptName}"?`)) {
             const targets = allRecords.filter(r => r.department === deptName);
-            const ops = targets.map(t => (!t.item_name && !t.vendor_name && !t.company_name) ? deleteMasterData(t.id) : updateMasterData(t.id, { department: null }));
+            const ops = targets.map(t => deleteMasterData(t.id, 'department'));
             await Promise.all(ops);
             toast.success('Department removed'); loadData(); updateAll();
         }
@@ -320,7 +324,7 @@ export default function MasterManagement() {
             if (type === 'site_engineer') res = await deleteSiteEngineer(record.number);
             else if (type === 'contractor') res = await deleteContractor(record.id);
             else if (type === 'site_location') res = await deleteSiteLocation(record.id);
-            else res = await deleteMasterData(record.id);
+            else res = await deleteMasterData(record.id, type || record.__table);
 
             if (res.success) { toast.success('Deleted'); loadData(); updateAll(); } else toast.error('Delete failed');
         }
@@ -459,10 +463,11 @@ export default function MasterManagement() {
         let res;
         const vendorPayload = type === 'vendor'
             ? {
-                ...values,
+                vendor_name: values.vendor_name,
                 vendor_gstin: values.vendor_gstin || null,
                 vendor_address: values.vendor_address || null,
                 vendor_email: values.vendor_email || null,
+                payment_term: values.payment_term || null,
                 responsible_person: values.responsible_person || null,
                 location: values.location || null,
                 phone: values.phone || null,
@@ -545,13 +550,23 @@ export default function MasterManagement() {
                 res = await insertMasterData(finalPayload);
             }
 
+            if (res.success && ['vendor', 'item', 'project', 'gh', 'uom', 'areaofuse', 'ghuom', 'company'].includes(type)) {
+                const normalizedRes = await insertNormalizedMasterData(type, values);
+                if (!normalizedRes.success) {
+                    toast.error('Saved in master, but normalized table insert failed');
+                    return;
+                }
+            }
+
             if (res.success && type === 'item' && values.include_in_inventory) {
+                const firmId = masterSheet?.firmObjects?.find((firm) => firm.name === values.firm_name)?.id;
                 const inventoryRes = await addItemToInventory({
                     itemName: values.item_name,
                     groupHead: values.group_head,
                     uom: values.uom,
                     quantity: values.inventory_quantity,
                     firmName: values.firm_name,
+                    firmId,
                 });
 
                 if (!inventoryRes.success) {
@@ -752,6 +767,12 @@ export default function MasterManagement() {
                                                 <FormItem>
                                                     <FormLabel>Email</FormLabel>
                                                     <FormControl><Input {...field} placeholder="e.g., vendor@example.com" /></FormControl>
+                                                </FormItem>
+                                            )} />
+                                            <FormField control={vForm.control} name="payment_term" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Payment Term</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="e.g., 30 Days" /></FormControl>
                                                 </FormItem>
                                             )} />
                                             <FormField control={vForm.control} name="phone" render={({ field }) => (

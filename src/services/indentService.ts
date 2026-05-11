@@ -9,7 +9,7 @@ import { hasNoFirmAccess, normalizeFirmAccess } from '@/lib/firmAccess';
 // ==================== INTERFACES ====================
 
 export interface IndentRecord {
-    id: number; // Added
+    id: number;
     indent_number: string;
     indenter_name: string;
     // department: string;
@@ -18,7 +18,7 @@ export interface IndentRecord {
     uom: string;
     attachment: string;
     specifications: string;
-    area_of_use: string; // Added
+    area_of_use: string;
     vendor_type: string;
     indent_status: string;
     indent_type: string;
@@ -26,6 +26,7 @@ export interface IndentRecord {
     planned1: string;
     actual1: string;
     firm_name: string;
+    firm_id?: number;
     firmName: string;
     firmNameMatch: string;
     approved_quantity: number;
@@ -89,7 +90,14 @@ export async function fetchIndentRecords(permittedFirms?: string[]): Promise<Ind
             .order('indent_number', { ascending: false });
 
         if (firms) {
-            query = query.in('firm_name', firms);
+            const ids   = firms.filter(f => /^\d+$/.test(f)).map(Number);
+            const names = firms.filter(f => !/^\d+$/.test(f));
+            // ID-first: when firm_access contains IDs, use firm_id only (secure)
+            if (ids.length > 0) {
+                query = query.in('firm_id', ids);
+            } else {
+                query = query.in('firm_name', names); // legacy fallback
+            }
         }
 
         const { data, error } = await query;
@@ -97,7 +105,7 @@ export async function fetchIndentRecords(permittedFirms?: string[]): Promise<Ind
         if (error) throw error;
 
         return (data || []).map((r: any) => ({
-            id: r.id, // Added
+            id: r.id,
             indent_number: r.indent_number || '',
             indenter_name: r.indenter_name || '',
             // department: r.department || '',
@@ -106,7 +114,7 @@ export async function fetchIndentRecords(permittedFirms?: string[]): Promise<Ind
             uom: r.uom || '',
             attachment: r.attachment || '',
             specifications: r.specifications || '',
-            area_of_use: r.area_of_use || '', // Added
+            area_of_use: r.area_of_use || '',
             vendor_type: r.vendor_type || 'Pending',
             indent_status: r.indent_status || '',
             indent_type: r.indent_type || '',
@@ -114,6 +122,7 @@ export async function fetchIndentRecords(permittedFirms?: string[]): Promise<Ind
             planned1: r.planned1 || '',
             actual1: r.actual1 || '',
             firm_name: r.firm_name || '',
+            firm_id: r.firm_id,
             firmName: r.firm_name || '',
             firmNameMatch: r.firm_name || '',
             approved_quantity: Number(r.approved_quantity) || 0,
@@ -149,10 +158,10 @@ export async function fetchIndentRecords(permittedFirms?: string[]): Promise<Ind
             vendor1_rank: r.vendor1_rank || '',
             vendor2_rank: r.vendor2_rank || '',
             vendor3_rank: r.vendor3_rank || '',
-            indent_url: r.indent_url || '', // Populated from DB
-            expected_req_date: r.expected_req_date || '', // Added
-            group_head: r.group_head || '', // Added
-            min_stock_qty: Number(r.min_stock_qty) || 0, // Added
+            indent_url: r.indent_url || '',
+            expected_req_date: r.expected_req_date || '',
+            group_head: r.group_head || '',
+            min_stock_qty: Number(r.min_stock_qty) || 0,
         }));
     } catch (error) {
         console.error('Error fetching indent records:', error);

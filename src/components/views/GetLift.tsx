@@ -25,6 +25,7 @@ import { ShoppingCart, X, Truck, FileText, IndianRupee, CreditCard, User, Phone,
 import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
 import { formatDate, formatDateTime, parseCustomDate } from '@/lib/utils';
+import { filterByFirmAccess } from '@/lib/firmAccess';
 import {
     fetchIndentRecords,
     fetchStoreInRecords,
@@ -42,6 +43,7 @@ import {
 interface GetPurchaseData {
     indentNo: string;
     firmNameMatch: string;
+    firm_id?: number;
     vendorName: string;
     poNumber: string;
     poDate: string;
@@ -67,6 +69,7 @@ interface GetPurchaseData {
 interface HistoryData {
     indentNo: string;
     firmNameMatch: string;
+    firm_id?: number;
     vendorName: string;
     poNumber: string;
     poDate: string;
@@ -137,12 +140,10 @@ export default function GetPurchase() {
 
     // Process pending table data
     useEffect(() => {
-        const permittedFirms = user?.firm_access || [];
-        const filteredByFirm = indentRecords.filter(
-            (sheet) =>
-                user?.firmNameMatch?.toLowerCase() === 'all' ||
-                permittedFirms.includes(sheet.firmNameMatch)
-        );
+        const filteredByFirm = filterByFirmAccess(indentRecords, user?.firm_access, {
+            name: (r) => r.firmNameMatch,
+            id: (r) => r.firm_id
+        });
         const processedData = filteredByFirm
             .map((sheet) => {
                 // Calculate received quantity from STORE IN records
@@ -188,6 +189,7 @@ export default function GetPurchase() {
                 groupedMap.set(key, {
                     indentNo: item.indentNumber?.toString() || '',
                     firmNameMatch: item.firmNameMatch || '',
+                    firm_id: item.firm_id,
                     vendorName: item.approvedVendorName || '',
                     poNumber: item.poNumber || '',
                     poDate: item.actual4 ? formatDate(parseCustomDate(item.actual4)) : '',
@@ -237,12 +239,10 @@ export default function GetPurchase() {
 
     // Process history data independently
     useEffect(() => {
-        const permittedFirms = user?.firm_access || [];
-        const firmIndents = indentRecords.filter(
-            (sheet) =>
-                user?.firmNameMatch?.toLowerCase() === 'all' ||
-                permittedFirms.includes(sheet.firmNameMatch)
-        );
+        const firmIndents = filterByFirmAccess(indentRecords, user?.firm_access, {
+            name: (r) => r.firmNameMatch,
+            id: (r) => r.firm_id
+        });
 
         const indentMap = new Map(
             firmIndents.map((sheet) => [
@@ -251,12 +251,10 @@ export default function GetPurchase() {
             ])
         );
 
-        const firmStoreIn = storeInRecords
-            .filter(
-                (sheet) =>
-                    user?.firmNameMatch?.toLowerCase() === 'all' ||
-                    permittedFirms.includes(sheet.firmNameMatch)
-            )
+        const firmStoreIn = filterByFirmAccess(storeInRecords, user?.firm_access, {
+            name: (r) => r.firmNameMatch,
+            id: (r) => r.firm_id
+        })
             .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
         // Tracking cumulative totals per indent to show point-in-time history
@@ -278,6 +276,7 @@ export default function GetPurchase() {
             return {
                 indentNo: store.indentNo || '',
                 firmNameMatch: store.firmNameMatch || '',
+                firm_id: store.firm_id,
                 vendorName: store.vendorName || indentMatch?.approvedVendorName || '-',
                 poNumber: store.poNumber || indentMatch?.poNumber || '-',
                 poDate: indentMatch?.actual4 ? formatDate(parseCustomDate(indentMatch.actual4)) : '-',
@@ -777,6 +776,7 @@ export default function GetPurchase() {
                             driverMobileNo: values.driverMobileNo || '',
                             billRemark: values.billRemark || '',
                             firmNameMatch: selectedIndent?.firmNameMatch || user?.firmNameMatch || '',
+                            firm_id: selectedIndent?.firm_id ?? null,
                             rate: String(item.approvedRate || ''),
                             // department: selectedIndent?.department || '',
                             areaOfUse: selectedIndent?.areaOfUse || '',

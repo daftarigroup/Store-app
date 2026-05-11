@@ -1,9 +1,9 @@
 import { supabase } from '@/lib/supabase';
-import { hasNoFirmAccess, normalizeFirmAccess } from '@/lib/firmAccess';
+import { hasNoFirmAccess, applyFirmAccessFilter } from '@/lib/firmAccess';
 
 /**
  * Fullkitting Service
- * Handles all Supabase operations for the Fullkitting component
+ * Handles all Supabase operations for the Fullkitting (Freight Payment) component
  */
 
 export interface FullkittingRecord {
@@ -34,16 +34,16 @@ export interface FullkittingRecord {
     amount1: number;
     biltyImage: string;
     firmNameMatch: string;
+    firm_id?: number | null;
 }
 
 /**
  * Fetch all fullkitting records from Supabase
- * @param permittedFirms Optional array of firm names to filter by
+ * @param permittedFirms Optional array of firm IDs/names to filter by
  */
 export async function fetchFullkittingRecords(permittedFirms?: string[]): Promise<FullkittingRecord[]> {
     try {
         if (hasNoFirmAccess(permittedFirms)) return [];
-        const firms = normalizeFirmAccess(permittedFirms);
 
         let query = supabase
             .from('fullkitting')
@@ -51,11 +51,11 @@ export async function fetchFullkittingRecords(permittedFirms?: string[]): Promis
             .order('indent_number', { ascending: false })
             .order('timestamp', { ascending: false });
 
-        if (firms) {
-            query = query.in('firm_name', firms);
-        }
+        // ID-first: applyFirmAccessFilter uses firm_id when IDs are present, firm_name for legacy
+        const filteredQuery = applyFirmAccessFilter(query, permittedFirms);
+        if (!filteredQuery) return [];
 
-        const { data, error } = await query;
+        const { data, error } = await filteredQuery;
 
         if (error) throw error;
 
@@ -87,6 +87,7 @@ export async function fetchFullkittingRecords(permittedFirms?: string[]): Promis
             amount1: Number(r.amount1) || 0,
             biltyImage: r.bilty_image || '',
             firmNameMatch: r.firm_name || '',
+            firm_id: r.firm_id ?? null,
         }));
     } catch (error) {
         console.error('Error fetching fullkitting records:', error);
