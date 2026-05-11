@@ -220,9 +220,9 @@ export default function PcReportTable() {
     const records = Array.isArray(tallyEntrySheet) ? tallyEntrySheet : [];
 
     const filteredByFirm = records.filter((item) => {
+      const permittedFirms = (user?.firm_access || []).map(f => f.trim().toLowerCase());
       const itemFirm = (item.firmNameMatch || '').trim().toLowerCase();
-      const userFirm = (user.firmNameMatch || '').trim().toLowerCase();
-      const matchesFirm = userFirm === "all" || itemFirm === userFirm;
+      const matchesFirm = permittedFirms.includes('all') || permittedFirms.includes(itemFirm);
       return matchesFirm;
     });
 
@@ -258,14 +258,16 @@ export default function PcReportTable() {
       } else if (hasValue(item.actual5)) {
         currentStage = 'COMPLETED';
         isCompleted = true;
-        plannedDate = item.planned5 || item.planned4 || item.planned3 || item.planned2 || item.planned1;
+        plannedDate = item.planned5 || item.planned4 || item.planned3 || item.planned2 || item.planned1 || item.timestamp;
       } else {
-        // If Audit was Done, we might be ready for Stage 4 even if 2 and 3 were never touched
-        if (isAuditDone && hasValue(item.planned4) && !hasValue(item.actual4)) {
+        // ✅ DEFAULT: If no stage is explicitly triggered but record exists, it's in AUDIT
+        // or if Audit was Done, we might be ready for Stage 4 even if 2 and 3 were never touched
+        if (isAuditDone) {
           currentStage = 'TALLY_ENTRY';
-          plannedDate = item.planned4;
+          plannedDate = item.planned4 || item.timestamp;
         } else {
-          return null;
+          currentStage = 'AUDIT';
+          plannedDate = item.planned1 || item.timestamp;
         }
       }
 
@@ -317,7 +319,7 @@ export default function PcReportTable() {
         receivedQuantity: item.receivedQuantity,
       };
     }).filter((item): item is ProcessedTallyData => item !== null);
-  }, [tallyEntrySheet, user.firmNameMatch]);
+  }, [tallyEntrySheet, user?.firm_access]);
 
   // Filter and GROUP data based on active tab
   const filteredData = useMemo(() => {
@@ -628,6 +630,20 @@ export default function PcReportTable() {
     { accessorKey: 'rate', header: 'Rate' },
     { accessorKey: 'indentQty', header: 'Indent Qty' },
     { accessorKey: 'totalRate', header: 'Total Rate' },
+    {
+      accessorKey: 'hodStatus',
+      header: 'HOD Status',
+      cell: ({ getValue }) => {
+        const status = getValue() as string;
+        return (
+          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${status === 'Approved' ? 'bg-green-100 text-green-800' : (status === 'Rejected' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800')
+            }`}>
+            {status || 'Pending'}
+          </span>
+        );
+      },
+    },
+    { accessorKey: 'hodRemark', header: 'HOD Remark' },
 
     // Add status and remarks columns for each stage
     {
@@ -802,6 +818,20 @@ export default function PcReportTable() {
       accessorKey: 'firmNameMatch',
       header: 'Project Name'
     },
+    {
+      accessorKey: 'hodStatus',
+      header: 'HOD Status',
+      cell: ({ getValue }) => {
+        const status = getValue() as string;
+        return (
+          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${status === 'Approved' ? 'bg-green-100 text-green-800' : (status === 'Rejected' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800')
+            }`}>
+            {status || 'Pending'}
+          </span>
+        );
+      },
+    },
+    { accessorKey: 'hodRemark', header: 'HOD Remark' },
     {
       accessorKey: 'status1',
       header: 'Audit Status',

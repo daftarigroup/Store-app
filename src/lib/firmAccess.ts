@@ -1,11 +1,15 @@
 export function normalizeFirmAccess(firms?: string[]) {
     if (firms === undefined) return undefined;
 
+    const normalized = firms
+        .map((firm) => String(firm || '').trim())
+        .filter(Boolean);
+    
+    const lowercaseFirms = normalized.map(f => f.toLowerCase());
+    if (lowercaseFirms.includes('all')) return undefined;
+
     return Array.from(new Map(
-        firms
-            .map((firm) => String(firm || '').trim())
-            .filter(Boolean)
-            .map((firm) => [firm.toLowerCase(), firm])
+        normalized.map((firm) => [firm.toLowerCase(), firm])
     ).values());
 }
 

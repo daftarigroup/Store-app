@@ -85,7 +85,9 @@ export async function fetchInventoryRecords(permittedFirms?: string[]): Promise<
                 groupHead: r.group_head || '',
                 uom: r.uom || '',
                 opening: Number(r.opening) || 0,
+                individualRate: Number(r.individual_rate) || 0,
                 rate: Number(r.individual_rate) || 0,
+                individual_rate: Number(r.individual_rate) || 0,
                 indented: Number(r.indented) || 0,
                 approved: Number(r.approved) || 0,
                 purchaseQuantity: purQty,
@@ -104,6 +106,7 @@ export async function fetchInventoryRecords(permittedFirms?: string[]): Promise<
                 current: Number(r.current) || 0,
                 totalPrice: Number(r.total_price) || 0,
                 status: r.color_code || '',
+                colorCode: r.color_code || '',
             };
         });
     } catch (error) {

@@ -413,9 +413,11 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
     }
 
     useEffect(() => {
+        if (!user || !user.username) return;
+
         try {
             updateAll();
-            toast.success('Fetched all the data');
+            // toast.success('Fetched all the data');
 
             // ✅ AUTO-REFRESH EVERY 30 SECONDS
             const intervalId = setInterval(() => {
@@ -428,7 +430,7 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
             toast.error('Something went wrong while fetching data');
         } finally {
         }
-    }, []);
+    }, [user?.username, user?.firm_access]);
 
     function updateTallyEntrySheet(silent = false) {
         if (!silent) setTallyEntryLoading(true);

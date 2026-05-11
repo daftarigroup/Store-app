@@ -67,8 +67,10 @@ export default () => {
     };
 
     useEffect(() => {
-        fetchData();
-    }, []);
+        if (user?.username) {
+            fetchData();
+        }
+    }, [user?.username, user?.firm_access]);
 
     const [searchTerm, setSearchTerm] = useState('');
     const [searchTermGroupHead, setSearchTermGroupHead] = useState('');

@@ -88,10 +88,10 @@ export default () => {
     }, [stockTransferSheet, selectedProject]);
 
     const tableData = useMemo(() => {
-        if (!inventorySheet || inventorySheet.length === 0) return [];
+        const inventoryBase = inventorySheet || [];
 
         const calculated = calculateRealInventory(
-            inventorySheet,
+            inventoryBase,
             filteredIndents,
             filteredStoreIns,
             filteredIssues,
@@ -290,10 +290,10 @@ export default () => {
         { accessorKey: 'groupHead', header: 'Group Head' },
         { accessorKey: 'uom', header: 'UOM' },
         {
-            accessorKey: 'rate',
+            accessorKey: 'individualRate',
             header: 'Rate',
             cell: ({ row }) => {
-                return <>&#8377;{row.original.rate}</>;
+                return <>&#8377;{row.original.individualRate || row.original.rate}</>;
             },
         },
         {

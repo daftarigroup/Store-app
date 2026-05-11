@@ -41,9 +41,11 @@ const transferSchema = z.object({
 type TransferFormValues = z.infer<typeof transferSchema>;
 
 export default () => {
-    const { masterSheet, inventorySheet, indentSheet, storeInSheet, issueSheet, updateAll } = useSheets();
+    const { masterSheet, inventorySheet, indentSheet, storeInSheet, issueSheet, stockTransferSheet, updateAll } = useSheets();
     const { user } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [searchTermFrom, setSearchTermFrom] = useState('');
+    const [searchTermTo, setSearchTermTo] = useState('');
 
     const form = useForm<TransferFormValues>({
         resolver: zodResolver(transferSchema),
@@ -63,17 +65,23 @@ export default () => {
     const sourceInventory = useMemo(() => {
         if (!fromProject || !inventorySheet) return [];
 
-        const filteredIndents = (indentSheet || []).filter((i: any) => i.firmName === fromProject);
-        const filteredStoreIns = (storeInSheet || []).filter((s: any) => s.firmNameMatch === fromProject);
-        const filteredIssues = (issueSheet || []).filter((is: any) => is.projectName === fromProject);
+        const filteredIndents = (indentSheet || []).filter((i: any) => (i.firmName || '').trim().toLowerCase() === fromProject.trim().toLowerCase());
+        const filteredStoreIns = (storeInSheet || []).filter((s: any) => (s.firmNameMatch || '').trim().toLowerCase() === fromProject.trim().toLowerCase());
+        const filteredIssues = (issueSheet || []).filter((is: any) => (is.projectName || '').trim().toLowerCase() === fromProject.trim().toLowerCase());
+        const filteredTransfers = (stockTransferSheet || []).filter((t: any) =>
+            (t.fromProject || '').trim().toLowerCase() === fromProject.trim().toLowerCase() ||
+            (t.toProject || '').trim().toLowerCase() === fromProject.trim().toLowerCase()
+        );
 
         return calculateRealInventory(
-            inventorySheet,
+            inventorySheet || [],
             filteredIndents,
             filteredStoreIns,
-            filteredIssues
+            filteredIssues,
+            filteredTransfers,
+            fromProject
         );
-    }, [fromProject, inventorySheet, indentSheet, storeInSheet, issueSheet]);
+    }, [fromProject, inventorySheet, indentSheet, storeInSheet, issueSheet, stockTransferSheet]);
 
     // Available items in the source project that have stock > 0
     const availableItems = useMemo(() => {
@@ -201,8 +209,22 @@ export default () => {
                                                             </SelectTrigger>
                                                         </FormControl>
                                                         <SelectContent>
+                                                            <div className="flex items-center border-b px-3 pb-3">
+                                                                <Building2 className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                                                                <input
+                                                                    placeholder="Search Project..."
+                                                                    value={searchTermFrom}
+                                                                    onChange={(e) => setSearchTermFrom(e.target.value)}
+                                                                    onKeyDown={(e) => e.stopPropagation()}
+                                                                    className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
+                                                                />
+                                                            </div>
                                                             {(masterSheet?.firms || [])
-                                                                .filter(f => (user?.firm_access || []).includes(f))
+                                                                .filter(f => f.toLowerCase().includes(searchTermFrom.toLowerCase()))
+                                                                .filter(f => {
+                                                                    const permitted = (user?.firm_access || []).map(p => p.trim().toLowerCase());
+                                                                    return permitted.includes('all') || permitted.includes(f.trim().toLowerCase());
+                                                                })
                                                                 .map(firm => (
                                                                     <SelectItem key={firm} value={firm}>{firm}</SelectItem>
                                                                 ))}
@@ -229,8 +251,23 @@ export default () => {
                                                             </SelectTrigger>
                                                         </FormControl>
                                                         <SelectContent>
+                                                            <div className="flex items-center border-b px-3 pb-3">
+                                                                <Building2 className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                                                                <input
+                                                                    placeholder="Search Project..."
+                                                                    value={searchTermTo}
+                                                                    onChange={(e) => setSearchTermTo(e.target.value)}
+                                                                    onKeyDown={(e) => e.stopPropagation()}
+                                                                    className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
+                                                                />
+                                                            </div>
                                                             {(masterSheet?.firms || [])
-                                                                .filter(f => f !== fromProject && (user?.firm_access || []).includes(f))
+                                                                .filter(f => f.toLowerCase().includes(searchTermTo.toLowerCase()))
+                                                                .filter(f => {
+                                                                    const permitted = (user?.firm_access || []).map(p => p.trim().toLowerCase());
+                                                                    const hasAccess = permitted.includes('all') || permitted.includes(f.trim().toLowerCase());
+                                                                    return f !== fromProject && hasAccess;
+                                                                })
                                                                 .map(firm => (
                                                                     <SelectItem key={firm} value={firm}>{firm}</SelectItem>
                                                                 ))}

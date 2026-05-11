@@ -98,8 +98,11 @@ export default () => {
     }, []);
 
     useEffect(() => {
-        const filteredByFirm = allData.filter(item =>
-            (user.firmNameMatch || '').trim().toLowerCase() === "all" || (item.firmNameMatch || '').trim() === (user.firmNameMatch || '').trim()
+        const permittedFirms = (user?.firm_access || []).map(f => f.trim());
+        const hasNoAccess = permittedFirms.length === 0;
+
+        const filteredByFirm = hasNoAccess ? [] : allData.filter(item =>
+            permittedFirms.includes('all') || permittedFirms.includes((item.firmNameMatch || '').trim())
         );
 
         setTableData(
@@ -137,7 +140,7 @@ export default () => {
                     challanImage: i.challanImage || '',
                 }))
         );
-    }, [allData, user.firmNameMatch]);
+    }, [allData, user?.username, user?.firm_access]);
 
 
     useEffect(() => {
@@ -326,11 +329,16 @@ export default () => {
 
             console.log('📤 Updating record');
 
-            await updateStoreInBillStatus(selectedIndent.liftNumber, {
-                actual11: currentDateTime,
-                billStatusNew: values.status,
-                billImageStatus: billImageUrl || '',
-            });
+            await updateStoreInBillStatus(
+                selectedIndent.liftNumber,
+                selectedIndent.indentNo,
+                selectedIndent.productName,
+                {
+                    actual11: currentDateTime,
+                    billStatusNew: values.status,
+                    billImageStatus: billImageUrl || '',
+                }
+            );
 
             console.log('✅ Update successful');
             toast.success(`Bill status updated for ${selectedIndent?.indentNo}`);

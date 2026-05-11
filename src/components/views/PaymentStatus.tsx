@@ -160,8 +160,10 @@ export default function PIApprovals() {
             const poBasedPendingItems = safePoMasterSheet
                 .filter((record: any) => {
                     // Firm filtering
-                    const firmMatch = !user || (user.firmNameMatch || '').trim().toLowerCase() === "all" ||
-                        (record.firmNameMatch || '').trim() === (user.firmNameMatch || '').trim();
+                    const permittedFirms = (user?.firm_access || []);
+                    const itemFirm = (record.firmNameMatch || '').trim();
+                    const firmMatch = permittedFirms.includes('all') || 
+                                     permittedFirms.some(f => f.toLowerCase() === itemFirm.toLowerCase());
                     if (!firmMatch) return false;
 
                     // Status filtering
@@ -259,8 +261,10 @@ export default function PIApprovals() {
             const paymentBasedItems = safePaymentsSheet
                 .filter((payment: any) => {
                     const status = String(payment?.status || '').toLowerCase();
-                    const firmMatch = !user || (user.firmNameMatch || '').trim().toLowerCase() === "all" ||
-                        ((payment?.firmNameMatch || payment?.firm_name) || '').trim() === (user.firmNameMatch || '').trim();
+                    const permittedFirms = (user?.firm_access || []);
+                    const itemFirm = (payment?.firmNameMatch || payment?.firm_name || '').trim();
+                    const firmMatch = permittedFirms.includes('all') || 
+                                     permittedFirms.some(f => f.toLowerCase() === itemFirm.toLowerCase());
 
                     // Show payments that are pending and not yet scheduled
                     const isPending = status === 'pending';
@@ -414,7 +418,7 @@ export default function PIApprovals() {
             console.error('❌ Error in HOD Approval logic:', error);
             setPendingData([]);
         }
-    }, [poMasterSheet, paymentsSheet, storeInSheet, paymentHistorySheet, user?.firmNameMatch]);
+    }, [poMasterSheet, paymentsSheet, storeInSheet, paymentHistorySheet, user?.firm_access]);
 
     const pendingColumns: ColumnDef<PIPendingData>[] = [
         {

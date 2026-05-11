@@ -40,7 +40,15 @@ export function calculateRealInventory(
             acc[key] = { givenQty: 0, rejectedDamageQty: 0 };
         }
         acc[key].givenQty += Number(is.givenQty) || 0;
-        acc[key].rejectedDamageQty += Number(is.rejected_damage_qty) || 0;
+        
+        // Handle returns: fallback to 'quantity' if 'rejected_damage_qty' is 0 but a return slip exists
+        const explicitReturnQty = Number(is.rejected_damage_qty) || 0;
+        if (explicitReturnQty === 0 && (is.return_slip || is.returnPersonName)) {
+            acc[key].rejectedDamageQty += Number(is.quantity) || 0;
+        } else {
+            acc[key].rejectedDamageQty += explicitReturnQty;
+        }
+        
         return acc;
     }, {} as Record<string, { givenQty: number; rejectedDamageQty: number }>);
 
@@ -93,20 +101,37 @@ export function calculateRealInventory(
         if (currentProject === 'All') {
             opening = relevantMasterRecords.reduce((sum, r) => sum + (Number(r.opening) || 0), 0);
             masterStockTransfer = relevantMasterRecords.reduce((sum, r) => sum + (Number(r.stockTransfer) || 0), 0);
-            // Use the first record for metadata
+            
+            // Metadata extraction with deep fallback
             const first = relevantMasterRecords[0];
             individualRate = Number(first?.individualRate) || 0;
-            groupHead = first?.groupHead || '';
-            uom = first?.uom || '';
+            
+            // Try Master -> Indents -> StoreIns -> Issues -> StockTransfers
+            groupHead = first?.groupHead || 
+                        indents.find(i => i.productName === itemName)?.groupHead || 
+                        issues.find(is => is.productName === itemName)?.groupHead || '';
+            
+            uom = first?.uom || 
+                  indents.find(i => i.productName === itemName)?.uom || 
+                  storeIns.find(s => s.productName === itemName)?.uom || 
+                  issues.find(is => is.productName === itemName)?.uom || '';
         } else {
             const specific = relevantMasterRecords.find(r => r.firmName === currentProject);
             opening = Number(specific?.opening) || 0;
             masterStockTransfer = Number(specific?.stockTransfer) || 0;
-            // Metadata can come from specific record or fallback to any record for that item
+            
             const meta = specific || relevantMasterRecords[0];
             individualRate = Number(meta?.individualRate) || 0;
-            groupHead = meta?.groupHead || '';
-            uom = meta?.uom || '';
+            
+            // Try Master -> Indents -> StoreIns -> Issues
+            groupHead = meta?.groupHead || 
+                        indents.find(i => i.productName === itemName)?.groupHead || 
+                        issues.find(is => is.productName === itemName)?.groupHead || '';
+            
+            uom = meta?.uom || 
+                  indents.find(i => i.productName === itemName)?.uom || 
+                  storeIns.find(s => s.productName === itemName)?.uom || 
+                  issues.find(is => is.productName === itemName)?.uom || '';
         }
 
         const item = {
@@ -123,19 +148,25 @@ export function calculateRealInventory(
             issueReturn: currentProject === 'All'
                 ? relevantMasterRecords.reduce((sum, r) => sum + (Number(r.issueReturn) || 0), 0)
                 : (relevantMasterRecords.find(r => r.firmName === currentProject)?.issueReturn || 0),
+            outQuantity: currentProject === 'All'
+                ? relevantMasterRecords.reduce((sum, r) => sum + (Number(r.outQuantity) || 0), 0)
+                : (relevantMasterRecords.find(r => r.firmName === currentProject)?.outQuantity || 0),
+            liftingQty: currentProject === 'All'
+                ? relevantMasterRecords.reduce((sum, r) => sum + (Number(r.liftingQty) || 0), 0)
+                : (relevantMasterRecords.find(r => r.firmName === currentProject)?.liftingQty || 0),
         };
 
         const iSum = indentSummary[key] || { quantity: 0, approvedQuantity: 0 };
         const sDet = storeInDetailed[key] || { liftingQty: 0, stockTransfer: 0, purchaseQuantity: 0, purchaseReturn: 0 };
         const oSum = issueSummary[key] || { givenQty: 0, rejectedDamageQty: 0 };
 
-        // Core metrics
-        const indented = iSum.quantity;
-        const approved = iSum.approvedQuantity;
+        // Core metrics: Use transaction sum if available, else fallback to master record baseline
+        const indented = iSum.quantity || (currentProject === 'All' ? relevantMasterRecords.reduce((sum, r) => sum + (Number(r.indented) || 0), 0) : (relevantMasterRecords.find(r => r.firmName === currentProject)?.indented || 0));
+        const approved = iSum.approvedQuantity || (currentProject === 'All' ? relevantMasterRecords.reduce((sum, r) => sum + (Number(r.approved) || 0), 0) : (relevantMasterRecords.find(r => r.firmName === currentProject)?.approved || 0));
         const purchaseQuantity = sDet.purchaseQuantity;
-        const liftingQty = sDet.liftingQty;
+        const liftingQty = sDet.liftingQty || item.liftingQty || 0;
         const purchaseReturn = sDet.purchaseReturn || item.purchaseReturn || 0;
-        const outQuantity = oSum.givenQty;
+        const outQuantity = oSum.givenQty || item.outQuantity || 0;
         const issueReturn = oSum.rejectedDamageQty || item.issueReturn || 0;
 
         // Stock Transfer: Old way (from storeIn) + New way (from dedicated table)

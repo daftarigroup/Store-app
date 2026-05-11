@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { hasNoFirmAccess, normalizeFirmAccess } from '@/lib/firmAccess';
 
 /**
  * GetLift Service
@@ -32,6 +33,7 @@ export interface GetLiftIndentRecord {
     areaOfUse?: string;
     approvedQuantity: number;
     receivedQuantity: number;
+    uom: string;
 }
 
 export interface GetLiftStoreInRecord {
@@ -81,6 +83,7 @@ export interface StoreInInsertData {
     driverName: string;
     driverMobileNo: string;
     billRemark: string;
+    receivedQuantity?: number;
     firmNameMatch: string;
     rate: string;
     // department?: string;
@@ -90,6 +93,7 @@ export interface StoreInInsertData {
     notBillReceivedNo?: string;
     challanNo?: string;
     challanImage?: string;
+    uom?: string;
 }
 
 // ==================== FETCH FUNCTIONS ====================
@@ -98,12 +102,21 @@ export interface StoreInInsertData {
  * Fetch all indent records from Supabase
  * Used for displaying pending and completed lift records
  */
-export async function fetchIndentRecords() {
+export async function fetchIndentRecords(permittedFirms?: string[]) {
     try {
-        const { data, error } = await supabase
+        if (hasNoFirmAccess(permittedFirms)) return [];
+        const firms = normalizeFirmAccess(permittedFirms);
+
+        let query = supabase
             .from('indent')
             .select('*')
             .order('indent_number', { ascending: false });
+
+        if (firms) {
+            query = query.in('firm_name', firms);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw error;
         console.log("fetchIndentRecords", data);
@@ -131,6 +144,7 @@ export async function fetchIndentRecords() {
             expectedDate: r.expected_req_date || '',
             approvedQuantity: Number(r.approved_quantity) || 0,
             receivedQuantity: Number(r.received_quantity) || 0,
+            uom: r.uom || '',
         }));
     } catch (error) {
         console.error('Error fetching indent records:', error);
@@ -142,12 +156,21 @@ export async function fetchIndentRecords() {
  * Fetch all store-in records from Supabase
  * Used for calculating received quantities and history
  */
-export async function fetchStoreInRecords() {
+export async function fetchStoreInRecords(permittedFirms?: string[]) {
     try {
-        const { data, error } = await supabase
+        if (hasNoFirmAccess(permittedFirms)) return [];
+        const firms = normalizeFirmAccess(permittedFirms);
+
+        let query = supabase
             .from('store_in')
             .select('*')
             .order('timestamp', { ascending: false });
+
+        if (firms) {
+            query = query.in('firm_name', firms);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw error;
 
@@ -204,74 +227,106 @@ export const fetchVendorOptions = async (): Promise<string[]> => {
  */
 export async function insertStoreInRecord(storeInData: StoreInInsertData) {
     try {
-        // ✅ FIXED: Only map columns that actually exist in the store_in table schema
+        // 1. Fetch latest lift_number by timestamp to reliably continue sequence (using LN- prefix)
+        const { data: latestLifts, error: fetchError } = await supabase
+            .from('store_in')
+            .select('lift_number')
+            .like('lift_number', 'LN-%');
+
+        let liftNumber = 'LN-1';
+        if (latestLifts && latestLifts.length > 0) {
+            let maxNum = 0;
+            latestLifts.forEach(record => {
+                if (record.lift_number) {
+                    const matches = record.lift_number.match(/LN-(\d+)/);
+                    if (matches && matches[1]) {
+                        const num = parseInt(matches[1], 10);
+                        if (num > maxNum) maxNum = num;
+                    }
+                }
+            });
+            liftNumber = `LN-${maxNum + 1}`;
+        }
+
+        const now = new Date().toISOString();
+
+        // ✅ EXACT SCHEMA MAPPING BASED ON PROVIDED SQL
         const mappedData = {
-            timestamp: storeInData.timestamp,
-            indent_no: storeInData.indentNo,
-            bill_no: storeInData.billNo,
-            vendor_name: storeInData.vendorName,
-            product_name: storeInData.productName,
-            qty: storeInData.qty?.toString(),
-            lead_time_to_lift_material: storeInData.leadTimeToLiftMaterial?.toString(),
-            discount_amount: storeInData.discountAmount?.toString(),
-            type_of_bill: storeInData.typeOfBill,
-            bill_amount: storeInData.billAmount?.toString(),
-            payment_type: storeInData.paymentType,
-            advance_amount_if_any: storeInData.advanceAmountIfAny?.toString(),
-            photo_of_bill: storeInData.photoOfBill,
-            transportation_include: storeInData.transportationInclude,
-            transporter_name: storeInData.transporterName,
-            amount: storeInData.amount?.toString(),
-            bill_status: storeInData.billStatus,
-            received_quantity: '0', // Initially 0, will be updated in ReceiveItem
-            quantity_as_per_bill: storeInData.quantityAsPerBill?.toString(),
-            po_number: storeInData.poNumber,
-            vehicle_no: storeInData.vehicleNo,
-            driver_name: storeInData.driverName,
-            driver_mobile_no: storeInData.driverMobileNo,
-            bill_remark: storeInData.billRemark,
-            firm_name: storeInData.firmNameMatch,
-            rate: storeInData.rate || '',
-            // Default empty values for optional fields that exist in schema
-            planned6: null,
+            timestamp: storeInData.timestamp || now,
+            lift_number: liftNumber,
+            indent_no: storeInData.indentNo || null,
+            po_number: storeInData.poNumber || null,
+            vendor_name: storeInData.vendorName || null,
+            product_name: storeInData.productName || null,
+            bill_status: storeInData.billStatus || null,
+            bill_no: storeInData.billNo || null,
+            qty: String(storeInData.qty || '0'),
+            lead_time_to_lift_material: null, // As seen in SQL
+            type_of_bill: storeInData.typeOfBill || null,
+            bill_amount: String(storeInData.billAmount || '0'),
+            discount_amount: String(storeInData.discountAmount || '0'),
+            payment_type: storeInData.paymentType || null,
+            advance_amount_if_any: String(storeInData.advanceAmountIfAny || '0'),
+            photo_of_bill: storeInData.photoOfBill || null,
+            transportation_include: storeInData.transportationInclude || null,
+            transporter_name: storeInData.transporterName || null,
+            amount: String(storeInData.amount || '0'),
+            vehicle_no: storeInData.vehicleNo || null,
+            driver_name: storeInData.driverName || null,
+            driver_mobile_no: storeInData.driverMobileNo || null,
+            bill_remark: storeInData.billRemark || null,
+            planned6: storeInData.timestamp || now,
             actual6: null,
-            time_delay6: '',
-            send_debit_note: '',
-            receiving_status: '',
-            photo_of_product: '',
-            damage_order: '',
-            remark: '',
+            time_delay6: null,
+            receiving_status: null,
+            received_quantity: String(storeInData.receivedQuantity || '0'),
+            photo_of_product: null,
+            damage_order: null,
+            quantity_as_per_bill: null,
+            remark: null,
             planned7: null,
             actual7: null,
-            time_delay7: '',
-            status: '',
-            reason: '',
+            time_delay7: null,
+            status: null,
+            bill_copy_attached: null,
+            reason: null,
+            send_debit_note: null,
             planned9: null,
             actual9: null,
-            time_delay9: '',
-            debit_note_copy: '',
-            debit_note_number: '',
+            time_delay9: null,
+            debit_note_copy: null,
+            debit_note_number: null,
+            firm_name: storeInData.firmNameMatch || null,
+            lifting_status: storeInData.liftingStatus || 'Pending',
             planned11: null,
             actual11: null,
-            bill_status_new: '',
-            bill_image_status: '',
-            // Additional fields from schema
-            indent_date: storeInData.indentNo ? new Date().toISOString() : null,
-            indent_qty: storeInData.quantity?.toString(),
-            purchase_date: new Date().toISOString(),
-            material_date: new Date().toISOString(),
-            party_name: storeInData.vendorName,
-            // indented_for: storeInData.department || '',
-            area: storeInData.areaOfUse || '',
-            approved_party_name: storeInData.approvedVendorName || storeInData.vendorName || '',
-            total_rate: (Number(storeInData.rate) * Number(storeInData.qty)).toString(),
-            lifting_status: storeInData.liftingStatus || 'Active',
-            not_bill_received_no: storeInData.notBillReceivedNo || '',
-            challan_no: storeInData.challanNo || (storeInData.billStatus === 'Bill Not Received' || storeInData.billStatus === 'Not Received' ? storeInData.billNo : ''),
-            challan_image: storeInData.challanImage || (storeInData.billStatus === 'Bill Not Received' || storeInData.billStatus === 'Not Received' ? storeInData.photoOfBill : ''),
+            time_delay: null,
+            bill_status_new: null,
+            bill_image_status: null,
+            indent_date: storeInData.indentNo ? now : null,
+            indent_qty: String(storeInData.qty || '0'),
+            purchase_date: now,
+            material_date: null,
+            party_name: storeInData.vendorName || null,
+            location: null,
+            area: storeInData.areaOfUse || null,
+            not_bill_received_no: storeInData.notBillReceivedNo || null,
+            indented_for: null,
+            approved_party_name: storeInData.approvedVendorName || storeInData.vendorName || null,
+            rate: String(storeInData.rate || '0'),
+            total_rate: String(Number(storeInData.rate || 0) * Number(storeInData.qty || 0)),
+            bill_received2: null,
+            price_as_per_po_check: null,
+            hod_status: 'Pending',
+            hod_remark: null,
+            hod_planned: null,
+            hod_actual: null,
+            challan_no: storeInData.challanNo || null,
+            challan_image: storeInData.challanImage || null,
+            receiver_name: null,
         };
 
-        console.log('📤 Inserting store-in record:', mappedData);
+        console.log('📤 Inserting store-in record (Full Schema):', mappedData);
 
         const { data, error } = await supabase
             .from('store_in')

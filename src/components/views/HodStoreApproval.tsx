@@ -39,6 +39,7 @@ import { formatDateTime, parseCustomDate } from '@/lib/utils';
 import { Pill } from '../ui/pill';
 
 interface HodPendingData {
+    id: number;
     liftNumber: string;
     indentNo: string;
     vendorName: string;
@@ -73,6 +74,7 @@ interface HodPendingData {
 }
 
 interface HodHistoryData {
+    id: number;
     liftNumber: string;
     indentNo: string;
     vendorName: string;
@@ -105,7 +107,7 @@ export default () => {
     const form = useForm<FormValues>({
         resolver: zodResolver(schema),
         defaultValues: {
-            status: undefined,
+            status: '' as any,
             remark: '',
         },
     });
@@ -124,18 +126,25 @@ export default () => {
     };
 
     useEffect(() => {
-        fetchAllData();
-    }, []);
+        if (user?.username) {
+            fetchAllData();
+        }
+    }, [user?.username, user?.firm_access]);
 
     useEffect(() => {
-        const filteredByFirm = storeInRecords.filter((item) =>
-            (user.firmNameMatch || '').trim().toLowerCase() === "all" || (item.firmNameMatch || '').trim() === (user.firmNameMatch || '').trim()
-        );
+        const permittedFirms = user?.firm_access || [];
+        const filteredByFirm = storeInRecords.filter((item) => {
+            const itemFirm = (item.firmNameMatch || '').trim();
+            return (user?.firmNameMatch || '').trim().toLowerCase() === "all" ||
+                permittedFirms.includes('all') ||
+                permittedFirms.some(f => f.toLowerCase() === itemFirm.toLowerCase());
+        });
 
         setPendingData(
             filteredByFirm
                 .filter((i) => i.plannedHod !== '' && i.actualHod === '')
                 .map((i) => ({
+                    id: i.id || 0,
                     liftNumber: i.liftNumber || '',
                     indentNo: i.indentNo || '',
                     vendorName: i.vendorName || '',
@@ -174,6 +183,7 @@ export default () => {
             filteredByFirm
                 .filter((i) => i.plannedHod !== '' && i.actualHod !== '')
                 .map((i) => ({
+                    id: i.id || 0,
                     liftNumber: i.liftNumber || '',
                     indentNo: i.indentNo || '',
                     vendorName: i.vendorName || '',
@@ -197,16 +207,21 @@ export default () => {
             const triggerStage7 = values.status === 'Rejected';
 
             // Update standard store_in table
-            await updateStoreInHodApproval(selectedItem.liftNumber, {
-                actualHod: currentDateTime,
-                hodStatus: values.status,
-                hodRemark: values.remark || '',
-                triggerStage7: triggerStage7
-            });
+            await updateStoreInHodApproval(
+                selectedItem.liftNumber,
+                selectedItem.indentNo,
+                selectedItem.productName,
+                {
+                    actualHod: currentDateTime,
+                    hodStatus: values.status,
+                    hodRemark: values.remark || '',
+                    triggerStage7: triggerStage7
+                }
+            );
 
-            // ✅ Create Payment Entry ONLY if HOD approves
+            // ✅ Create Integrations ONLY if HOD approves
             if (values.status === 'Approved' && !triggerStage7) {
-                // ✅ ONLY Insert into Payments if term is Advance-related
+                // Handle Advance payment related sync
                 const terms = (selectedItem.paymentTerms || '').toString().toLowerCase();
                 const isAdvanceTerm = terms.includes('advance') || terms.includes('pi');
 
@@ -224,7 +239,7 @@ export default () => {
                     });
                 }
 
-                // ✅ ALSO: Create entry in Tally Entry (Audit Data) table
+                // ✅ Sync with Audit Data (Tally Entry)
                 try {
                     console.log('📝 Creating Audit Data entry from HOD Approval...');
                     const formattedDateOnly = currentDateTime.split('T')[0];
@@ -242,8 +257,8 @@ export default () => {
                         bill_image: selectedItem.photoOfBill || '',
                         bill_no: selectedItem.billNo || '',
                         planned1: formattedDateOnly, // Start Audit stage
-                        firm_name: selectedItem.firmNameMatch || user?.firmNameMatch || '',
-                    } as any);
+                        firmNameMatch: selectedItem.firmNameMatch,
+                    });
                 } catch (auditError) {
                     console.error('Failed to create audit entry during HOD Approval:', auditError);
                 }
@@ -252,10 +267,12 @@ export default () => {
             toast.success(`HOD ${values.status} for ${selectedItem.liftNumber}`);
             setOpenDialog(false);
             fetchAllData();
-            updateAll(); // Refresh global sheets data to update Payment Status section
-        } catch (error) {
+            updateAll(); // Refresh global sheets data
+        } catch (error: any) {
             console.error('Error in onSubmit:', error);
-            toast.error('Failed to update HOD approval');
+            // Catch trigger-specific errors (like the 42703 column error)
+            const dbError = error.message || error.details || 'Database Error';
+            toast.error(`Approval Failed: ${dbError}`);
         } finally {
             setIsSubmitting(false);
         }
@@ -272,6 +289,7 @@ export default () => {
                 </DialogTrigger>
             ),
         },
+        { accessorKey: 'firmNameMatch', header: 'Project' },
         { accessorKey: 'liftNumber', header: 'Lift No.' },
         { accessorKey: 'indentNo', header: 'Indent No.' },
         { accessorKey: 'billNo', header: 'Bill No.' },
@@ -501,7 +519,7 @@ export default () => {
                                                 render={({ field }) => (
                                                     <FormItem className="space-y-1">
                                                         <FormLabel className="text-[10px] font-bold uppercase text-slate-400 pl-1">Approval Decision</FormLabel>
-                                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                        <Select onValueChange={field.onChange} value={field.value || ''}>
                                                             <FormControl>
                                                                 <SelectTrigger className="h-10 border-slate-200">
                                                                     <SelectValue placeholder="Select decision" />

@@ -133,16 +133,18 @@ export default () => {
 
     useEffect(() => {
         fetchAllData();
-    }, []);
+    }, [user?.firm_access]);
 
     useEffect(() => {
-        const filteredByFirm = storeInRecords.filter((item) =>
-            (user.firmNameMatch || '').trim().toLowerCase() === "all" || (item.firmNameMatch || '').trim() === (user.firmNameMatch || '').trim()
-        );
+        const filteredByFirm = storeInRecords.filter((item) => {
+            const permittedFirms = (user?.firm_access || []).map(f => f.trim().toLowerCase());
+            const itemFirm = (item.firmNameMatch || '').trim().toLowerCase();
+            return permittedFirms.includes('all') || permittedFirms.includes(itemFirm);
+        });
 
         setPendingData(
             filteredByFirm
-                .filter((i) => i.planned9 !== '' && i.actual9 === '')
+                .filter((i) => i.sendDebitNote === 'Yes' && i.actual9 === '')
                 .map((i) => ({
                     liftNumber: i.liftNumber || '',
                     indentNumber: i.indentNo || '',
@@ -167,7 +169,7 @@ export default () => {
 
         setHistoryData(
             filteredByFirm
-                .filter((i) => i.planned9 !== '' && i.actual9 !== '')
+                .filter((i) => i.sendDebitNote === 'Yes' && i.actual9 !== '')
                 .map((i) => ({
                     liftNumber: i.liftNumber || '',
                     indentNumber: i.indentNo || '',
@@ -192,7 +194,7 @@ export default () => {
                     timestamp: i.timestamp || '',
                 }))
         );
-    }, [storeInRecords, user.firmNameMatch]);
+    }, [storeInRecords, user?.firm_access]);
 
     useEffect(() => {
         if (!openDialog) {
@@ -233,11 +235,17 @@ export default () => {
 
             console.log('📤 Updating record in Supabase...');
 
-            await updateStoreInDebitNote(selectedItem.liftNumber, {
-                actual9: currentDateTime,
-                debitNoteCopy: debitNoteCopyUrl,
-                debitNoteNumber: values.debitNoteNumber || '',
-            });
+            await updateStoreInDebitNote(
+                selectedItem.liftNumber,
+                selectedItem.indentNumber,
+                selectedItem.productName,
+                {
+                    actual9: currentDateTime,
+                    debitNoteCopy: debitNoteCopyUrl,
+                    debitNoteNumber: values.debitNoteNumber || '',
+                    firmNameMatch: selectedItem.firmNameMatch, // Pass project name to sync
+                }
+            );
 
             console.log('✅ Update successful');
             toast.success(`Updated status for ${selectedItem.indentNumber}`);

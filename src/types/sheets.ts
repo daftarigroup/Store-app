@@ -242,6 +242,7 @@ export type PoMasterSheet = {
     terms?: any;
 };
 
+
 export type Vendor = {
     vendorName: string;
     gstin: string;

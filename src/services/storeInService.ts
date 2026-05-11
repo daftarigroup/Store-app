@@ -10,6 +10,7 @@ import { hasNoFirmAccess, normalizeFirmAccess } from '@/lib/firmAccess';
 // ==================== INTERFACES ====================
 
 export interface StoreInRecord {
+    id: number;
     liftNumber: string;
     indentNo: string;
     billNo: string;
@@ -118,6 +119,7 @@ export async function fetchStoreInRecords(permittedFirms?: string[]) {
         if (error) throw error;
 
         return (data || []).map((r: any) => ({
+            id: r.id,
             liftNumber: r.lift_number || '',
             indentNo: r.indent_no || '',
             billNo: r.bill_no || '',
@@ -132,7 +134,7 @@ export async function fetchStoreInRecords(permittedFirms?: string[]) {
             transportationInclude: r.transportation_include || '',
             transporterName: r.transporter_name || '',
             amount: Number(r.amount) || 0,
-            planned6: r.planned6 || '',
+            planned6: r.planned6 || r.timestamp || '',
             actual6: r.actual6 || '',
             receivingStatus: r.receiving_status || '',
             receivedQuantity: Number(r.received_quantity) || 0,
@@ -151,7 +153,7 @@ export async function fetchStoreInRecords(permittedFirms?: string[]) {
             billStatus: r.bill_status || '',
             leadTimeToLiftMaterial: Number(r.lead_time_to_lift_material) || 0,
             discountAmount: Number(r.discount_amount) || 0,
-            firmNameMatch: r.firm_name || '',
+            firmNameMatch: r.firm_name_match || r.firm_name || '',
             timestamp: r.timestamp || '',
             billNumber: r.bill_number || '',
             unitOfMeasurement: r.unit_of_measurement || '',
@@ -276,7 +278,7 @@ export async function fetchLocationOptions(): Promise<string[]> {
                 .filter(Boolean)
         )).sort();
 
-        return locations;
+        return locations as string[];
     } catch (error) {
         console.error('Error fetching location options:', error);
         return [];
@@ -292,6 +294,8 @@ export async function fetchLocationOptions(): Promise<string[]> {
  */
 export async function updateStoreInReceiving(
     liftNumber: string,
+    indentNo: string,
+    productName: string,
     updateData: {
         actual6: string;
         receivingStatus: string;
@@ -318,11 +322,13 @@ export async function updateStoreInReceiving(
                 quantity_as_per_bill: updateData.quantityAsPerBill,
                 remark: updateData.remark,
                 location: updateData.location,
-                bill_received2: updateData.priceAsPerPoCheck, // ✅ Using existing spare column
+                price_as_per_po_check: updateData.priceAsPerPoCheck,
                 challan_no: updateData.challanNo,
                 challan_image: updateData.challanImage,
             })
-            .eq('lift_number', liftNumber);
+            .eq('lift_number', liftNumber)
+            .eq('indent_no', indentNo)
+            .eq('product_name', productName);
 
         if (error) throw error;
 
@@ -334,13 +340,21 @@ export async function updateStoreInReceiving(
                 hod_planned: updateData.actual6,
                 hod_status: 'Pending'
             })
-            .eq('lift_number', liftNumber);
+            .eq('lift_number', liftNumber)
+            .eq('indent_no', indentNo)
+            .eq('product_name', productName);
 
         if (plannedHodError) console.error('Error triggering HOD Stage:', plannedHodError);
 
         return true;
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error updating store-in record:', error);
+        // Display detailed error to the user to help debug trigger issues
+        if (error.message) {
+            import('sonner').then(({ toast }) => {
+                toast.error(`Database Error: ${error.message}`);
+            });
+        }
         throw error;
     }
 }
@@ -352,6 +366,8 @@ export async function updateStoreInReceiving(
  */
 export async function updateStoreInHodApproval(
     liftNumber: string,
+    indentNo: string,
+    productName: string,
     updateData: {
         actualHod: string;
         hodStatus: string;
@@ -367,7 +383,9 @@ export async function updateStoreInHodApproval(
                 hod_status: updateData.hodStatus,
                 hod_remark: updateData.hodRemark,
             })
-            .eq('lift_number', liftNumber);
+            .eq('lift_number', liftNumber)
+            .eq('indent_no', indentNo)
+            .eq('product_name', productName);
 
         if (error) throw error;
 
@@ -379,7 +397,9 @@ export async function updateStoreInHodApproval(
                 .update({
                     planned7: updateData.actualHod,
                 })
-                .eq('lift_number', liftNumber);
+                .eq('lift_number', liftNumber)
+                .eq('indent_no', indentNo)
+                .eq('product_name', productName);
 
             if (planned7Error) console.error('Error triggering Stage 7:', planned7Error);
         }
@@ -398,6 +418,8 @@ export async function updateStoreInHodApproval(
  */
 export async function updateStoreInQuantityCheck(
     liftNumber: string,
+    indentNo: string,
+    productName: string,
     updateData: {
         actual7: string;
         status: string;
@@ -407,16 +429,25 @@ export async function updateStoreInQuantityCheck(
     }
 ) {
     try {
+        const updateFields: any = {
+            actual7: updateData.actual7,
+            status: updateData.status,
+            bill_copy_attached: updateData.billCopyAttached,
+            send_debit_note: updateData.sendDebitNote,
+            reason: updateData.reason,
+        };
+
+        // ✅ If Debit Note is requested, trigger Stage 9 (planned9)
+        if (updateData.sendDebitNote === 'Yes') {
+            updateFields.planned9 = updateData.actual7;
+        }
+
         const { error } = await supabase
             .from('store_in')
-            .update({
-                actual7: updateData.actual7,
-                status: updateData.status,
-                bill_copy_attached: updateData.billCopyAttached,
-                send_debit_note: updateData.sendDebitNote,
-                reason: updateData.reason,
-            })
-            .eq('lift_number', liftNumber);
+            .update(updateFields)
+            .eq('lift_number', liftNumber)
+            .eq('indent_no', indentNo)
+            .eq('product_name', productName);
 
         if (error) throw error;
 
@@ -434,10 +465,13 @@ export async function updateStoreInQuantityCheck(
  */
 export async function updateStoreInDebitNote(
     liftNumber: string,
+    indentNo: string,
+    productName: string,
     updateData: {
         actual9: string;
         debitNoteCopy: string;
         debitNoteNumber: string;
+        firmNameMatch?: string; // Optional project name to sync
     }
 ) {
     try {
@@ -447,8 +481,12 @@ export async function updateStoreInDebitNote(
                 actual9: updateData.actual9,
                 debit_note_copy: updateData.debitNoteCopy,
                 debit_note_number: updateData.debitNoteNumber,
+                firm_name: updateData.firmNameMatch, // Sync firm_name
+                firm_name_match: updateData.firmNameMatch, // Sync firm_name_match
             })
-            .eq('lift_number', liftNumber);
+            .eq('lift_number', liftNumber)
+            .eq('indent_no', indentNo)
+            .eq('product_name', productName);
 
         if (error) throw error;
 
@@ -467,6 +505,8 @@ export async function updateStoreInDebitNote(
  */
 export async function updateStoreInExchange(
     liftNumber: string,
+    indentNo: string,
+    productName: string,
     updateData: {
         actual10: string;
         status: string;
@@ -479,7 +519,9 @@ export async function updateStoreInExchange(
                 actual10: updateData.actual10,
                 status: updateData.status,
             })
-            .eq('lift_number', liftNumber);
+            .eq('lift_number', liftNumber)
+            .eq('indent_no', indentNo)
+            .eq('product_name', productName);
 
         if (error) throw error;
 
@@ -497,6 +539,8 @@ export async function updateStoreInExchange(
  */
 export async function updateStoreInBillStatus(
     liftNumber: string,
+    indentNo: string,
+    productName: string,
     updateData: {
         actual11: string;
         billStatusNew: string;
@@ -512,7 +556,9 @@ export async function updateStoreInBillStatus(
                 bill_status_new: updateData.billStatusNew,
                 bill_image_status: updateData.billImageStatus,
             })
-            .eq('lift_number', liftNumber);
+            .eq('lift_number', liftNumber)
+            .eq('indent_no', indentNo)
+            .eq('product_name', productName);
 
         if (error) throw error;
 
@@ -537,6 +583,7 @@ export async function createPaymentEntry(storeInData: {
     photo_of_bill?: string;
     product_name: string;
     firm_name: string;
+    firmNameMatch?: string;
     payment_form?: string;
     prefix?: string;
     remark?: string;
@@ -546,21 +593,24 @@ export async function createPaymentEntry(storeInData: {
         const nowIso = new Date().toISOString();
 
         // 1. Fetch latest unique_no to continue sequence (format: PAY-XXXX)
-        const { data: latestPayment, error: fetchError } = await supabase
+        const { data: latestPayments, error: fetchError } = await supabase
             .from('payments')
             .select('unique_no')
-            .like('unique_no', 'PAY-%')
-            .order('unique_no', { ascending: false })
-            .limit(1)
-            .maybeSingle();
+            .like('unique_no', 'PAY-%');
 
         let uniqueNo = 'PAY-0001';
-        if (latestPayment && latestPayment.unique_no) {
-            const matches = latestPayment.unique_no.match(/PAY-(\d+)/);
-            if (matches && matches[1]) {
-                const nextNum = parseInt(matches[1], 10) + 1;
-                uniqueNo = `PAY-${nextNum.toString().padStart(4, '0')}`;
-            }
+        if (latestPayments && latestPayments.length > 0) {
+            let maxNum = 0;
+            latestPayments.forEach(record => {
+                if (record.unique_no) {
+                    const matches = record.unique_no.match(/PAY-(\d+)/);
+                    if (matches && matches[1]) {
+                        const num = parseInt(matches[1], 10);
+                        if (num > maxNum) maxNum = num;
+                    }
+                }
+            });
+            uniqueNo = `PAY-${(maxNum + 1).toString().padStart(4, '0')}`;
         }
 
         const paymentEntry = {
@@ -585,7 +635,7 @@ export async function createPaymentEntry(storeInData: {
             actual: null,
             status1: 'hod_approval_pending',
             payment_form: storeInData.payment_form || 'store_in',
-            firm_name: storeInData.firm_name,
+            firm_name: storeInData.firm_name || storeInData.firmNameMatch,
         };
 
         const { data, error } = await supabase
@@ -804,9 +854,6 @@ export async function createDirectRecord(record: Partial<StoreInRecord>) {
                 timestamp: record.timestamp || new Date().toISOString(),
                 actual6: new Date().toISOString(),
                 hod_status: 'Pending',
-                hod_planned: new Date().toISOString(),
-                challan_no: record.challanNo,
-                challan_image: record.challanImage,
             }])
             .select();
 

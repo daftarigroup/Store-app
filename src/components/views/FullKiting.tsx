@@ -28,6 +28,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { fetchFullkittingRecords, updateFullkittingRecord, uploadBiltyImage, type FullkittingRecord } from '@/services/fullkittingService';
 import { createPaymentEntry } from '@/services/storeInService';
 import { formatDateTime, parseCustomDate } from '@/lib/utils';
+import { supabase } from '@/lib/supabase';
 
 // Helper function to format date as "YYYY-MM-DD"
 function formatDate(date: Date): string {
@@ -51,16 +52,38 @@ export default function FullKiting() {
             setDataLoading(true);
             const data = await fetchFullkittingRecords();
 
-            // Filter by Project Name match
-            const filteredData = data.filter(item =>
-                (user.firmNameMatch || '').trim().toLowerCase() === "all" || (item.firmNameMatch || '').trim() === (user.firmNameMatch || '').trim()
-            );
+            const permittedFirms = (user?.firm_access || []).map((f: string) => f.trim().toLowerCase());
+            const hasNoAccess = permittedFirms.length === 0;
 
-            // Pending: has planned but no actual
-            setPendingData(filteredData.filter(i => i.planned && !i.actual));
+            // Fetch store_in records to check HOD status
+            const { data: storeInData } = await supabase
+                .from('store_in')
+                .select('indent_no, lift_number, hod_status');
 
-            // History: has both planned and actual
-            setHistoryData(filteredData.filter(i => i.planned && i.actual));
+            // Filter by Project Name match AND HOD status
+            const filteredData = hasNoAccess ? [] : data.filter(item => {
+                const itemFirm = (item.firmNameMatch || '').trim().toLowerCase();
+                const matchesFirm = permittedFirms.includes('all') || permittedFirms.includes(itemFirm);
+                
+                if (!matchesFirm) return false;
+
+                // Only show if HOD check is complete (Approved)
+                const linkedStoreIn = (storeInData || []).find(s => 
+                    s.indent_no === item.indentNumber || s.lift_number === item.indentNumber
+                );
+                
+                if (linkedStoreIn && linkedStoreIn.hod_status !== 'Approved') {
+                    return false;
+                }
+
+                return true;
+            });
+
+            // Pending: everything that hasn't been completed yet (actual is empty)
+            setPendingData(filteredData.filter(i => !i.actual));
+
+            // History: everything that has been completed (actual is set)
+            setHistoryData(filteredData.filter(i => i.actual));
         } catch (error) {
             console.error('Error fetching fullkitting data:', error);
             toast.error('Failed to fetch data');
@@ -70,8 +93,10 @@ export default function FullKiting() {
     };
 
     useEffect(() => {
-        fetchData();
-    }, [user.firmNameMatch]);
+        if (user?.username) {
+            fetchData();
+        }
+    }, [user?.username, user?.firm_access]);
 
     const columns: ColumnDef<FullkittingRecord>[] = [
         {

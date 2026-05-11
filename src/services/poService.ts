@@ -80,13 +80,12 @@ export async function fetchIndents(permittedFirms?: string[]) {
         if (error) throw error;
 
         return (data || []).map((r: any) => {
-            // Priority: pending_po_qty > approved_quantity > quantity
-            // Need to handle "0" string which is truthy in JS
             const rawPending = Number(r.pending_po_qty) || 0;
             const rawApproved = Number(r.approved_quantity) || 0;
             const rawQuantity = Number(r.quantity) || 0;
 
-            const finalApprovedQty = rawPending > 0 ? rawPending : (rawApproved > 0 ? rawApproved : rawQuantity);
+            // Priority: approved_quantity > pending_po_qty > original_quantity
+            const finalQty = rawApproved > 0 ? rawApproved : (rawPending > 0 ? rawPending : rawQuantity);
 
             return {
                 id: r.id,
@@ -100,7 +99,8 @@ export async function fetchIndents(permittedFirms?: string[]) {
                 specifications: r.specifications || '',
                 taxValue1: r.tax_value1 || 0,
                 taxValue4: r.tax_value4 || 0,
-                approvedQuantity: finalApprovedQty,
+                approvedQuantity: finalQty, // This will be shown in 'Qty' column
+                indentQuantity: rawQuantity, // Original requested quantity
                 pendingPoQty: rawPending,
                 uom: r.uom || '',
                 approvedRate: r.approved_rate || 0,

@@ -116,6 +116,8 @@ interface StoreInHistoryData {
     billImage: string;
     firmNameMatch: string;
     planned6Date: string;
+    hodStatus: string;
+    hodRemark: string;
 }
 
 interface DirectStoreInData {
@@ -268,13 +270,17 @@ export default () => {
 
     // Fetch all data from Supabase
     useEffect(() => {
-        fetchAllData();
-    }, []);
+        if (user?.username) {
+            fetchAllData();
+        }
+    }, [user?.username, user?.firm_access]);
 
     // Process pending table data
     useEffect(() => {
+        const permittedFirms = user?.firm_access || [];
         const filteredByFirm = storeInRecords.filter((item) =>
-            user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch
+            (user?.firmNameMatch || '').toLowerCase() === "all" ||
+            permittedFirms.includes(item.firmNameMatch)
         );
 
         // Filter for pending items (planned6 set, actual6 empty)
@@ -295,12 +301,14 @@ export default () => {
             indentNumbers: [i.indentNo || ''],
             originalItems: [i]
         })));
-    }, [storeInRecords, user.firmNameMatch]);
+    }, [storeInRecords, user?.firmNameMatch, user?.firm_access]);
 
     // Process history data
     useEffect(() => {
+        const permittedFirms = user?.firm_access || [];
         const filteredByFirm = storeInRecords.filter((item) =>
-            user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch
+            (user?.firmNameMatch || '').toLowerCase() === "all" ||
+            permittedFirms.includes(item.firmNameMatch)
         );
 
         // Display standard procurement records (actual6 set, NO Direct prefix)
@@ -347,13 +355,15 @@ export default () => {
             billImage: i.photoOfBill || '',
             firmNameMatch: i.firmNameMatch || '',
             planned6Date: i.planned6 || '',
+            hodStatus: i.hodStatus || '',
+            hodRemark: i.hodRemark || '',
             challanNo: i.challanNo || '',
             challanImage: i.challanImage || '',
             receiverName: i.receiverName || '',
         })));
 
         // Note: directData is now set directly in fetchAllData from the new table
-    }, [storeInRecords, user.firmNameMatch]);
+    }, [storeInRecords, user?.firmNameMatch]);
 
     const textWrapCell = ({ getValue }: { getValue: () => any }) => {
         const value = getValue();
@@ -361,7 +371,7 @@ export default () => {
     };
 
     const columns: ColumnDef<RecieveItemsData>[] = [
-        ...(user.receiveItemView
+        ...(user?.receiveItemView
             ? [
                 {
                     header: 'Action',
@@ -403,7 +413,7 @@ export default () => {
                 );
             }
         },
-        { accessorKey: 'firmNameMatch', header: 'Firm Name', cell: textWrapCell },
+        { accessorKey: 'firmNameMatch', header: 'Project Name', cell: textWrapCell },
         {
             accessorKey: 'billStatus',
             header: 'Bill Status',
@@ -449,7 +459,7 @@ export default () => {
         { accessorKey: 'liftNumber', header: 'Lift Number', cell: textWrapCell },
         { accessorKey: 'indentNo', header: 'Indent No.', cell: textWrapCell },
         { accessorKey: 'poNumber', header: 'PO Number', cell: textWrapCell },
-        { accessorKey: 'firmNameMatch', header: 'Firm Name', cell: textWrapCell },
+        { accessorKey: 'firmNameMatch', header: 'Project Name', cell: textWrapCell },
         { accessorKey: 'vendorName', header: 'Vendor Name', cell: textWrapCell },
         { accessorKey: 'productName', header: 'Product Name', cell: textWrapCell },
         {
@@ -493,6 +503,19 @@ export default () => {
         { accessorKey: 'amount', header: 'Freight Amount' },
         { accessorKey: 'receiveStatus', header: 'Rec. Status', cell: textWrapCell },
         { accessorKey: 'receivedQuantity', header: 'Rec. Qty' },
+        {
+            accessorKey: 'hodStatus',
+            header: 'HOD Status',
+            cell: ({ getValue }) => {
+                const status = getValue() as string;
+                return (
+                    <Pill variant={status === 'Approved' ? 'default' : (status === 'Rejected' ? 'reject' : 'secondary')}>
+                        {status || 'Pending'}
+                    </Pill>
+                );
+            }
+        },
+        { accessorKey: 'hodRemark', header: 'HOD Remark', cell: textWrapCell },
         {
             accessorKey: 'photoOfProduct',
             header: 'Product Photo',
@@ -602,10 +625,10 @@ export default () => {
         if (selectedIndent?.originalItems) {
             form.reset({
                 status: 'Received',
-                photoOfProduct: undefined,
-                damageOrder: undefined,
-                quantityAsPerBill: undefined,
-                priceAsPerPoCheck: undefined,
+                photoOfProduct: '',
+                damageOrder: '',
+                quantityAsPerBill: '',
+                priceAsPerPoCheck: '',
                 remark: '',
                 location: '',
                 items: selectedIndent.originalItems.map(item => ({
@@ -614,6 +637,7 @@ export default () => {
                     productName: item.productName || '',
                     qty: Number(item.qty) || 0,
                     receivedQty: Number(item.qty) || 0,
+                    damageOrder: '',
                 })),
             });
         }
@@ -642,10 +666,10 @@ export default () => {
 
             const currentDateTime = new Date().toISOString();
 
-            // 3. Update all items in parallel
-            const updatePromises = values.items.map(async item => {
+            // Use sequential loop to avoid 409 Conflict / database locks
+            for (const item of values.items) {
                 // Update original store_in record to remove from processing
-                await updateStoreInReceiving(item.liftNumber, {
+                await updateStoreInReceiving(item.liftNumber, item.indentNo, item.productName, {
                     actual6: currentDateTime,
                     receivingStatus: values.status,
                     receivedQuantity: item.receivedQty,
@@ -679,9 +703,7 @@ export default () => {
                         timestamp: currentDateTime,
                     });
                 }
-            });
-
-            await Promise.all(updatePromises);
+            }
 
 
             toast.success(`All ${values.items.length} items stored in successfully!`);
@@ -858,7 +880,7 @@ export default () => {
                                                     render={({ field }) => (
                                                         <FormItem>
                                                             <FormLabel>Project Name</FormLabel>
-                                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                            <Select onValueChange={field.onChange} value={field.value || ""}>
                                                                 <FormControl>
                                                                     <SelectTrigger className="w-full">
                                                                         <SelectValue placeholder="Select project" />
@@ -895,7 +917,7 @@ export default () => {
                                                     render={({ field }) => (
                                                         <FormItem>
                                                             <FormLabel>Vendor Name</FormLabel>
-                                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                            <Select onValueChange={field.onChange} value={field.value || ""}>
                                                                 <FormControl>
                                                                     <SelectTrigger className="w-full">
                                                                         <SelectValue placeholder="Select vendor" />
@@ -918,7 +940,7 @@ export default () => {
                                                     render={({ field }) => (
                                                         <FormItem>
                                                             <FormLabel>Product Name</FormLabel>
-                                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                            <Select onValueChange={field.onChange} value={field.value || ""}>
                                                                 <FormControl>
                                                                     <SelectTrigger className="w-full">
                                                                         <SelectValue placeholder="Select product" />
@@ -941,7 +963,7 @@ export default () => {
                                                     render={({ field }) => (
                                                         <FormItem>
                                                             <FormLabel>Bill Status</FormLabel>
-                                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                            <Select onValueChange={field.onChange} value={field.value || ""}>
                                                                 <FormControl>
                                                                     <SelectTrigger className="w-full">
                                                                         <SelectValue placeholder="Select status" />
@@ -1032,7 +1054,7 @@ export default () => {
                                                     render={({ field }) => (
                                                         <FormItem>
                                                             <FormLabel>Transporting Type</FormLabel>
-                                                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                            <Select onValueChange={field.onChange} value={field.value || ""}>
                                                                 <FormControl>
                                                                     <SelectTrigger className="w-full">
                                                                         <SelectValue placeholder="Include Transport?" />
@@ -1313,7 +1335,7 @@ export default () => {
                                                 <FormControl>
                                                     <Select
                                                         onValueChange={field.onChange}
-                                                        value={field.value}
+                                                        value={field.value || ""}
                                                     >
                                                         <SelectTrigger className="w-full">
                                                             <SelectValue placeholder="Select status" />
@@ -1374,7 +1396,7 @@ export default () => {
                                                 <FormControl>
                                                     <Select
                                                         onValueChange={field.onChange}
-                                                        value={field.value}
+                                                        value={field.value || ""}
                                                     >
                                                         <SelectTrigger className="w-full">
                                                             <SelectValue placeholder="Select" />

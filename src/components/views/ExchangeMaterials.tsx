@@ -370,10 +370,15 @@ const ExchangeMaterials = () => {
         if (!selectedItem) return;
 
         try {
-            await updateStoreInExchange(selectedItem.liftNumber, {
-                actual10: new Date().toISOString(),
-                status: values.status,
-            });
+            await updateStoreInExchange(
+                selectedItem.liftNumber,
+                selectedItem.indentNo,
+                selectedItem.productName,
+                {
+                    actual10: new Date().toISOString(),
+                    status: values.status,
+                }
+            );
 
             toast.success(`Updated status for ${selectedItem.liftNumber}`);
             setOpenDialog(false);

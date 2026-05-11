@@ -89,7 +89,9 @@ interface HistoryData {
 }
 
 interface AuthUser {
+    username?: string;
     firmNameMatch?: string;
+    firm_access?: string[];
     receiveItemAction?: boolean;
 }
 
@@ -107,15 +109,16 @@ export default function GetPurchase() {
     const [indentRecords, setIndentRecords] = useState<GetLiftIndentRecord[]>([]);
     const [storeInRecords, setStoreInRecords] = useState<GetLiftStoreInRecord[]>([]);
 
-    // Fetch all data from Supabase
     useEffect(() => {
         const fetchAllData = async () => {
+            if (!user?.username) return;
             setLoading(true);
             try {
+                const firms = user?.firm_access;
                 const [vendors, indents, storeIns] = await Promise.all([
                     fetchVendorOptions(),
-                    fetchIndentRecords(),
-                    fetchStoreInRecords(),
+                    fetchIndentRecords(firms),
+                    fetchStoreInRecords(firms),
                 ]);
 
                 setVendorOptions(vendors);
@@ -130,14 +133,15 @@ export default function GetPurchase() {
         };
 
         fetchAllData();
-    }, []);
+    }, [user?.username]);
 
     // Process pending table data
     useEffect(() => {
+        const permittedFirms = user?.firm_access || [];
         const filteredByFirm = indentRecords.filter(
             (sheet) =>
                 user?.firmNameMatch?.toLowerCase() === 'all' ||
-                sheet.firmNameMatch === user?.firmNameMatch
+                permittedFirms.includes(sheet.firmNameMatch)
         );
         const processedData = filteredByFirm
             .map((sheet) => {
@@ -165,7 +169,11 @@ export default function GetPurchase() {
                 // Show only Pending items with planned date but no actual date
                 const hasPlanned5 = item.planned5 && item.planned5.toString().trim() !== '';
                 const hasActual5 = item.actual5 && item.actual5.toString().trim() !== '';
-                const isPending = item.liftingStatus === 'Pending' || item.liftingStatus === '' || item.liftingStatus === null;
+                const liftingStatus = (item.liftingStatus || '').toLowerCase();
+                const isPending = liftingStatus === 'pending' || 
+                                 liftingStatus === 'active' || 
+                                 liftingStatus === '' || 
+                                 item.liftingStatus === null;
 
                 // ✅ Hide if no quantity left to lift
                 return isPending && hasPlanned5 && !hasActual5 && item.pendingPoQty > 0;
@@ -225,14 +233,15 @@ export default function GetPurchase() {
         });
 
         setTableData(sortedData);
-    }, [indentRecords, storeInRecords, user?.firmNameMatch]);
+    }, [indentRecords, storeInRecords, user?.firm_access, user?.firmNameMatch]);
 
     // Process history data independently
     useEffect(() => {
+        const permittedFirms = user?.firm_access || [];
         const firmIndents = indentRecords.filter(
             (sheet) =>
                 user?.firmNameMatch?.toLowerCase() === 'all' ||
-                sheet.firmNameMatch === user?.firmNameMatch
+                permittedFirms.includes(sheet.firmNameMatch)
         );
 
         const indentMap = new Map(
@@ -246,7 +255,7 @@ export default function GetPurchase() {
             .filter(
                 (sheet) =>
                     user?.firmNameMatch?.toLowerCase() === 'all' ||
-                    sheet.firmNameMatch === user?.firmNameMatch
+                    permittedFirms.includes(sheet.firmNameMatch)
             )
             .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
@@ -290,7 +299,7 @@ export default function GetPurchase() {
 
         // Sort by timestamp descending for the UI
         setHistoryData(processedHistory.reverse());
-    }, [storeInRecords, indentRecords, user?.firmNameMatch]);
+    }, [storeInRecords, indentRecords, user?.firm_access, user?.firmNameMatch]);
 
     // Creating table columns
     const columns: ColumnDef<GetPurchaseData>[] = [
@@ -329,6 +338,11 @@ export default function GetPurchase() {
             accessorKey: 'poNumber',
             header: 'PO Number',
             cell: ({ getValue }) => <div className="font-bold">{(getValue() as string) || '-'}</div>,
+        },
+        {
+            accessorKey: 'firmNameMatch',
+            header: 'Project Name',
+            cell: ({ getValue }) => <div>{(getValue() as string) || '-'}</div>,
         },
         {
             accessorKey: 'vendorName',
@@ -506,6 +520,7 @@ export default function GetPurchase() {
             withTax: z.string(),
             liftQty: z.coerce.number().min(0),
             cancelQty: z.coerce.number().min(0).optional(),
+            uom: z.string().optional(),
         })).superRefine((items, ctx) => {
             items.forEach((item, index) => {
                 const numericLiftQty = Number(item.liftQty) || 0;
@@ -636,6 +651,7 @@ export default function GetPurchase() {
                     withTax: item.withTax || 'No',
                     liftQty: item.pendingPoQty || 0,
                     cancelQty: 0,
+                    uom: item.uom || '',
                 })),
             });
 
@@ -755,6 +771,7 @@ export default function GetPurchase() {
                             indentNumber: item.indentNo,
                             product: item.product || '',
                             quantity: liftQty,
+                            uom: item.uom || '',
                             vehicleNo: values.vehicleNo || '',
                             driverName: values.driverName || '',
                             driverMobileNo: values.driverMobileNo || '',
@@ -791,9 +808,10 @@ export default function GetPurchase() {
             setCancelQtyValue('');
 
             setTimeout(async () => {
+                const firms = user?.firm_access;
                 const [indents, storeIns] = await Promise.all([
-                    fetchIndentRecords(),
-                    fetchStoreInRecords(),
+                    fetchIndentRecords(firms),
+                    fetchStoreInRecords(firms),
                 ]);
                 setIndentRecords(indents);
                 setStoreInRecords(storeIns);

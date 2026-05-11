@@ -23,7 +23,7 @@ import { ClipLoader as Loader } from 'react-spinners';
 import { ClipboardList, Trash, Search, PlusCircle } from 'lucide-react';
 import { useSheets } from '@/context/SheetsContext';
 import Heading from '../element/Heading';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase, supabaseEnabled } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import IndentPdf from '../element/IndentPdf';
@@ -110,6 +110,12 @@ export default () => {
         control: form.control,
         name: 'products',
     });
+    
+    useEffect(() => {
+        if (user?.username) {
+            fetchHistory();
+        }
+    }, [user?.username, user?.firm_access]);
 
     const fetchHistory = async () => {
         setHistoryLoading(true);

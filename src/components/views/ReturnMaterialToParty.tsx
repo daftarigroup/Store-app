@@ -82,9 +82,11 @@ export default () => {
             const data = await fetchStoreInRecords();
 
             // Filter by Project Name
-            const filteredByFirm = data.filter(item =>
-                (user.firmNameMatch || '').trim().toLowerCase() === "all" || (item.firmNameMatch || '').trim() === (user.firmNameMatch || '').trim()
-            );
+            const filteredByFirm = data.filter((item) => {
+                const permittedFirms = (user?.firm_access || []).map(f => f.trim().toLowerCase());
+                const itemFirm = (item.firmNameMatch || '').trim().toLowerCase();
+                return permittedFirms.includes('all') || permittedFirms.includes(itemFirm);
+            });
 
             const pending = filteredByFirm
                 .filter((i) => i.planned8 && i.planned8 !== '' && (!i.actual8 || i.actual8 === ''))
@@ -144,7 +146,7 @@ export default () => {
 
     useEffect(() => {
         fetchData();
-    }, [user.firmNameMatch]);
+    }, [user?.firm_access]);
 
     const pendingColumns: ColumnDef<StoreInPendingData>[] = [
         ...(user.receiveItemView

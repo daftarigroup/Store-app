@@ -114,27 +114,12 @@ interface DisplayPaymentHistory {
     billImage: string;
     poImage: string;
     billImageStatus?: string;
-    // New fields from schema
-    liftNumber: string;
     indentNo: string;
     poNumber: string;
     vendorName: string;
     productName: string;
     billNo: string;
-    qty: string;
-    typeOfBill: string;
-    billAmount: string;
-    discountAmount: string;
-    paymentType: string;
-    advanceAmountIfAny: string;
-    transportationInclude: string;
-    transporterName: string;
-    amount: string;
-    billRemark: string;
     timestamp1: string;
-    vehicle_no: string;
-    driver_name: string;
-    driver_mobile_no: string;
 }
 
 interface UpdatePayload {
@@ -145,6 +130,7 @@ interface UpdatePayload {
 }
 
 export default function MakePayment() {
+    const { user } = useAuth();
     const [paymentsLoading, setPaymentsLoading] = useState(false);
     const [paymentsSheet, setPaymentsSheet] = useState<PaymentsRecord[]>([]);
     const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(false);
@@ -276,9 +262,16 @@ export default function MakePayment() {
                 setOriginalData(mappedPayments);
                 setPaymentsSheet(mappedPayments);
 
-                // Filter Pending: Has planned date and status is not 'Completed'
+                const permittedFirms = (user?.firm_access || []).map((f: string) => f.trim().toLowerCase());
+                const hasAllAccess = permittedFirms.includes('all');
+
+                // Filter Pending: Has planned date, status is not 'Completed', and firm access matches
                 const pendingBasic = mappedPayments
                     .filter((sheet: PaymentsRecord) => {
+                        // Firm Access Filter
+                        const itemFirm = (sheet.firmNameMatch || '').trim().toLowerCase();
+                        const hasFirmAccess = hasAllAccess || permittedFirms.includes(itemFirm);
+                        if (!hasFirmAccess) return false;
                         const status = String(sheet?.status || '').toLowerCase();
                         const isCompleted = status === 'completed';
 
@@ -286,16 +279,12 @@ export default function MakePayment() {
                         const terms = String(sheet?.paymentTerms || '').toLowerCase();
                         const isAdvanceTerm = terms.includes('advance') || terms.includes('pi');
 
-                        if (!isAdvanceTerm) {
-                            return false;
-                        }
-
                         // Check linked Store In for HOD status: Only show if Approved
-                        const linkedStoreIn = storeInRecords.find((s: any) =>
+                        const linkedStoreIn = (storeInData || []).find((s: any) =>
                             (s.indent_no || s.indent_number) === (sheet.internalCode)
                         );
-                        if (linkedStoreIn && linkedStoreIn.hod_status !== 'Approved') {
-                            return false;
+                        if (linkedStoreIn && (linkedStoreIn.hod_status || linkedStoreIn.hodStatus) !== 'Approved') {
+                             return false;
                         }
 
                         return !isCompleted;
@@ -364,7 +353,6 @@ export default function MakePayment() {
                         existing.payAmount += item.payAmount;
                         existing.outstandingAmount += item.outstandingAmount;
                         existing.totalPaidAmount += item.totalPaidAmount;
-                        // For unique numbers and other non-summing fields, keep the first one
                     }
                 });
 
@@ -372,7 +360,13 @@ export default function MakePayment() {
                 setPendingData(sortedPending);
 
                 // 2. Fetch History directly from payment_history table
-                const historyItems = (historyDbData || [])
+                const historyItemsFromDb = (historyDbData || [])
+                    .filter((r: any) => {
+                        const itemFirm = (r.fms_name || '').trim().toLowerCase();
+                        // If user has all access, show everything (even empty firms)
+                        if (hasAllAccess) return true;
+                        return permittedFirms.includes(itemFirm);
+                    })
                     .map((r: any, index: number) => ({
                         rowIndex: r.id || index,
                         timestamp: r.timestamp || '',
@@ -385,41 +379,86 @@ export default function MakePayment() {
                         remarks: r.remarks || '',
                         anyAttachments: r.any_attachments || '',
                         planned: r.planned || '',
-                        paymentTerms: r.payment_terms || '',
+                        paymentTerms: r.payment_terms || r.paymentTerms || '',
                         billImage: r.photo_of_bill || r.any_attachments || '',
                         poImage: r.any_attachments || '',
                         billImageStatus: r.bill_status || '',
-                        // Mapping new fields
-                        liftNumber: r.lift_number || '',
                         indentNo: r.indent_no || '',
                         poNumber: r.po_number || '',
                         vendorName: r.vendor_name || '',
                         productName: r.product_name || '',
                         billNo: r.bill_no || '',
-                        qty: r.qty || '',
-                        typeOfBill: r.type_of_bill || '',
-                        billAmount: r.bill_amount || '',
-                        discountAmount: r.discount_amount || '',
-                        paymentType: r.payment_type || '',
-                        advanceAmountIfAny: r.advance_amount_if_any || '',
-                        transportationInclude: r.transportation_include || '',
-                        transporterName: r.transporter_name || '',
-                        amount: r.amount || '',
-                        billRemark: r.bill_remark || '',
                         timestamp1: r.timestamp1 || '',
-                        vehicle_no: r.vehicle_no || '',
-                        driver_name: r.driver_name || '',
-                        driver_mobile_no: r.driver_mobile_no || '',
                     }));
 
-                setHistoryData(historyItems);
+                // 3. Merge History: items from payment_history table + completed items from payments table
+                const completedPaymentsFromTable = mappedPayments
+                    .filter(p => p.paymentDone)
+                    .map((p, index) => ({
+                        rowIndex: p.rowIndex,
+                        timestamp: p.actual || p.timestamp || '',
+                        apPaymentNumber: `AP-AUTO-${p.rowIndex}`,
+                        status: 'Paid',
+                        uniqueNumber: p.uniqueNo,
+                        fmsName: p.firmNameMatch,
+                        payTo: p.partyName,
+                        amountToBePaid: p.payAmount,
+                        remarks: p.remark || 'Payment Completed',
+                        anyAttachments: p.file || p.pdf || '',
+                        planned: p.planned || '',
+                        paymentTerms: p.paymentTerms || '',
+                        billImage: p.file || p.pdf || '',
+                        poImage: p.pdf || '',
+                        billImageStatus: p.billImageStatus || '',
+                        liftNumber: '',
+                        indentNo: p.internalCode,
+                        poNumber: p.poNumber,
+                        vendorName: p.partyName,
+                        productName: p.product,
+                        billNo: p.billNo,
+                        qty: '',
+                        typeOfBill: '',
+                        billAmount: String(p.payAmount),
+                        discountAmount: '',
+                        paymentType: '',
+                        advanceAmountIfAny: '',
+                        transportationInclude: '',
+                        transporterName: '',
+                        amount: String(p.payAmount),
+                        billRemark: p.remark || '',
+                        timestamp1: p.actual || '',
+                        vehicle_no: '',
+                        driver_name: '',
+                        driver_mobile_no: '',
+                    }));
 
-                const totalAmount = pendingItems.reduce((sum, item) => sum + item.outstandingAmount, 0);
+                // Combine and deduplicate by uniqueNumber + amount
+                const combinedHistory = [...historyItemsFromDb];
+                const seenHistoryKeys = new Set(historyItemsFromDb.map(h => `${h.uniqueNumber}-${h.amountToBePaid}`));
+                
+                completedPaymentsFromTable.forEach(p => {
+                    const key = `${p.uniqueNumber}-${p.amountToBePaid}`;
+                    if (!seenHistoryKeys.has(key)) {
+                        combinedHistory.push(p);
+                        seenHistoryKeys.add(key);
+                    }
+                });
+
+                // Sort by timestamp descending
+                combinedHistory.sort((a, b) => {
+                    const dateA = new Date(a.timestamp).getTime();
+                    const dateB = new Date(b.timestamp).getTime();
+                    return dateB - dateA;
+                });
+
+                setHistoryData(combinedHistory);
+
+                const totalAmount = sortedPending.reduce((sum, item) => sum + item.outstandingAmount, 0);
                 setStats({
-                    total: pendingItems.length,
+                    total: sortedPending.length,
                     totalAmount,
-                    pendingCount: pendingItems.length,
-                    historyCount: historyItems.length
+                    pendingCount: sortedPending.length,
+                    historyCount: combinedHistory.length
                 });
 
                 setSelectedRows(new Set());
@@ -435,28 +474,12 @@ export default function MakePayment() {
         };
 
         fetchData();
-    }, [reloadKey]);
-    const formatCurrentDate = (): string => {
-        return new Date().toISOString();
-    };
-
-    const formatCurrentDateTime = (): string => {
-        const now = new Date();
-        const day = now.getDate().toString().padStart(2, '0');
-        const month = (now.getMonth() + 1).toString().padStart(2, '0');
-        const year = now.getFullYear().toString().slice(-2);
-        const hours = now.getHours().toString().padStart(2, '0');
-        const minutes = now.getMinutes().toString().padStart(2, '0');
-        const seconds = now.getSeconds().toString().padStart(2, '0');
-        return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
-    };
+    }, [reloadKey, user?.username, user?.firm_access]);
 
     const handleSelectAll = () => {
         if (selectedRows.size === pendingData.length) {
-            // If all are selected, deselect all
             setSelectedRows(new Set());
         } else {
-            // Select all
             const allRowIndices = pendingData.map((_, index) => index);
             setSelectedRows(new Set(allRowIndices));
         }
@@ -481,25 +504,17 @@ export default function MakePayment() {
         setIsSubmitting(true);
         const isoNow = new Date().toISOString();
         const currentDateOnly = isoNow.split('T')[0];
-        const currentDateTime = isoNow;
-        const legacyFormatDate = formatCurrentDate(); // Keep for history remarks if needed
 
         try {
-            // Get the selected items
             const selectedItems = Array.from(selectedRows).map(index => pendingData[index]);
-
-            console.log('🔍 Selected items to update:', selectedItems);
-
-            // Prepare IDs and update payments table in Supabase
-            const ids = selectedItems.map(item => item.rowIndex).filter(Boolean);
+            const ids = selectedItems.flatMap(item => item.rowIds).filter(Boolean);
+            
             if (ids.length === 0) {
                 toast.error('Could not find matching records to update');
                 setIsSubmitting(false);
                 return;
             }
 
-            // Update payments rows in bulk
-            // Update payments rows in bulk
             const { error: updateError } = await supabase
                 .from('payments')
                 .update({
@@ -510,22 +525,13 @@ export default function MakePayment() {
                 })
                 .in('id', ids);
 
-            if (updateError) {
-                console.error('❌ Supabase update error:', updateError);
-                toast.error('Failed to update payments in database');
-                setIsSubmitting(false);
-                return;
-            }
+            if (updateError) throw updateError;
 
-            // --- INSERT INTO PAYMENT_HISTORY ---
             const historyRows = selectedItems.map(item => {
-                // Try to find the matching store_in record to get more metadata
                 const storeIn = storeInRecords.find(si =>
                     si.po_number === item.poNumber &&
                     (si.indent_no === item.internalCode || si.indent_number === item.internalCode)
                 );
-
-                // Auto-generate AP Payment Number (e.g., AP-7707)
                 const apPaymentNumber = `AP-${Math.floor(1000 + Math.random() * 9000)}`;
 
                 return {
@@ -544,26 +550,7 @@ export default function MakePayment() {
                     indent_no: item.internalCode,
                     po_number: item.poNumber,
                     product_name: item.product,
-                    // Additional fields from store_in if found
-                    lift_number: storeIn?.liftNumber || '',
-                    bill_status: storeIn?.billStatus || '',
-                    bill_no: String(storeIn?.billNo || ''),
-                    qty: String(storeIn?.qty || ''),
-                    vendor_name: storeIn?.vendorName || item.partyName,
-                    type_of_bill: storeIn?.typeOfBill || '',
-                    bill_amount: String(storeIn?.billAmount || ''),
-                    discount_amount: String(storeIn?.discountAmount || ''),
-                    payment_type: storeIn?.paymentType || '',
-                    advance_amount_if_any: String(storeIn?.advanceAmountIfAny || ''),
-                    photo_of_bill: storeIn?.photoOfBill || item.file || '',
-                    transportation_include: storeIn?.transportationInclude || '',
-                    transporter_name: storeIn?.transporterName || '',
-                    amount: String(storeIn?.amount || ''),
-                    lead_time_to_lift_material: String(storeIn?.leadTimeToLiftMaterial || ''),
-                    vehicle_no: storeIn?.vehicleNo || '',
-                    driver_name: storeIn?.driverName || '',
-                    driver_mobile_no: storeIn?.driverMobileNo || '',
-                    bill_remark: storeIn?.billRemark || item.remark || '',
+                    bill_no: item.billNo || '',
                 };
             });
 
@@ -571,19 +558,14 @@ export default function MakePayment() {
                 .from('payment_history')
                 .insert(historyRows);
 
-            if (historyError) {
-                console.warn('⚠️ Error inserting into payment_history:', historyError);
-                // We don't block the UI as the main payment update succeeded
-            }
+            if (historyError) console.warn('⚠️ Error inserting into payment_history:', historyError);
 
             toast.success(`Successfully updated ${ids.length} payment(s)`);
-
-            // Refresh data
             setTimeout(() => updateAll(), 800);
             setSelectedRows(new Set());
         } catch (error) {
             console.error('❌ Error submitting payments:', error);
-            toast.error('Error updating payments. Check console for details.');
+            toast.error('Error updating payments.');
         } finally {
             setIsSubmitting(false);
         }
@@ -597,16 +579,13 @@ export default function MakePayment() {
         const currentDateOnly = isoNow.split('T')[0];
 
         try {
-            // 0. Upload Payment Confirmation Image if exists
             let attachmentUrl = selectedPaymentItem.file || selectedPaymentItem.pdf || '';
             if (paymentModalFile) {
                 attachmentUrl = await uploadPaymentImage(paymentModalFile, selectedPaymentItem.uniqueNo);
             }
 
-            // 1. Update payments table in Supabase
             const ids = selectedPaymentItem.rowIds || [selectedPaymentItem.rowIndex];
             
-            // Update payments rows
             const { error: updateError } = await supabase
                 .from('payments')
                 .update({
@@ -618,20 +597,13 @@ export default function MakePayment() {
                 })
                 .in('id', ids);
 
-            if (updateError) {
-                console.error('❌ Supabase update error:', updateError);
-                toast.error('Failed to update payment status');
-                return;
-            }
+            if (updateError) throw updateError;
 
-            // --- INSERT INTO PAYMENT_HISTORY ---
-            // Try to find the matching store_in record to get more metadata
             const storeIn = storeInRecords.find(si =>
                 si.po_number === selectedPaymentItem.poNumber &&
                 (si.indent_no === selectedPaymentItem.internalCode || si.indent_number === selectedPaymentItem.internalCode)
             );
 
-            // Auto-generate AP Payment Number (e.g., AP-7707)
             const apPaymentNumber = `AP-${Math.floor(1000 + Math.random() * 9000)}`;
 
             const historyRow = {
@@ -650,46 +622,36 @@ export default function MakePayment() {
                 indent_no: selectedPaymentItem.internalCode,
                 po_number: selectedPaymentItem.poNumber,
                 product_name: selectedPaymentItem.product,
-                // Additional fields from store_in if found
-                lift_number: storeIn?.liftNumber || '',
-                bill_status: storeIn?.billStatus || '',
-                bill_no: String(storeIn?.billNo || ''),
+                lift_number: storeIn?.lift_number || '',
+                bill_status: storeIn?.bill_status || '',
+                bill_no: String(storeIn?.bill_no || ''),
                 qty: String(storeIn?.qty || ''),
-                vendor_name: storeIn?.vendorName || selectedPaymentItem.partyName,
-                type_of_bill: storeIn?.typeOfBill || '',
-                bill_amount: String(storeIn?.billAmount || ''),
-                discount_amount: String(storeIn?.discountAmount || ''),
-                payment_type: storeIn?.paymentType || '',
-                advance_amount_if_any: String(storeIn?.advanceAmountIfAny || ''),
-                photo_of_bill: storeIn?.photoOfBill || selectedPaymentItem.file || '',
-                transportation_include: storeIn?.transportationInclude || '',
-                transporter_name: storeIn?.transporterName || '',
+                vendor_name: storeIn?.vendor_name || selectedPaymentItem.partyName,
+                type_of_bill: storeIn?.type_of_bill || '',
+                bill_amount: String(storeIn?.bill_amount || ''),
+                discount_amount: String(storeIn?.discount_amount || ''),
+                payment_type: storeIn?.payment_type || '',
+                advance_amount_if_any: String(storeIn?.advance_amount_if_any || ''),
+                photo_of_bill: storeIn?.photo_of_bill || selectedPaymentItem.file || '',
+                transportation_include: storeIn?.transportation_include || '',
+                transporter_name: storeIn?.transporter_name || '',
                 amount: String(storeIn?.amount || ''),
-                lead_time_to_lift_material: String(storeIn?.leadTimeToLiftMaterial || ''),
-                vehicle_no: storeIn?.vehicleNo || '',
-                driver_name: storeIn?.driverName || '',
-                driver_mobile_no: storeIn?.driverMobileNo || '',
-                bill_remark: storeIn?.billRemark || paymentModalRemark || '',
+                vehicle_no: storeIn?.vehicle_no || '',
+                driver_name: storeIn?.driver_name || '',
+                driver_mobile_no: storeIn?.driver_mobile_no || '',
+                bill_remark: storeIn?.bill_remark || paymentModalRemark || '',
             };
 
             const { error: historyError } = await supabase
                 .from('payment_history')
                 .insert([historyRow]);
 
-            if (historyError) {
-                console.warn('⚠️ Error inserting into payment_history:', historyError);
-                // We don't block the UI as the main payment update succeeded
-            }
+            if (historyError) console.warn('⚠️ Error inserting into payment_history:', historyError);
 
             toast.success(`Successfully recorded payment`);
-
-            // Refresh data
             setIsPaymentModalOpen(false);
             setPaymentModalFile(null);
             setTimeout(() => updateAll(), 800);
-            
-            // If the user wants to open the external form, we can do it here or via button in modal
-            // if (selectedPaymentItem.paymentForm) window.open(selectedPaymentItem.paymentForm, '_blank');
             
         } catch (error) {
             console.error('❌ Error submitting payment:', error);
@@ -740,7 +702,7 @@ export default function MakePayment() {
                                     setSelectedPaymentItem(item);
                                     setPaymentModalRemark(item.remark || '');
                                     setPaymentModalStatus('Complete');
-                                    setPaymentModalAmount('');
+                                    setPaymentModalAmount(item.payAmount || '');
                                     setPaymentModalFile(null);
                                     setIsPaymentModalOpen(true);
                                 }}
@@ -762,6 +724,13 @@ export default function MakePayment() {
                     </div>
                 );
             },
+        },
+        {
+            accessorKey: 'firmNameMatch',
+            header: 'Project Name',
+            cell: ({ row }) => (
+                <span className="font-medium text-blue-700">{row.original.firmNameMatch || '-'}</span>
+            )
         },
         {
             accessorKey: 'planned',
@@ -873,75 +842,100 @@ export default function MakePayment() {
             }
         },
         {
-            id: 'bill_image',
-            header: 'Bill Image',
-            cell: ({ row }) => {
-                const url = row.original.file;
-                const status = row.original.billImageStatus;
-                const hasAttachment = url?.trim() !== '';
-                const isStatusUrl = status && (status.startsWith('http') || status.includes('drive.google.com') || status.includes('supabase.co'));
+            accessorKey: 'remark',
+            header: 'Remark',
+            cell: ({ row }) => (
+                <span className="text-xs text-gray-500 truncate max-w-[150px] inline-block">
+                    {row.original.remark || '-'}
+                </span>
+            )
+        }
+    ];
 
-                return (
-                    <div className="flex flex-col gap-1">
-                        {hasAttachment ? (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => window.open(url, '_blank')}
-                                className="text-emerald-600 hover:text-emerald-700 h-8 font-medium"
-                            >
-                                <ExternalLink className="mr-2 h-3 w-3" />
-                                View Bill
-                            </Button>
-                        ) : null}
-
-                        {status && (
-                            isStatusUrl ? (
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => window.open(status, '_blank')}
-                                    className="text-blue-600 hover:text-blue-700 h-8 font-medium"
-                                >
-                                    <ExternalLink className="mr-2 h-3 w-3" />
-                                    Store Bill
-                                </Button>
-                            ) : (
-                                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full inline-block text-center uppercase ${status.toLowerCase() === 'received' || status.toLowerCase() === 'ok'
-                                    ? 'bg-green-100 text-green-700 border border-green-200'
-                                    : status.toLowerCase() === 'pending'
-                                        ? 'bg-amber-100 text-amber-700 border border-amber-200'
-                                        : 'bg-gray-100 text-gray-600 border border-gray-200'
-                                    }`}>
-                                    {status}
-                                </span>
-                            )
-                        )}
-                        {!hasAttachment && !status && <span className="text-gray-400 text-sm">-</span>}
-                    </div>
-                );
-            }
+    const historyColumns: ColumnDef<DisplayPaymentHistory>[] = [
+        {
+            accessorKey: 'timestamp',
+            header: 'Date',
+            cell: ({ getValue }) => (
+                <span className="text-xs">{formatTimestamp(getValue() as string) || '-'}</span>
+            )
         },
         {
-            id: 'po_image',
-            header: 'PO Image',
+            accessorKey: 'apPaymentNumber',
+            header: 'AP No.',
+            cell: ({ row }) => (
+                <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded border border-blue-200">
+                    {row.original.apPaymentNumber || '-'}
+                </span>
+            )
+        },
+        {
+            accessorKey: 'uniqueNumber',
+            header: 'Payment No.',
+            cell: ({ row }) => (
+                <span className="text-xs font-medium">{row.original.uniqueNumber || '-'}</span>
+            )
+        },
+        {
+            accessorKey: 'fmsName',
+            header: 'Project Name',
+            cell: ({ row }) => (
+                <span className="text-xs font-medium text-slate-700">{row.original.fmsName || '-'}</span>
+            )
+        },
+        {
+            accessorKey: 'payTo',
+            header: 'Paid To',
+            cell: ({ row }) => (
+                <span className="text-xs font-semibold text-slate-800">{row.original.payTo || '-'}</span>
+            )
+        },
+        {
+            accessorKey: 'productName',
+            header: 'Product',
+            cell: ({ row }) => (
+                <span className="text-xs text-slate-600 truncate max-w-[120px] inline-block">
+                    {row.original.productName || '-'}
+                </span>
+            )
+        },
+        {
+            accessorKey: 'amountToBePaid',
+            header: 'Amount Paid',
+            cell: ({ row }) => (
+                <span className="font-bold text-emerald-700">₹{row.original.amountToBePaid?.toLocaleString('en-IN')}</span>
+            )
+        },
+        {
+            accessorKey: 'remarks',
+            header: 'Remarks',
+            cell: ({ row }) => (
+                <span className="text-xs italic text-slate-500 truncate max-w-[150px] inline-block">
+                    {row.original.remarks || '-'}
+                </span>
+            )
+        },
+        {
+            id: 'attachments',
+            header: 'Attachments',
             cell: ({ row }) => {
-                const url = row.original.pdf;
-                const hasAttachment = url?.trim() !== '';
+                const attachments = row.original.anyAttachments;
+                const bill = row.original.billImage;
                 return (
-                    <div>
-                        {hasAttachment ? (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => window.open(url, '_blank')}
-                                className="text-purple-600 hover:text-purple-700 h-8 font-medium"
-                            >
-                                <ExternalLink className="mr-2 h-3 w-3" />
-                                View PO
+                    <div className="flex gap-2">
+                        {attachments && (
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-600" asChild>
+                                <a href={attachments} target="_blank" rel="noopener noreferrer">
+                                    <ExternalLink className="h-3.5 w-3.5" />
+                                </a>
                             </Button>
-                        ) : (
-                            <span className="text-gray-400 text-sm">-</span>
+                        )}
+                        {bill && bill !== attachments && (
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-purple-600" asChild title="View Bill">
+                                <a href={bill} target="_blank" rel="noopener noreferrer">
+                                    <FileText className="h-3.5 w-3.5" />
+                                </a>
+                            </Button>
                         )}
                     </div>
                 );
@@ -949,590 +943,165 @@ export default function MakePayment() {
         }
     ];
 
-    const historyColumns: ColumnDef<DisplayPaymentHistory>[] = [
-        {
-            accessorKey: 'timestamp',
-            header: 'Timestamp',
-            cell: ({ row }) => (
-                <div className="text-sm text-gray-600 whitespace-nowrap">
-                    {formatTimestamp(row.original.timestamp)}
-                </div>
-            )
-        },
-        {
-            accessorKey: 'uniqueNumber',
-            header: 'Unique Number',
-            cell: ({ row }) => (
-                <div className="bg-gray-50 py-1 px-3 rounded-md inline-block border">
-                    {row.original.uniqueNumber || '-'}
-                </div>
-            )
-        },
-        {
-            accessorKey: 'apPaymentNumber',
-            header: 'AP Payment No.',
-            size: 130,
-            cell: ({ row }) => (
-                <div className="bg-gray-50 py-1 px-2 rounded-md inline-block border text-xs font-medium whitespace-nowrap">
-                    {row.original.apPaymentNumber || '-'}
-                </div>
-            )
-        },
-        {
-            accessorKey: 'payTo',
-            header: 'Pay To',
-            cell: ({ row }) => (
-                <span className="font-medium">{row.original.payTo || '-'}</span>
-            )
-        },
-        {
-            accessorKey: 'amountToBePaid',
-            header: 'Amount',
-            cell: ({ row }) => (
-                <span className="font-bold text-green-600">
-                    ₹{row.original.amountToBePaid?.toLocaleString('en-IN')}
-                </span>
-            )
-        },
-        {
-            accessorKey: 'paymentTerms',
-            header: 'Payment Terms',
-            cell: ({ row }) => (
-                <span className="text-sm italic text-gray-600">
-                    {row.original.paymentTerms || '-'}
-                </span>
-            )
-        },
-        {
-            accessorKey: 'status',
-            header: 'Status',
-            cell: ({ row }) => {
-                const status = row.original.status?.toLowerCase() || '';
-                const isPaid = status.includes('paid') || status.includes('completed') || status.includes('done');
-                const isPending = status.includes('pending') || status === '';
-
-                return (
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${isPaid
-                        ? 'bg-green-100 text-green-800 border border-green-300'
-                        : isPending
-                            ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                            : 'bg-gray-100 text-gray-800 border border-gray-300'
-                        }`}>
-                        {isPaid && <CheckCircle className="mr-1 h-3 w-3" />}
-                        {isPending && <AlertCircle className="mr-1 h-3 w-3" />}
-                        {row.original.status || 'Pending'}
-                    </span>
-                );
-            }
-        },
-        {
-            accessorKey: 'planned',
-            header: 'Planned Date',
-            cell: ({ row }) => (
-                <span className="text-sm text-gray-600">
-                    {formatDate(row.original.planned) || '-'}
-                </span>
-            )
-        },
-        {
-            id: 'bill_image',
-            header: 'Bill Image',
-            cell: ({ row }) => {
-                const url = row.original.billImage;
-                const status = row.original.billImageStatus;
-                const hasAttachment = url?.trim() !== '';
-                const isStatusUrl = status && (status.startsWith('http') || status.includes('drive.google.com') || status.includes('supabase.co'));
-
-                return (
-                    <div className="flex flex-col gap-1">
-                        {hasAttachment ? (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => window.open(url, '_blank')}
-                                className="text-emerald-600 hover:text-emerald-700 h-8 font-medium"
-                            >
-                                <ExternalLink className="mr-2 h-3 w-3" />
-                                View Bill
-                            </Button>
-                        ) : null}
-
-                        {status && (
-                            isStatusUrl ? (
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => window.open(status, '_blank')}
-                                    className="text-blue-600 hover:text-blue-700 h-8 font-medium"
-                                >
-                                    <ExternalLink className="mr-2 h-3 w-3" />
-                                    Store Bill
-                                </Button>
-                            ) : (
-                                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full inline-block text-center uppercase ${status.toLowerCase() === 'received' || status.toLowerCase() === 'ok'
-                                    ? 'bg-green-100 text-green-700 border border-green-200'
-                                    : status.toLowerCase() === 'pending'
-                                        ? 'bg-amber-100 text-amber-700 border border-amber-200'
-                                        : 'bg-gray-100 text-gray-600 border border-gray-200'
-                                    }`}>
-                                    {status}
-                                </span>
-                            )
-                        )}
-                        {!hasAttachment && !status && <span className="text-gray-400 text-sm">-</span>}
-                    </div>
-                );
-            }
-        },
-        {
-            id: 'po_image',
-            header: 'PO Image',
-            cell: ({ row }) => {
-                const url = row.original.poImage;
-                const hasAttachment = url?.trim() !== '';
-                return (
-                    <div>
-                        {hasAttachment ? (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => window.open(url, '_blank')}
-                                className="text-purple-600 hover:text-purple-700 h-8 font-medium"
-                            >
-                                <ExternalLink className="mr-2 h-3 w-3" />
-                                View PO
-                            </Button>
-                        ) : (
-                            <span className="text-gray-400 text-sm">-</span>
-                        )}
-                    </div>
-                );
-            }
-        },
-        {
-            accessorKey: 'remarks',
-            header: 'Remarks',
-            size: 160,
-            cell: ({ row }) => (
-                <span className="text-sm text-gray-600 break-words whitespace-normal leading-snug block max-w-[160px]">
-                    {row.original.remarks || '-'}
-                </span>
-            )
-        },
-    ];
-
-    const handleRefresh = () => {
-        console.log('🔄 Manually refreshing data...');
-        updateAll();
-    };
-
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 p-4 md:p-6">
-            <div className="mx-auto max-w-7xl">
-                {/* Header Section */}
-                <div className="mb-6">
-                    <div className="flex items-center justify-between gap-3 mb-4">
-                        <div className="flex items-center gap-3">
-                            <div className="p-3 bg-blue-600 rounded-lg shadow">
-                                <DollarSign size={28} className="text-white" />
-                            </div>
-                            <div>
-                                <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Make Payment</h1>
-                                <p className="text-gray-600">Select payments to mark as completed and submit</p>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            {activeTab === 'pending' && selectedRows.size > 0 && (
-                                <div className="flex items-center gap-2 bg-blue-50 px-3 py-2 rounded-lg">
-                                    <CheckSquare className="h-4 w-4 text-blue-600" />
-                                    <span className="text-sm font-medium text-blue-700">
-                                        {selectedRows.size} selected
-                                    </span>
-                                </div>
-                            )}
-                            <Button
-                                onClick={handleRefresh}
-                                variant="outline"
-                                size="sm"
-                                className="flex items-center gap-2"
-                            >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                </svg>
-                                Refresh
-                            </Button>
-                        </div>
+        <div className="container mx-auto py-6 space-y-6 max-w-7xl">
+            <div className="flex justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                <div className="flex items-center gap-4">
+                    <div className="bg-primary/10 p-3 rounded-full">
+                        <DollarSign size={32} className="text-primary" />
                     </div>
-
-                    {/* Stats Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                        <Card className="bg-white shadow border-0 hover:shadow-md transition-shadow">
-                            <CardContent className="p-5">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm font-medium text-gray-600">Pending Payments</p>
-                                        <p className="text-2xl font-bold text-blue-600 mt-1">{stats.total}</p>
-                                    </div>
-                                    <FileText className="h-10 w-10 text-blue-500" />
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* <Card className="bg-white shadow border-0 hover:shadow-md transition-shadow">
-                            <CardContent className="p-5">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm font-medium text-gray-600">Outstanding Amount</p>
-                                        <p className="text-2xl font-bold text-red-600 mt-1">
-                                            ₹{stats.totalAmount.toLocaleString('en-IN')}
-                                        </p>
-                                    </div>
-                                    <DollarSign className="h-10 w-10 text-red-500" />
-                                </div>
-                            </CardContent>
-                        </Card>
-                         */}
-                        <Card className="bg-white shadow border-0 hover:shadow-md transition-shadow">
-                            <CardContent className="p-5">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm font-medium text-gray-600">Payment History</p>
-                                        <p className="text-2xl font-bold text-purple-600 mt-1">
-                                            {stats.historyCount}
-                                        </p>
-                                    </div>
-                                    <History className="h-10 w-10 text-purple-500" />
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        <Card className="bg-white shadow border-0 hover:shadow-md transition-shadow">
-                            <CardContent className="p-5">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm font-medium text-gray-600">Selected</p>
-                                        <p className="text-2xl font-bold text-green-600 mt-1">
-                                            {activeTab === 'pending' ? selectedRows.size : 0}
-                                        </p>
-                                    </div>
-                                    <div className={`h-10 w-10 flex items-center justify-center rounded-full ${stats.pendingCount > 0 ? 'bg-amber-100' : 'bg-green-100'
-                                        }`}>
-                                        {stats.pendingCount > 0 ? (
-                                            <AlertCircle className="h-6 w-6 text-amber-600" />
-                                        ) : (
-                                            <CheckCircle className="h-6 w-6 text-green-600" />
-                                        )}
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
+                    <div>
+                        <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Make Payment</h1>
+                        <p className="text-slate-500 text-sm">Schedule and confirm vendor transactions</p>
                     </div>
                 </div>
-
-                {/* Main Content Card */}
-                <Card className="bg-white shadow-lg border-0 mb-6">
-                    <CardHeader className="pb-4">
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div>
-                                <CardTitle className="text-xl font-bold text-gray-800">Payment Management</CardTitle>
-                                <p className="text-gray-600">Manage pending payments and view payment history</p>
-                            </div>
-                            {activeTab === 'pending' && selectedRows.size > 0 && (
-                                <div className="flex items-center gap-3">
-                                    <div className="text-sm text-gray-500">
-                                        {selectedRows.size > 0 ? (
-                                            <span className="font-medium text-green-600">
-                                                {selectedRows.size} payment(s) selected
-                                            </span>
-                                        ) : (
-                                            'Select payments to submit'
-                                        )}
-                                    </div>
-                                    <Button
-                                        onClick={handleSubmitSelected}
-                                        disabled={isSubmitting}
-                                        className="bg-green-600 hover:bg-green-700"
-                                    >
-                                        {isSubmitting ? (
-                                            <>
-                                                <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
-                                                Submitting...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <CheckSquare className="mr-2 h-4 w-4" />
-                                                Submit Selected ({selectedRows.size})
-                                            </>
-                                        )}
-                                    </Button>
-                                </div>
-                            )}
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                            <TabsList className="grid w-full max-w-md grid-cols-2 mb-6">
-                                <TabsTrigger value="pending" className="flex items-center gap-2">
-                                    <AlertCircle className="h-4 w-4" />
-                                    Pending Payments
-                                    {stats.pendingCount > 0 && (
-                                        <span className="bg-red-100 text-red-800 text-xs font-medium px-2 py-0.5 rounded-full">
-                                            {stats.pendingCount}
-                                        </span>
-                                    )}
-                                </TabsTrigger>
-                                <TabsTrigger value="history" className="flex items-center gap-2">
-                                    <History className="h-4 w-4" />
-                                    Payment History
-                                    {stats.historyCount > 0 && (
-                                        <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-0.5 rounded-full">
-                                            {stats.historyCount}
-                                        </span>
-                                    )}
-                                </TabsTrigger>
-                            </TabsList>
-
-                            {/* Pending Payments Tab */}
-                            <TabsContent value="pending">
-                                {paymentsLoading ? (
-                                    <div className="text-center py-12">
-                                        <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600 mb-4"></div>
-                                        <h3 className="text-lg font-semibold text-gray-700 mb-2">Loading Payment Data...</h3>
-                                        <p className="text-gray-500">Fetching data from Payments</p>
-                                        <Button
-                                            onClick={handleRefresh}
-                                            variant="outline"
-                                            className="mt-4"
-                                        >
-                                            Retry Loading
-                                        </Button>
-                                    </div>
-                                ) : pendingData.length > 0 ? (
-                                    <>
-                                        {/* Selection Summary Bar */}
-                                        {selectedRows.size > 0 && (
-                                            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-2">
-                                                        <CheckSquare className="h-5 w-5 text-green-600" />
-                                                        <span className="font-medium text-green-800">
-                                                            {selectedRows.size} payment(s) selected
-                                                        </span>
-                                                        <span className="text-sm text-green-600">
-                                                            - Will update: Actual date to {formatCurrentDate()}, Status to "Completed", Status1 to "ok"
-                                                        </span>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            onClick={() => setSelectedRows(new Set())}
-                                                            className="text-red-600 hover:text-red-700 border-red-200 hover:border-red-300"
-                                                        >
-                                                            <XSquare className="mr-1 h-3 w-3" />
-                                                            Clear All
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Data Table */}
-                                        <DataTable<DisplayPayment, ColumnDef<DisplayPayment>>
-                                            data={pendingData}
-                                            columns={pendingColumns}
-                                            searchFields={['uniqueNo', 'poNumber', 'partyName', 'product', 'internalCode', 'firmNameMatch']}
-                                            dataLoading={false}
-                                            className="border rounded-lg"
-                                        />
-                                    </>
-                                ) : (
-                                    <div className="text-center py-12">
-                                        <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                                        <h3 className="text-lg font-semibold text-gray-700 mb-2">No Pending Payment Forms</h3>
-                                        <div className="mt-6">
-                                            <Button
-                                                onClick={handleRefresh}
-                                                variant="default"
-                                            >
-                                                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                                </svg>
-                                                Refresh Data
-                                            </Button>
-                                        </div>
-                                    </div>
-                                )}
-                            </TabsContent>
-
-                            {/* Payment History Tab */}
-                            <TabsContent value="history">
-                                {paymentHistoryLoading ? (
-                                    <div className="text-center py-12">
-                                        <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600 mb-4"></div>
-                                        <h3 className="text-lg font-semibold text-gray-700 mb-2">Loading Payment History...</h3>
-                                        <p className="text-gray-500">Fetching data from Payment History</p>
-                                    </div>
-                                ) : historyData.length > 0 ? (
-                                    <>
-                                        <div className="mb-4 p-4 bg-gray-50 rounded-lg">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <History className="h-5 w-5 text-gray-600" />
-                                                    <span className="font-medium text-gray-700">
-                                                        Total Records: {stats.historyCount}
-                                                    </span>
-                                                </div>
-                                                <div className="text-sm text-gray-500">
-                                                    Last updated: {formatCurrentDateTime()}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <DataTable<DisplayPaymentHistory, ColumnDef<DisplayPaymentHistory>>
-                                            data={historyData}
-                                            columns={historyColumns}
-                                            searchFields={['apPaymentNumber', 'uniqueNumber', 'fmsName', 'payTo', 'remarks']}
-                                            dataLoading={false}
-                                            className="border rounded-lg"
-                                        />
-                                    </>
-                                ) : (
-                                    <div className="text-center py-12">
-                                        <History className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                                        <h3 className="text-lg font-semibold text-gray-700 mb-2">No Payment History Found</h3>
-                                        <p className="text-gray-500">No payment history records available</p>
-                                    </div>
-                                )}
-                            </TabsContent>
-                        </Tabs>
-                    </CardContent>
-                </Card>
+                <div className="flex gap-6">
+                    <Card className="shadow-none border-none bg-emerald-50/50">
+                        <CardContent className="p-3 flex flex-col items-center">
+                            <span className="text-xs text-emerald-600 font-semibold uppercase tracking-wider">Total Pending</span>
+                            <span className="text-2xl font-bold text-emerald-700">₹{stats.totalAmount.toLocaleString('en-IN')}</span>
+                        </CardContent>
+                    </Card>
+                    <Card className="shadow-none border-none bg-blue-50/50">
+                        <CardContent className="p-3 flex flex-col items-center">
+                            <span className="text-xs text-blue-600 font-semibold uppercase tracking-wider">Pending Tasks</span>
+                            <span className="text-2xl font-bold text-blue-700">{stats.pendingCount}</span>
+                        </CardContent>
+                    </Card>
+                </div>
             </div>
-            
+
+            <Tabs defaultValue="pending" className="w-full" onValueChange={setActiveTab}>
+                <div className="flex justify-between items-center mb-4">
+                    <TabsList className="bg-slate-100/50 p-1">
+                        <TabsTrigger value="pending" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                            <DollarSign className="w-4 h-4 mr-2" />
+                            Pending Payments
+                        </TabsTrigger>
+                        <TabsTrigger value="history" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                            <History className="w-4 h-4 mr-2" />
+                            Payment History
+                        </TabsTrigger>
+                    </TabsList>
+
+                    {activeTab === 'pending' && selectedRows.size > 0 && (
+                        <Button 
+                            onClick={handleSubmitSelected} 
+                            disabled={isSubmitting}
+                            className="bg-primary hover:bg-primary/90 shadow-md"
+                        >
+                            {isSubmitting ? 'Updating...' : `Mark ${selectedRows.size} as Paid`}
+                        </Button>
+                    )}
+                </div>
+
+                <TabsContent value="pending">
+                    <Card className="border-slate-200 shadow-sm overflow-hidden">
+                        <CardContent className="p-0">
+                            <DataTable
+                                columns={pendingColumns}
+                                data={pendingData}
+                                dataLoading={paymentsLoading}
+                                searchFields={['partyName', 'uniqueNo', 'poNumber', 'internalCode', 'firmNameMatch']}
+                            />
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="history">
+                    <Card className="border-slate-200 shadow-sm overflow-hidden">
+                        <CardContent className="p-0">
+                            <DataTable
+                                columns={historyColumns}
+                                data={historyData}
+                                dataLoading={paymentHistoryLoading}
+                                searchFields={['payTo', 'uniqueNumber', 'apPaymentNumber', 'fmsName']}
+                            />
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+            </Tabs>
+
             {/* Payment Confirmation Modal */}
             <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
                 <DialogContent className="sm:max-w-[500px]">
                     <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                            <DollarSign className="h-5 w-5 text-green-600" />
-                            Confirm Payment Completion
-                        </DialogTitle>
+                        <DialogTitle className="text-xl">Confirm Payment</DialogTitle>
                         <DialogDescription>
-                            Please record the payment details for {selectedPaymentItem?.partyName}.
+                            Enter details for payment <span className="font-bold text-primary">{selectedPaymentItem?.uniqueNo}</span>
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="grid gap-6 py-4">
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="flex flex-col gap-1.5 p-3 bg-purple-50 rounded-lg border border-purple-100">
-                                <span className="text-[10px] font-bold text-purple-600 uppercase">Payment No.</span>
-                                <span className="font-semibold text-gray-800">{selectedPaymentItem?.uniqueNo}</span>
+                            <div className="space-y-2">
+                                <Label className="text-slate-600">Vendor</Label>
+                                <div className="text-sm font-semibold p-2 bg-slate-50 rounded border">{selectedPaymentItem?.partyName}</div>
                             </div>
-                            <div className="flex flex-col gap-1.5 p-3 bg-amber-50 rounded-lg border border-amber-100">
-                                <span className="text-[10px] font-bold text-amber-600 uppercase">Total Amount</span>
-                                <span className="font-bold text-gray-800">₹{selectedPaymentItem?.totalPoAmount.toLocaleString('en-IN')}</span>
-                            </div>
-                            <div className="flex flex-col gap-1.5 p-3 bg-green-50 rounded-lg border border-green-100">
-                                <span className="text-[10px] font-bold text-green-600 uppercase">Paid Amount</span>
-                                <span className="font-bold text-gray-800">₹{selectedPaymentItem?.payAmount.toLocaleString('en-IN')}</span>
-                            </div>
-                            <div className="flex flex-col gap-1.5 p-3 bg-red-50 rounded-lg border border-red-100">
-                                <span className="text-[10px] font-bold text-red-600 uppercase">Pending Amount</span>
-                                <span className="font-bold text-gray-800">
-                                    ₹{((Number(selectedPaymentItem?.totalPoAmount) || 0) - (Number(selectedPaymentItem?.payAmount) || 0)).toLocaleString('en-IN')}
-                                </span>
+                            <div className="space-y-2">
+                                <Label className="text-slate-600">PO Number</Label>
+                                <div className="text-sm font-semibold p-2 bg-slate-50 rounded border">{selectedPaymentItem?.poNumber}</div>
                             </div>
                         </div>
 
-                        <div className="space-y-4">
-                            <div className="grid gap-2">
-                                <Label htmlFor="amount" className="text-sm font-semibold">Payment Amount (₹)</Label>
-                                <Input
-                                    id="amount"
-                                    type="number"
-                                    value={paymentModalAmount}
-                                    onChange={(e) => setPaymentModalAmount(e.target.value)}
-                                    className="font-bold text-gray-800"
-                                    placeholder="Enter amount"
-                                />
-                            </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="amount">Payment Amount (₹)</Label>
+                            <Input
+                                id="amount"
+                                type="number"
+                                value={paymentModalAmount}
+                                onChange={(e) => setPaymentModalAmount(e.target.value)}
+                                placeholder="Enter amount paid"
+                                className="text-lg font-bold text-emerald-700"
+                            />
+                        </div>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="status" className="text-sm font-semibold">Payment Status</Label>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="status">Status</Label>
                                 <Select value={paymentModalStatus} onValueChange={setPaymentModalStatus}>
-                                    <SelectTrigger id="status" className="w-full">
+                                    <SelectTrigger id="status">
                                         <SelectValue placeholder="Select status" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="Complete">Complete</SelectItem>
-                                        <SelectItem value="Pending">Pending</SelectItem>
-                                        <SelectItem value="On Hold">On Hold</SelectItem>
+                                        <SelectItem value="Complete">Complete (Paid)</SelectItem>
+                                        <SelectItem value="Partial">Partial Payment</SelectItem>
+                                        <SelectItem value="Scheduled">Scheduled</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="attachment" className="text-sm font-semibold">Attachment (Proof of Payment)</Label>
+                            <div className="space-y-2">
+                                <Label htmlFor="file">Attachment (Proof)</Label>
                                 <Input
-                                    id="attachment"
+                                    id="file"
                                     type="file"
-                                    onChange={(e) => {
-                                        const file = e.target.files?.[0];
-                                        if (file) setPaymentModalFile(file);
-                                    }}
+                                    onChange={(e) => setPaymentModalFile(e.target.files?.[0] || null)}
                                     className="cursor-pointer"
-                                />
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="remark" className="text-sm font-semibold">Remarks</Label>
-                                <Textarea
-                                    id="remark"
-                                    placeholder="Add any internal payment notes..."
-                                    value={paymentModalRemark}
-                                    onChange={(e) => setPaymentModalRemark(e.target.value)}
-                                    className="min-h-[100px] resize-none"
                                 />
                             </div>
                         </div>
 
-                        {/* {selectedPaymentItem?.paymentForm && (
-                            <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg flex items-center justify-between">
-                                <div className="flex flex-col">
-                                    <span className="text-xs font-semibold text-blue-700">External Payment Link</span>
-                                    <span className="text-[10px] text-blue-500">A form link is available for this payment</span>
-                                </div>
-                                <Button 
-                                    size="sm" 
-                                    variant="link" 
-                                    className="text-blue-600 h-8 p-0"
-                                    onClick={() => window.open(selectedPaymentItem.paymentForm, '_blank')}
-                                >
-                                    <ExternalLink className="h-3 w-3 mr-1" />
-                                    Open Form
-                                </Button>
-                            </div>
-                        )} */}
+                        <div className="space-y-2">
+                            <Label htmlFor="remark">Remarks</Label>
+                            <Textarea
+                                id="remark"
+                                value={paymentModalRemark}
+                                onChange={(e) => setPaymentModalRemark(e.target.value)}
+                                placeholder="Add internal payment notes..."
+                                className="resize-none"
+                                rows={3}
+                            />
+                        </div>
                     </div>
 
                     <DialogFooter className="gap-2 sm:gap-0">
-                        <Button variant="outline" onClick={() => setIsPaymentModalOpen(false)}>
-                            Cancel
-                        </Button>
+                        <Button variant="outline" onClick={() => setIsPaymentModalOpen(false)}>Cancel</Button>
                         <Button 
-                            className="bg-green-600 hover:bg-green-700 text-white shadow-md transition-all hover:scale-[1.02]"
-                            onClick={handleSinglePaymentSubmit}
-                            disabled={isSubmitting}
+                            onClick={handleSinglePaymentSubmit} 
+                            disabled={isSubmitting || !paymentModalAmount}
+                            className="bg-primary hover:bg-primary/90 shadow-md min-w-[120px]"
                         >
-                            {isSubmitting ? (
-                                <div className="flex items-center gap-2">
-                                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                                    Processing...
-                                </div>
-                            ) : (
-                                "Record & Complete"
-                            )}
+                            {isSubmitting ? 'Processing...' : 'Confirm Payment'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

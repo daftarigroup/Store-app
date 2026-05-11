@@ -60,8 +60,10 @@ export default function AgainAuditingTable() {
   };
 
   useEffect(() => {
-    fetchData();
-  }, [user.firm_access]);
+    if (user?.username) {
+      fetchData();
+    }
+  }, [user?.username, user?.firm_access]);
 
   // Validation schema
   const schema = z.object({

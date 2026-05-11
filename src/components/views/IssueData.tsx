@@ -68,14 +68,14 @@ export default function IssueData() {
                 <IssuePdf
                     type={type}
                     issueNumber={issueNumber}
-                    date={new Date().toLocaleString('en-IN', { 
-                        day: '2-digit', 
-                        month: '2-digit', 
-                        year: 'numeric', 
-                        hour: '2-digit', 
-                        minute: '2-digit', 
+                    date={new Date().toLocaleString('en-IN', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
                         second: '2-digit',
-                        hour12: true 
+                        hour12: true
                     })}
                     constructorName={data.constructorName}
                     siteLocation={data.siteLocation}
@@ -129,24 +129,18 @@ export default function IssueData() {
 
     useEffect(() => {
         fetchData();
-    }, [user.firmNameMatch]);
+    }, [user?.firm_access]);
 
     const returnData = useMemo(() => {
-        return allData.filter(i => i.rejected_damage_qty && i.rejected_damage_qty !== '0' && i.rejected_damage_qty !== '');
+        return allData.filter(i => i.return_slip || i.return_person_name || (i.rejected_damage_qty && i.rejected_damage_qty !== '0' && i.rejected_damage_qty !== ''));
     }, [allData]);
 
     const pendingData = useMemo(() => {
-        return allData.filter(i => 
-            i.planned1 && !i.actual1 && 
-            !(i.rejected_damage_qty && i.rejected_damage_qty !== '0' && i.rejected_damage_qty !== '')
-        );
+        return allData.filter(i => i.planned1 && !i.actual1);
     }, [allData]);
 
     const historyData = useMemo(() => {
-        return allData.filter(i => 
-            i.planned1 && i.actual1 && 
-            !(i.rejected_damage_qty && i.rejected_damage_qty !== '0' && i.rejected_damage_qty !== '')
-        );
+        return allData.filter(i => i.planned1 && i.actual1);
     }, [allData]);
 
     const handleDownload = (data: any[]) => {
@@ -434,16 +428,16 @@ export default function IssueData() {
                             columns={returnColumns}
                             searchFields={['product_name', 'issue_no', 'issue_to', 'constructor_name', 'site_location', 'firm_name', 'return_person_name']}
                             dataLoading={dataLoading}
-                            // extraActions={
-                            //     <Button
-                            //         variant="default"
-                            //         onClick={() => handleDownload(returnData)}
-                            //         className="bg-gradient-to-r from-orange-500 to-red-600 border-none rounded-lg font-bold shadow-md flex items-center gap-2 px-4"
-                            //     >
-                            //         <DownloadOutlined />
-                            //         Download Returns
-                            //     </Button>
-                            // }
+                        // extraActions={
+                        //     <Button
+                        //         variant="default"
+                        //         onClick={() => handleDownload(returnData)}
+                        //         className="bg-gradient-to-r from-orange-500 to-red-600 border-none rounded-lg font-bold shadow-md flex items-center gap-2 px-4"
+                        //     >
+                        //         <DownloadOutlined />
+                        //         Download Returns
+                        //     </Button>
+                        // }
                         />
                     </TabsContent>
                     <TabsContent value="history">

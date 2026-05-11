@@ -1,7 +1,7 @@
 
 
 
-import { ChevronDown, ChevronUp, FilePlus2, Pencil, Save, Trash } from 'lucide-react';
+import { ChevronDown, ChevronUp, FilePlus2, Pencil, Plus, Save, Trash, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -17,6 +17,7 @@ import { fetchMasterOptions, fetchMasterRecords } from '@/services/masterService
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useSheets } from '@/context/SheetsContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { useAuth } from '@/context/AuthContext';
 import { cn, formatDate } from '@/lib/utils';
 import { toast } from 'sonner';
 import { ClipLoader as Loader } from 'react-spinners';
@@ -118,6 +119,8 @@ const Badge = ({ children, className, onClick }: {
 
 
 export default function QuotationPage() {
+  const { user } = useAuth();
+
   const { indentSheet, poMasterSheet, updateIndentSheet, updatePoMasterSheet, masterSheet: details } = useSheets();
   const [mode, setMode] = useState<Mode>('create');
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
@@ -290,11 +293,7 @@ export default function QuotationPage() {
   });
 
 
-  useEffect(() => {
-    if (details?.defaultTerms) {
-      form.setValue('terms', details.defaultTerms);
-    }
-  }, [details]);
+  
 
 
   // Auto-generate quotation number in create mode - FIXED
@@ -452,6 +451,7 @@ export default function QuotationPage() {
           description: values.description || '',
           items: selectedItemsData.map(item => ({
             internalCode: item.indentNumber,
+            project: item.firmNameMatch || 'N/A',
             product: item.productName,
             description: item.specifications,
             quantity: item.quantity,
@@ -612,7 +612,7 @@ export default function QuotationPage() {
               <TableHead className="font-bold">Date</TableHead>
               <TableHead className="font-bold">Enquiry No</TableHead>
               <TableHead className="font-bold">Supplier</TableHead>
-              <TableHead className="font-bold">Firm</TableHead>
+              <TableHead className="font-bold">Project</TableHead>
               <TableHead className="font-bold">Items Count</TableHead>
               <TableHead className="font-bold text-right pr-4">Action</TableHead>
             </TableRow>
@@ -667,21 +667,28 @@ export default function QuotationPage() {
                             <Table>
                               <TableHeader>
                                 <TableRow className="bg-slate-100/80">
-                                  <TableHead className="h-9 text-xs font-bold text-slate-600">Indent No</TableHead>
-                                  <TableHead className="h-9 text-xs font-bold text-slate-600">Product</TableHead>
-                                  <TableHead className="h-9 text-xs font-bold text-slate-600">Description</TableHead>
-                                  <TableHead className="h-9 text-xs font-bold text-slate-600 text-center">Qty</TableHead>
-                                  <TableHead className="h-9 text-xs font-bold text-slate-600">Unit</TableHead>
+                                  <TableHead className="h-9 text-xs font-bold text-slate-600">SR.</TableHead>
+                                  <TableHead className="h-9 text-xs font-bold text-slate-600">INDENT NO</TableHead>
+                                  <TableHead className="h-9 text-xs font-bold text-slate-600">PROJECT</TableHead>
+                                  <TableHead className="h-9 text-xs font-bold text-slate-600">PRODUCT</TableHead>
+
+                                  <TableHead className="h-9 text-xs font-bold text-slate-600 text-center">QTY</TableHead>
+                                  <TableHead className="h-9 text-xs font-bold text-slate-600">UNIT</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
                                 {group.items.map((item, i) => (
                                   <TableRow key={i} className="hover:bg-slate-50 border-b last:border-0">
+                                    <TableCell className="py-2.5 text-xs text-slate-600">{i + 1}</TableCell>
                                     <TableCell className="py-2.5 text-xs text-slate-600">{item.indentNo}</TableCell>
-                                    <TableCell className="py-2.5 text-xs font-medium text-slate-900">{item.product}</TableCell>
-                                    <TableCell className="py-2.5 text-xs text-slate-500 max-w-sm truncate" title={item.description}>
-                                      {item.description || '-'}
+                                    <TableCell className="py-2.5 text-xs text-slate-600">{item.firm || 'N/A'}</TableCell>
+                                    <TableCell className="py-2.5 text-xs font-medium text-slate-900">
+                                      <div>{item.product}</div>
+                                      {item.description && <div className="text-[10px] text-slate-400 font-normal">{item.description}</div>}
                                     </TableCell>
+
+
+
                                     <TableCell className="py-2.5 text-xs text-center font-semibold text-slate-700">{item.qty}</TableCell>
                                     <TableCell className="py-2.5 text-xs text-slate-600">{item.unit}</TableCell>
                                   </TableRow>
@@ -853,6 +860,9 @@ export default function QuotationPage() {
             )}
           />
 
+
+
+
           <hr />
 
           <div className="mx-4 grid overflow-y-auto overflow-x-auto max-h-[500px]">
@@ -862,15 +872,16 @@ export default function QuotationPage() {
                   <TableHead className="w-12">
                     <Checkbox checked={selectedItems.length === eligibleItems.length && eligibleItems.length > 0} onCheckedChange={handleSelectAll} />
                   </TableHead>
-                  <TableHead>S/N</TableHead>
-                  <TableHead>Internal Code</TableHead>
-                  <TableHead>Firm</TableHead>
-                  <TableHead>Product</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Qty</TableHead>
-                  <TableHead>Unit</TableHead>
+                  <TableHead>SR.</TableHead>
+                  <TableHead>INDENT NO</TableHead>
+                  <TableHead>PROJECT</TableHead>
+                  <TableHead>PRODUCT</TableHead>
+
+                  <TableHead>QTY</TableHead>
+                  <TableHead>UNIT</TableHead>
                 </TableRow>
-              </TableHeader>              <TableBody>
+              </TableHeader>
+              <TableBody>
                 {eligibleItems.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center text-muted-foreground py-10 text-xl font-bold">
@@ -886,8 +897,11 @@ export default function QuotationPage() {
                       <TableCell>{index + 1}</TableCell>
                       <TableCell>{item.indentNumber}</TableCell>
                       <TableCell>{item.firmNameMatch || 'N/A'}</TableCell>
-                      <TableCell>{item.productName}</TableCell>
-                      <TableCell>{item.specifications || <span>No Description</span>}</TableCell>
+                      <TableCell>
+                        <div className="font-medium">{item.productName}</div>
+                        {item.specifications && <div className="text-xs text-muted-foreground">{item.specifications}</div>}
+                      </TableCell>
+
                       <TableCell>{item.quantity}</TableCell>
                       <TableCell>{item.uom}</TableCell>
                     </TableRow>
@@ -895,6 +909,63 @@ export default function QuotationPage() {
                 )}
               </TableBody>
             </Table>
+          </div>
+
+          <hr />
+
+          <div className="space-y-4 px-4 py-2">
+            <div className="flex items-center justify-between">
+              <FormLabel className="text-base font-bold text-slate-800">TERMS & CONDITIONS</FormLabel>
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="sm" 
+                onClick={() => termsArray.append('')}
+                className="h-8 flex items-center gap-1 text-blue-600 border-blue-200 hover:bg-blue-50"
+              >
+                <Plus size={16} />
+                Add Term
+              </Button>
+            </div>
+            
+            <div className="space-y-3">
+              {termsArray.fields.map((field, index) => (
+                <div key={field.id} className="flex items-start gap-2 group">
+                  <span className="mt-2 text-sm font-medium text-slate-400 w-4">{index + 1}.</span>
+                  <div className="flex-1">
+                    <FormField
+                      control={form.control as any}
+                      name={`terms.${index}`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              placeholder={`Term ${index + 1}`} 
+                              className="h-9 focus:ring-1 focus:ring-blue-400"
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => termsArray.remove(index)}
+                    className="h-9 w-9 p-0 text-slate-400 hover:text-red-500 hover:bg-red-50"
+                  >
+                    <X size={16} />
+                  </Button>
+                </div>
+              ))}
+              {termsArray.fields.length === 0 && (
+                <p className="text-sm text-center text-slate-400 py-2 bg-slate-50 rounded border border-dashed">
+                  No terms added. Click "Add Term" to manually enter terms and conditions.
+                </p>
+              )}
+            </div>
           </div>
         </div>
 

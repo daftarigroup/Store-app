@@ -18,11 +18,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     logoContainer: {
-        width: '30%',
+        width: '40%',
     },
     logo: {
-        width: 80,
-        height: 50,
+        width: 180,
+        height: 80,
         objectFit: 'contain',
     },
     companyInfo: {
@@ -134,12 +134,12 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         borderRight: '1 solid #000000',
     },
-    colSr: { width: '8%' },
+    colSr: { width: '6%' },
     colInternal: { width: '15%' },
-    colProduct: { width: '37%' },
-    colQty: { width: '15%' },
+    colProject: { width: '15%' },
+    colProduct: { width: '44%' },
+    colQty: { width: '10%' },
     colUnit: { width: '10%' },
-    colRate: { width: '15%' },
     
     rightAlign: { textAlign: 'right' },
     centerAlign: { textAlign: 'center' },
@@ -195,6 +195,7 @@ export interface POPdfProps {
     description?: string;
     items: {
         internalCode: string;
+        project: string;
         product: string;
         description: string;
         quantity: number;
@@ -287,23 +288,23 @@ const QuotationPdf = (props: POPdfProps) => {
                         <View style={styles.tableHeaderRow}>
                             <Text style={[styles.tableHeaderCell, styles.colSr]}>SR.</Text>
                             <Text style={[styles.tableHeaderCell, styles.colInternal]}>INDENT NO</Text>
-                            <Text style={[styles.tableHeaderCell, styles.colProduct]}>PRODUCT / DESCRIPTION</Text>
+                            <Text style={[styles.tableHeaderCell, styles.colProject]}>PROJECT</Text>
+                            <Text style={[styles.tableHeaderCell, styles.colProduct]}>PRODUCT</Text>
                             <Text style={[styles.tableHeaderCell, styles.colQty]}>QTY</Text>
                             <Text style={[styles.tableHeaderCell, styles.colUnit]}>UNIT</Text>
-                            <Text style={[styles.tableHeaderCell, styles.colRate]}>REMARKS</Text>
                         </View>
 
                         {items.map((item, index) => (
                             <View key={index} style={styles.tableRow}>
                                 <Text style={[styles.tableCell, styles.colSr]}>{String(index + 1)}</Text>
                                 <Text style={[styles.tableCell, styles.colInternal]}>{String(item.internalCode || '')}</Text>
+                                <Text style={[styles.tableCell, styles.colProject]}>{String(item.project || 'N/A')}</Text>
                                 <View style={[styles.tableCell, styles.colProduct, { textAlign: 'left' }]}>
                                     <Text style={{ fontFamily: 'Helvetica-Bold' }}>{String(item.product || '')}</Text>
                                     <Text style={{ fontSize: 7, color: '#666' }}>{String(item.description || '')}</Text>
                                 </View>
                                 <Text style={[styles.tableCell, styles.colQty]}>{String(item.quantity || '0')}</Text>
                                 <Text style={[styles.tableCell, styles.colUnit]}>{String(item.unit || '')}</Text>
-                                <Text style={[styles.tableCell, styles.colRate]}>-</Text>
                             </View>
                         ))}
                     </View>
@@ -320,9 +321,11 @@ const QuotationPdf = (props: POPdfProps) => {
 
                     <View style={styles.signatureContainer}>
                         <View style={styles.signatureBox}>
+                            <Text style={[styles.infoValue, { marginBottom: 2 }]}>Pooja Constructions</Text>
                             <Text style={styles.companyText}>Prepared By</Text>
                         </View>
                         <View style={styles.signatureBox}>
+                            <Text style={[styles.infoValue, { marginBottom: 2 }]}>{supplierName}</Text>
                             <Text style={styles.companyText}>Authorized Signatory</Text>
                         </View>
                     </View>

@@ -55,7 +55,7 @@ interface HistoryData {
 
 export default () => {
     const { user } = useAuth();
-    const userFirms = normalizeFirmAccess(user.firm_access) || [];
+    const userFirms = normalizeFirmAccess(user?.firm_access) || [];
 
     const [selectedIndent, setSelectedIndent] = useState<RateApprovalData | null>(null);
     const [selectedHistory, setSelectedHistory] = useState<HistoryData | null>(null);
@@ -157,8 +157,10 @@ export default () => {
     };
 
     useEffect(() => {
-        fetchPendingApprovals();
-    }, [user.firm_access]);
+        if (user?.username) {
+            fetchPendingApprovals();
+        }
+    }, [user?.username, user?.firm_access]);
 
 
     // Fetch completed three party approvals from Supabase
@@ -209,9 +211,11 @@ export default () => {
     };
 
     useEffect(() => {
-        fetchPendingApprovals();
-        fetchCompletedApprovals();
-    }, [user.firm_access]);
+        if (user?.username) {
+            fetchPendingApprovals();
+            fetchCompletedApprovals();
+        }
+    }, [user?.username, user?.firm_access]);
 
     const columns: ColumnDef<RateApprovalData>[] = [
         ...(user.threePartyApprovalAction

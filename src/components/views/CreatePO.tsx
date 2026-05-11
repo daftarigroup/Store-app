@@ -162,6 +162,7 @@ interface IndentSheetItem {
     taxValue1?: string | number;
     taxValue4?: string | number;
     approvedQuantity?: number;
+    indentQuantity?: number;
     uom?: string;
     approvedRate?: number;
     quotationNumber?: string;
@@ -310,7 +311,7 @@ const CreatePO = () => {
         } finally {
             setDataLoading(false);
         }
-    }, []);
+    }, [user?.username, user?.firm_access]);
 
     useEffect(() => {
         loadData();
@@ -487,35 +488,7 @@ const CreatePO = () => {
             })
         );
 
-        // Dynamic Terms Population based on Product and Vendor Type
-        const newTerms: string[] = [];
-        const masterDetails = details as MasterDetails;
-
-        if (masterDetails && masterDetails.items) {
-            matchingIndents.forEach((indent: IndentSheetItem) => {
-                const productName = indent.productName;
-                const vType = indent.vendorType?.toLowerCase()?.trim() || 'regular';
-
-                // Search for product in master items
-                const masterItem = masterDetails.items.find(item =>
-                    item.itemName.toLowerCase().trim() === productName?.toLowerCase()?.trim()
-                );
-
-                if (masterItem) {
-                    const conditions = (vType === 'three party' || vType === 'three pary')
-                        ? masterItem.thirdPartyConditions
-                        : masterItem.regularConditions;
-
-                    conditions.forEach(cond => {
-                        if (cond && !newTerms.includes(cond)) {
-                            newTerms.push(cond);
-                        }
-                    });
-                }
-            });
-        }
-
-        form.setValue('terms', newTerms);
+        // Dynamic Terms Population based on Product and Vendor Type - REMOVED for manual entry
 
         setTimeout(() => form.trigger(['supplierAddress', 'gstin']), 100);
 

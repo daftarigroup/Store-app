@@ -46,12 +46,8 @@ export default function TallyEntry() {
     const fetchData = async () => {
         setDataLoading(true);
         try {
-            const records = await fetchTallyEntryRecords();
-            // Filter by Project Name
-            const filteredByFirm = records.filter(item => {
-                return user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch;
-            });
-            setAllData(filteredByFirm);
+            const records = await fetchTallyEntryRecords(user?.firm_access || []);
+            setAllData(records);
         } catch (error) {
             console.error('Failed to fetch tally entry records:', error);
             toast.error('Failed to load data');
@@ -191,6 +187,19 @@ export default function TallyEntry() {
         { accessorKey: 'rate', header: 'Rate' },
         { accessorKey: 'indentQty', header: 'Indent Qty' },
         { accessorKey: 'totalRate', header: 'Total Rate' },
+        {
+            accessorKey: 'hodStatus',
+            header: 'HOD Status',
+            cell: ({ getValue }) => {
+                const status = getValue() as string;
+                return (
+                    <Pill variant={status === 'Approved' ? 'default' : (status === 'Rejected' ? 'reject' : 'secondary')}>
+                        {status || 'Pending'}
+                    </Pill>
+                );
+            }
+        },
+        { accessorKey: 'hodRemark', header: 'HOD Remark' },
         { accessorKey: 'status1', header: 'Status 1' },
         { accessorKey: 'remarks1', header: 'Remarks 1' },
         { accessorKey: 'status2', header: 'Status 2' },
@@ -245,6 +254,19 @@ export default function TallyEntry() {
         { accessorKey: 'rate', header: 'Rate' },
         { accessorKey: 'indentQty', header: 'Indent Qty' },
         { accessorKey: 'totalRate', header: 'Total Rate' },
+        {
+            accessorKey: 'hodStatus',
+            header: 'HOD Status',
+            cell: ({ getValue }) => {
+                const status = getValue() as string;
+                return (
+                    <Pill variant={status === 'Approved' ? 'default' : (status === 'Rejected' ? 'reject' : 'secondary')}>
+                        {status || 'Pending'}
+                    </Pill>
+                );
+            }
+        },
+        { accessorKey: 'hodRemark', header: 'HOD Remark' },
         {
             accessorKey: 'status1',
             header: 'Status 1',

@@ -126,7 +126,7 @@ export default function Dashboard() {
             }
         };
         loadData();
-    }, []);
+    }, [user?.username, user?.firm_access]);
 
     useEffect(() => {
         if (isLoading) return;

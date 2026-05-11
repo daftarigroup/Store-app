@@ -152,16 +152,19 @@ export default () => {
 
     useEffect(() => {
         fetchAllData();
-    }, []);
+    }, [user?.firm_access]);
 
     useEffect(() => {
-        const filteredByFirm = storeInRecords.filter((item) =>
-            (user.firmNameMatch || '').trim().toLowerCase() === "all" || (item.firmNameMatch || '').trim() === (user.firmNameMatch || '').trim()
-        );
+        const permittedFirms = user?.firm_access || [];
+        const filteredByFirm = storeInRecords.filter((item) => {
+            const itemFirm = (item.firmNameMatch || '').trim();
+            return permittedFirms.includes('all') ||
+                permittedFirms.some(f => f.toLowerCase() === itemFirm.toLowerCase());
+        });
 
         setPendingData(
             filteredByFirm
-                .filter((i) => i.planned7 !== '' && i.actual7 === '')
+                .filter((i) => (i.planned7 !== '' || i.hodStatus === 'Rejected') && i.actual7 === '')
                 .sort((a, b) => (b.liftNumber || '').localeCompare(a.liftNumber || '', undefined, { numeric: true, sensitivity: 'base' }))
                 .map((i) => ({
                     liftNumber: i.liftNumber || '',
@@ -193,7 +196,7 @@ export default () => {
 
         setHistoryData(
             filteredByFirm
-                .filter((i) => i.planned7 !== '' && i.actual7 !== '')
+                .filter((i) => i.actual7 !== '')
                 .sort((a, b) => (b.liftNumber || '').localeCompare(a.liftNumber || '', undefined, { numeric: true, sensitivity: 'base' }))
                 .map((i) => ({
                     liftNumber: i.liftNumber || '',
@@ -220,9 +223,11 @@ export default () => {
                     firmNameMatch: i.firmNameMatch || '',
                     planned7Date: i.planned7 || '',
                     timestamp: i.timestamp || '',
+                    hodStatus: i.hodStatus || '',
+                    hodRemark: i.hodRemark || '',
                 }))
         );
-    }, [storeInRecords, user.firmNameMatch]);
+    }, [storeInRecords, user?.username, user?.firm_access]);
 
     useEffect(() => {
         if (!openDialog) {
@@ -265,13 +270,18 @@ export default () => {
 
             console.log('📤 Updating record in Supabase...');
 
-            await updateStoreInQuantityCheck(selectedItem.liftNumber, {
-                actual7: currentDateTime,
-                status: values.status,
-                billCopyAttached: billCopyAttachedUrl,
-                sendDebitNote: values.debitNote || 'No',
-                reason: values.reason,
-            });
+            await updateStoreInQuantityCheck(
+                selectedItem.liftNumber,
+                selectedItem.indentNumber,
+                selectedItem.productName,
+                {
+                    actual7: currentDateTime,
+                    status: values.status,
+                    billCopyAttached: billCopyAttachedUrl,
+                    sendDebitNote: values.debitNote || 'No',
+                    reason: values.reason,
+                }
+            );
 
             console.log('✅ Update successful');
             toast.success(`Updated status for ${selectedItem.liftNumber}`);
@@ -425,6 +435,19 @@ export default () => {
                 return <Pill variant={variant as any}>{status}</Pill>;
             },
         },
+        {
+            accessorKey: 'hodStatus',
+            header: 'HOD Status',
+            cell: ({ getValue }) => {
+                const status = getValue() as string;
+                return (
+                    <Pill variant={status === 'Approved' ? 'default' : (status === 'Rejected' ? 'reject' : 'secondary')}>
+                        {status || 'Pending'}
+                    </Pill>
+                );
+            }
+        },
+        { accessorKey: 'hodRemark', header: 'HOD Remark' },
         {
             accessorKey: 'billCopyAttached',
             header: 'Bill Copy Attached',

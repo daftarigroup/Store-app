@@ -211,15 +211,16 @@ export default () => {
                     uom: product.uom,
                     group_head: product.groupHead,
                     product_name: product.productName,
-                    quantity: product.quantity,
-                    // department: product.department,
+                    // Preserve original quantity (don't overwrite with return qty)
+                    // quantity: product.quantity, 
                     constructor_name: data.constructorName,
                     site_location: data.siteLocation,
                     firm_name: data.projectName,
                     issue_person_name: data.issuePersonName,
                     return_person_name: data.returnPersonName,
                     damage_remark: data.damageRemark,
-                    rejected_damage_qty: String(data.rejectedDamageQty || 0),
+                    // Use the product quantity as the return amount for inventory
+                    rejected_damage_qty: String(product.quantity || data.rejectedDamageQty || 0),
                 };
 
                 rows.push(row);
@@ -321,11 +322,11 @@ export default () => {
                                 <SelectContent>
                                     {sheetIssues
                                         .filter(i => {
-                                            const userFirm = (user?.firmNameMatch || '').trim().toLowerCase();
-                                            const sheetFirm = (i.projectName || '').trim().toLowerCase();
-                                            const isFirmMatch = userFirm === "all" || sheetFirm === userFirm;
+                                            const permittedFirms = (user?.firm_access || []).map(f => f.trim().toLowerCase());
+                                            const sheetFirm = (i.projectName || i.firm_name || '').trim().toLowerCase();
+                                            const isFirmMatch = permittedFirms.includes('all') || permittedFirms.includes(sheetFirm);
                                             const isIssued = i.actual1 && i.actual1 !== '';
-                                            const isNotReturned = !(i.rejected_damage_qty && i.rejected_damage_qty !== '0' && i.rejected_damage_qty !== '');
+                                            const isNotReturned = !(i.return_slip || i.return_person_name || (i.rejected_damage_qty && i.rejected_damage_qty !== '0' && i.rejected_damage_qty !== ''));
                                             return isFirmMatch && isIssued && isNotReturned;
                                         })
                                         .map((issue) => (
