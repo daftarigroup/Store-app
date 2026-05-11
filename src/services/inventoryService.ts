@@ -11,6 +11,8 @@ export interface InventoryRecord {
     groupHead: string;
     uom: string;
     opening: number;
+    individualRate: number;
+    individual_rate?: number;
     rate: number;
     indented: number;
     approved: number;

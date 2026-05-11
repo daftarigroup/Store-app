@@ -625,10 +625,10 @@ export default () => {
         if (selectedIndent?.originalItems) {
             form.reset({
                 status: 'Received',
-                photoOfProduct: '',
-                damageOrder: '',
-                quantityAsPerBill: '',
-                priceAsPerPoCheck: '',
+                photoOfProduct: undefined,
+                damageOrder: undefined,
+                quantityAsPerBill: undefined,
+                priceAsPerPoCheck: undefined,
                 remark: '',
                 location: '',
                 items: selectedIndent.originalItems.map(item => ({

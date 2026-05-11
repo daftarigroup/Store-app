@@ -424,9 +424,12 @@ export type IssueSheet = {
     constructorName?: string;
     siteLocation?: string;
     projectName?: string;
+    firm_name?: string;
     rejected_damage_qty?: string;
     damage_remark?: string;
     returnPersonName?: string;
+    return_person_name?: string;
+    return_slip?: string;
     issuePersonName?: string;
 }
 

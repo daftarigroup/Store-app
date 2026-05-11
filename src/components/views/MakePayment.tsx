@@ -394,15 +394,15 @@ export default function MakePayment() {
                 // 3. Merge History: items from payment_history table + completed items from payments table
                 const completedPaymentsFromTable = mappedPayments
                     .filter(p => p.paymentDone)
-                    .map((p, index) => ({
-                        rowIndex: p.rowIndex,
+                    .map((p) => ({
+                        rowIndex: p.rowIndex || 0,
                         timestamp: p.actual || p.timestamp || '',
                         apPaymentNumber: `AP-AUTO-${p.rowIndex}`,
                         status: 'Paid',
-                        uniqueNumber: p.uniqueNo,
-                        fmsName: p.firmNameMatch,
-                        payTo: p.partyName,
-                        amountToBePaid: p.payAmount,
+                        uniqueNumber: p.uniqueNo || '',
+                        fmsName: p.firmNameMatch || '',
+                        payTo: p.partyName || '',
+                        amountToBePaid: Number(p.payAmount) || 0,
                         remarks: p.remark || 'Payment Completed',
                         anyAttachments: p.file || p.pdf || '',
                         planned: p.planned || '',
@@ -411,11 +411,11 @@ export default function MakePayment() {
                         poImage: p.pdf || '',
                         billImageStatus: p.billImageStatus || '',
                         liftNumber: '',
-                        indentNo: p.internalCode,
-                        poNumber: p.poNumber,
-                        vendorName: p.partyName,
-                        productName: p.product,
-                        billNo: p.billNo,
+                        indentNo: p.internalCode || '',
+                        poNumber: p.poNumber || '',
+                        vendorName: p.partyName || '',
+                        productName: p.product || '',
+                        billNo: p.billNo || '',
                         qty: '',
                         typeOfBill: '',
                         billAmount: String(p.payAmount),
