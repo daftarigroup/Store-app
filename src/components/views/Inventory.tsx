@@ -58,44 +58,49 @@ export default () => {
     } = useSheets();
     const { user } = useAuth();
 
-    const [selectedProject, setSelectedProject] = useState<string>('All');
+    const [selectedProjectId, setSelectedProjectId] = useState<string>('All');
+    const selectedFirm = useMemo(() => {
+        if (selectedProjectId === 'All') return null;
+        return (masterSheet?.firmObjects || []).find((f) => String(f.id) === selectedProjectId) || null;
+    }, [masterSheet?.firmObjects, selectedProjectId]);
 
     const filteredIndents = useMemo(() => {
-        if (selectedProject === 'All') return indentSheet || [];
-        const sel = selectedProject.trim().toLowerCase();
-        return (indentSheet || []).filter((i: any) => (i.firmName || '').trim().toLowerCase() === sel);
-    }, [indentSheet, selectedProject]);
+        if (selectedProjectId === 'All') return indentSheet || [];
+        const selId = Number(selectedProjectId);
+        return (indentSheet || []).filter((i: any) => Number(i.firm_id || i.firmId) === selId);
+    }, [indentSheet, selectedProjectId]);
 
     const filteredStoreIns = useMemo(() => {
-        if (selectedProject === 'All') return storeInSheet || [];
-        const sel = selectedProject.trim().toLowerCase();
-        return (storeInSheet || []).filter((s: any) => (s.firmNameMatch || '').trim().toLowerCase() === sel);
-    }, [storeInSheet, selectedProject]);
+        if (selectedProjectId === 'All') return storeInSheet || [];
+        const selId = Number(selectedProjectId);
+        return (storeInSheet || []).filter((s: any) => Number(s.firm_id || s.firmId) === selId);
+    }, [storeInSheet, selectedProjectId]);
 
     const filteredIssues = useMemo(() => {
-        if (selectedProject === 'All') return issueSheet || [];
-        const sel = selectedProject.trim().toLowerCase();
-        return (issueSheet || []).filter((is: any) => (is.projectName || '').trim().toLowerCase() === sel);
-    }, [issueSheet, selectedProject]);
+        if (selectedProjectId === 'All') return issueSheet || [];
+        const selId = Number(selectedProjectId);
+        return (issueSheet || []).filter((is: any) => Number(is.firm_id || is.firmId) === selId);
+    }, [issueSheet, selectedProjectId]);
 
     const filteredTransfers = useMemo(() => {
         if (!stockTransferSheet) return [];
-        if (selectedProject === 'All') return stockTransferSheet;
-        const sel = selectedProject.trim().toLowerCase();
+        if (selectedProjectId === 'All') return stockTransferSheet;
+        const selId = Number(selectedProjectId);
         return stockTransferSheet.filter((t: any) => 
-            (t.fromProject || '').trim().toLowerCase() === sel || 
-            (t.toProject || '').trim().toLowerCase() === sel
+            Number(t.from_firm_id || t.fromFirmId) === selId || 
+            Number(t.to_firm_id || t.toFirmId) === selId
         );
-    }, [stockTransferSheet, selectedProject]);
+    }, [stockTransferSheet, selectedProjectId]);
 
     const tableData = useMemo(() => {
         const inventoryBase = inventorySheet || [];
 
         const permittedFirms = user?.firm_access || [];
         const filteredInventory = filterByFirmAccess(inventoryBase, permittedFirms, {
-            id: (i: any) => i.firm_id,
-            name: (i: any) => i.firmName
+            id: (i: any) => i.firm_id
         });
+
+        const selectedProjectName = selectedProjectId === 'All' ? 'All' : (selectedFirm?.name || 'All');
 
         const calculated = calculateRealInventory(
             filteredInventory,
@@ -103,10 +108,10 @@ export default () => {
             filteredStoreIns,
             filteredIssues,
             filteredTransfers,
-            selectedProject
+            selectedProjectName
         ) as unknown as InventoryRecord[];
 
-        if (selectedProject === 'All') return calculated;
+        if (selectedProjectId === 'All') return calculated;
 
         // Filter to only show items with any activity for the selected project
         return calculated.filter(item =>
@@ -120,7 +125,7 @@ export default () => {
             (item.stockTransferReceiving || 0) > 0 ||
             (item.stockTransferGiven || 0) > 0
         );
-    }, [inventorySheet, filteredIndents, filteredStoreIns, filteredIssues, filteredTransfers, selectedProject]);
+    }, [inventorySheet, filteredIndents, filteredStoreIns, filteredIssues, filteredTransfers, selectedProjectId, selectedFirm?.name, user?.firm_access]);
 
     const isLoading = inventoryLoading || indentLoading || storeInLoading || issueLoading;
 
@@ -209,7 +214,7 @@ export default () => {
                         refNo: is.issueNo,
                         quantity: Number(is.givenQty || 0),
                         party: is.issueTo || 'N/A',
-                        projectName: is.firm_name || 'N/A'
+                        projectName: is.projectName || is.firm_name || 'N/A'
                     }));
                 break;
             case 'Issue Return':
@@ -219,8 +224,8 @@ export default () => {
                         date: is.timestamp,
                         refNo: is.issueNo,
                         quantity: Number(is.rejected_damage_qty || 0),
-                        party: is.return_person_name || 'N/A',
-                        projectName: is.firm_name || 'N/A'
+                        party: is.returnPersonName || is.return_person_name || 'N/A',
+                        projectName: is.projectName || is.firm_name || 'N/A'
                     }));
                 break;
             case 'Purchase Return':
@@ -247,7 +252,7 @@ export default () => {
                     }));
 
                 const newTransfersReceiving = filteredTransfers
-                    .filter((t: any) => t.productName === itemName && (selectedProject === 'All' || (t.toProject || '').trim().toLowerCase() === selectedProject.trim().toLowerCase()))
+                    .filter((t: any) => t.productName === itemName && (selectedProjectId === 'All' || Number(t.to_firm_id || t.toFirmId) === Number(selectedProjectId)))
                     .map((t: any) => ({
                         date: t.timestamp,
                         refNo: t.transferNo,
@@ -260,7 +265,7 @@ export default () => {
                 break;
             case 'Stock Transfer Given':
                 rows = filteredTransfers
-                    .filter((t: any) => t.productName === itemName && (selectedProject === 'All' || (t.fromProject || '').trim().toLowerCase() === selectedProject.trim().toLowerCase()))
+                    .filter((t: any) => t.productName === itemName && (selectedProjectId === 'All' || Number(t.from_firm_id || t.fromFirmId) === Number(selectedProjectId)))
                     .map((t: any) => ({
                         date: t.timestamp,
                         refNo: t.transferNo,
@@ -272,7 +277,7 @@ export default () => {
         }
 
         setDetailDialog({ open: true, title, rows: rows.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) });
-    }, [filteredIndents, filteredStoreIns, filteredIssues, filteredTransfers, inventorySheet, selectedProject]);
+    }, [filteredIndents, filteredStoreIns, filteredIssues, filteredTransfers, inventorySheet, selectedProjectId]);
 
     const ClickableCell = useMemo(() => ({ value, label, row }: { value: number; label: string; row: any }) => (
         <button
@@ -296,13 +301,6 @@ export default () => {
         },
         { accessorKey: 'groupHead', header: 'Group Head' },
         { accessorKey: 'uom', header: 'UOM' },
-        {
-            accessorKey: 'individualRate',
-            header: 'Rate',
-            cell: ({ row }) => {
-                return <>&#8377;{row.original.individualRate || row.original.rate}</>;
-            },
-        },
         {
             accessorKey: 'status',
             header: 'Status',
@@ -398,7 +396,7 @@ export default () => {
         <div>
             <Heading
                 heading="Inventory"
-                subtext="View inveontory"
+                subtext="View inventory"
                 action={
                     <div className="flex items-center gap-4">
                         <Button
@@ -411,16 +409,16 @@ export default () => {
                         <div className="h-8 w-px bg-border" />
                         <div className="flex items-center gap-2">
                             <span className="text-sm font-medium">Project:</span>
-                            <Select value={selectedProject} onValueChange={setSelectedProject}>
+                            <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
                                 <SelectTrigger className="w-[200px]">
                                     <SelectValue placeholder="Select Project" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="All">All Projects</SelectItem>
-                                    {(masterSheet?.firms || [])
+                                    {(masterSheet?.firmObjects || [])
                                         .map((firm) => (
-                                            <SelectItem key={firm} value={firm}>
-                                                {firm}
+                                            <SelectItem key={firm.id} value={String(firm.id)}>
+                                                {firm.name}
                                             </SelectItem>
                                         ))}
                                 </SelectContent>

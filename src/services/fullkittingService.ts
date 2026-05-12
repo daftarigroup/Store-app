@@ -51,7 +51,6 @@ export async function fetchFullkittingRecords(permittedFirms?: string[]): Promis
             .order('indent_number', { ascending: false })
             .order('timestamp', { ascending: false });
 
-        // ID-first: applyFirmAccessFilter uses firm_id when IDs are present, firm_name for legacy
         const filteredQuery = applyFirmAccessFilter(query, permittedFirms);
         if (!filteredQuery) return [];
 
@@ -96,11 +95,72 @@ export async function fetchFullkittingRecords(permittedFirms?: string[]): Promis
 }
 
 /**
+ * Create a fullkitting entry at Store Check time when transportation_include = Yes.
+ * Skips silently if an entry already exists for the same indent + product.
+ */
+export async function createFullkittingEntry(data: {
+    timestamp: string;
+    indent_number: string;
+    vendor_name: string;
+    product_name: string;
+    qty: number;
+    bill_no: string;
+    transporter_name: string;
+    amount: number;
+    vehicle_no: string;
+    driver_name: string;
+    driver_mobile_no: string;
+    firm_name: string;
+    firm_id?: number | null;
+}): Promise<boolean> {
+    try {
+        // Prevent duplicate entries for the same indent + product + bill_no
+        const { data: existing } = await supabase
+            .from('fullkitting')
+            .select('*')
+            .eq('indent_number', data.indent_number)
+            .eq('product_name', data.product_name)
+            .eq('bill_no', data.bill_no)
+            .maybeSingle();
+
+        if (existing) {
+            return false;
+        }
+
+        const { error } = await supabase
+            .from('fullkitting')
+            .insert([{
+                timestamp: data.timestamp,
+                indent_number: data.indent_number,
+                vendor_name: data.vendor_name,
+                product_name: data.product_name,
+                qty: data.qty,
+                bill_no: data.bill_no,
+                transporting_include: 'Yes',
+                transporter_name: data.transporter_name,
+                amount: data.amount,
+                vehical_no: data.vehicle_no,
+                driver_name: data.driver_name,
+                driver_mobile_no: data.driver_mobile_no,
+                firm_name: data.firm_name,
+                firm_id: data.firm_id,
+            }]);
+
+        if (error) throw error;
+        return true;
+    } catch (error) {
+        console.error('Error creating fullkitting entry:', error);
+        throw error;
+    }
+}
+
+/**
  * Update fullkitting record with form data
  */
 export async function updateFullkittingRecord(
     indentNumber: string,
     updateData: {
+        id?: number;
         actual?: string;
         status?: string;
         vehicleNumber?: string;
@@ -127,10 +187,15 @@ export async function updateFullkittingRecord(
         if (updateData.amount1 !== undefined) mappedData.amount1 = updateData.amount1.toString();
         if (updateData.biltyImage) mappedData.bilty_image = updateData.biltyImage;
 
-        const { error } = await supabase
+        let query = supabase
             .from('fullkitting')
-            .update(mappedData)
-            .eq('indent_number', indentNumber);
+            .update(mappedData);
+
+        query = updateData.id
+            ? query.eq('id', updateData.id)
+            : query.eq('indent_number', indentNumber);
+
+        const { error } = await query;
 
         if (error) throw error;
         return true;

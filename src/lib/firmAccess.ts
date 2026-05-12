@@ -22,15 +22,11 @@ export function isAllowedFirm(firm: { id?: number | string; name?: string }, per
     if (allowed.length === 0) return false;
 
     const firmId = String(firm.id || '').trim();
-    const firmName = String(firm.name || '').trim().toLowerCase();
 
     return allowed.some(val => {
         const normalizedVal = String(val).trim();
         // Check ID match
-        if (firmId && normalizedVal === firmId) return true;
-        // Check Name match (case-insensitive)
-        if (firmName && normalizedVal.toLowerCase() === firmName) return true;
-        return false;
+        return firmId && normalizedVal === firmId;
     });
 }
 
@@ -49,12 +45,8 @@ export function filterByFirmAccess<T>(
     return rows.filter((row: any) => {
         // Use provided accessors or fall back to common property names
         const firmId = accessors.id ? accessors.id(row) : (row.firm_id || row.id);
-        const firmName = accessors.name ? accessors.name(row) : (row.firm_name || row.firmName || row.firmNameMatch || row.firm);
         
-        return isAllowedFirm({ 
-            id: firmId, 
-            name: firmName 
-        }, allowed);
+        return isAllowedFirm({ id: firmId }, allowed);
     });
 }
 
@@ -65,16 +57,13 @@ export function applyFirmAccessFilter(query: any, firms?: (string | number)[]) {
     if (allowed === undefined) return query; // 'all' access — no filter
     if (allowed.length === 0) return null;   // no access — return nothing
 
-    const ids   = allowed.filter((firm) => /^\d+$/.test(String(firm))).map(Number);
-    const names = allowed.filter((firm) => !/^\d+$/.test(String(firm)));
+    const ids = allowed.filter((firm) => /^\d+$/.test(String(firm))).map(Number);
 
-    // ✅ SECURITY: When IDs are present, filter ONLY by firm_id.
-    // firm_name is a snapshot field for display — never used as the auth gate
-    // when firm_id is available.
+    // Filter exclusively by firm_id
     if (ids.length > 0) {
         return query.in('firm_id', ids);
     }
 
-    // Legacy fallback: user still has text-based firm_access (pre-migration).
-    return query.in('firm_name', names);
+    // If no numerical IDs are found in access list, return null to deny access
+    return null;
 }

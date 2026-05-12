@@ -1,6 +1,3 @@
-
-
-
 import { ChevronDown, ChevronUp, FilePlus2, Pencil, Plus, Save, Trash, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Input } from '../ui/input';
@@ -10,7 +7,19 @@ import { Button } from '../ui/button';
 import { useFieldArray, useForm, type Control, type FieldValues } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, FormControl, FormField, FormItem, FormLabel } from '../ui/form';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "../ui/dialog";
 import type { PoMasterSheet, QuotationHistorySheet, MasterDataRow } from '@/types';
+
+
+
 import { uploadFile } from '@/lib/fetchers';
 import { fetchQuotationHistory, insertQuotationHistory } from '@/services/quotationService';
 import { fetchMasterOptions, fetchMasterRecords } from '@/services/masterService';
@@ -30,12 +39,7 @@ import { Search as SearchIcon } from 'lucide-react';
 import Heading from '../element/Heading';
 import { sendEmail, generateBiddingEmailHtml } from '@/services/emailService';
 
-
-
-
-
 type Mode = 'create' | 'history';
-
 
 interface SupplierInfo {
   name: string;
@@ -44,7 +48,6 @@ interface SupplierInfo {
   email?: string;
 }
 
-
 // MASTER Sheet interface for suppliers
 interface MasterSheetSupplier {
   supplierName: string;      // Column A
@@ -52,7 +55,6 @@ interface MasterSheetSupplier {
   vendorAddress: string;     // Column C
   email?: string;
 }
-
 
 function filterUniqueQuotationNumbers(data: PoMasterSheet[]): string[] {
   const seen = new Set<string>();
@@ -101,12 +103,14 @@ type QuotationForm = z.infer<typeof quotationSchema>;
 
 
 // Simple Badge component as replacement
-const Badge = ({ children, className, onClick }: {
+const Badge = ({ children, className, onClick, variant }: {
   children: React.ReactNode;
   className?: string;
   onClick?: () => void;
+  variant?: string;
 }) => (
   <span
+    data-variant={variant}
     className={cn(
       "inline-flex items-center px-2 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800 border",
       className
@@ -132,6 +136,12 @@ export default function QuotationPage() {
   const [fullMasterData, setFullMasterData] = useState<MasterDataRow[]>([]);
   const [historySearch, setHistorySearch] = useState('');
   const [expandedQuotation, setExpandedQuotation] = useState<string | null>(null);
+  const [selectedSupplierBid, setSelectedSupplierBid] = useState<{
+    supplierName: string;
+    quotationNo: string;
+    items: QuotationHistorySheet[];
+  } | null>(null);
+
 
 
 
@@ -154,7 +164,8 @@ export default function QuotationPage() {
 
   const fetchLatestQuotationNumbers = async () => {
     try {
-      const quotationHistory = await fetchQuotationHistory();
+      const quotationHistory = await fetchQuotationHistory(user?.firm_access);
+
       console.log('Fetched QUOTATION HISTORY:', quotationHistory);
 
       if (Array.isArray(quotationHistory)) {
@@ -424,12 +435,13 @@ export default function QuotationPage() {
         return;
       }
 
+      // Generate ONE shared quotation number for the whole batch
+      currentMaxNumber += 1;
+      const sharedQuotationNumber = `QT-${String(currentMaxNumber).padStart(3, '0')}`;
+
       for (let i = 0; i < suppliersToProcess.length; i++) {
         const supplierInfo = suppliersToProcess[i];
-
-        currentMaxNumber += 1;
-        const uniqueQuotationNumber = `QT-${String(currentMaxNumber).padStart(3, '0')}`;
-        const sessionToken = crypto.randomUUID(); // Unique token for this vendor session
+        const sessionToken = crypto.randomUUID(); // Unique token for each vendor session
 
         const pdfProps: POPdfProps = {
           companyName: details?.companyName || '',
@@ -442,9 +454,9 @@ export default function QuotationPage() {
           supplierName: supplierInfo.name,
           supplierAddress: supplierInfo.address,
           supplierGstin: supplierInfo.gstin,
-          orderNumber: uniqueQuotationNumber,
+          orderNumber: sharedQuotationNumber,
           orderDate: formatDate(values.quotationDate || new Date()),
-          quotationNumber: uniqueQuotationNumber,
+          quotationNumber: sharedQuotationNumber,
           quotationDate: formatDate(values.quotationDate || new Date()),
           enqNo: '',
           enqDate: '',
@@ -471,7 +483,7 @@ export default function QuotationPage() {
         };
 
         const blob = await pdf(<POPdf {...pdfProps} />).toBlob();
-        const file = new File([blob], `ENQUIRY-${uniqueQuotationNumber}-${supplierInfo.name}.pdf`, { type: 'application/pdf' });
+        const file = new File([blob], `ENQUIRY-${sharedQuotationNumber}-${supplierInfo.name}.pdf`, { type: 'application/pdf' });
 
         if (!supplierInfo.email) {
           toast.error(`Email not found for ${supplierInfo.name}!`);
@@ -489,7 +501,7 @@ export default function QuotationPage() {
         // Type-safe mapping to QuotationHistorySheet
         const quotationHistoryRows: QuotationHistorySheet[] = selectedItemsData.map(item => ({
           timestamp: (values.quotationDate || new Date()).toISOString(),
-          quatationNo: uniqueQuotationNumber,
+          quatationNo: sharedQuotationNumber,
           supplierName: supplierInfo.name,
           adreess: supplierInfo.address,
           gst: supplierInfo.gstin,
@@ -500,6 +512,7 @@ export default function QuotationPage() {
           unit: item.uom || '',
           pdfLink: pdfUrl,
           firm: item.firmNameMatch || 'N/A',
+          firm_id: (item as any).firmId,
           token: sessionToken,
         }));
 
@@ -510,7 +523,7 @@ export default function QuotationPage() {
           const emailHtml = generateBiddingEmailHtml(supplierInfo.name, selectedItemsData[0]?.firmNameMatch || details?.companyName || 'Our Firm', sessionToken);
           await sendEmail({
             to: supplierInfo.email,
-            subject: `Enquiry Request: ${uniqueQuotationNumber}`,
+            subject: `Enquiry Request: ${sharedQuotationNumber}`,
             html: emailHtml
           });
           console.log(`Email sent to ${supplierInfo.name} (${supplierInfo.email})`);
@@ -522,12 +535,12 @@ export default function QuotationPage() {
 
       console.log('Submitting to QUOTATION HISTORY:', allQuotationRows);
       console.log('Total rows:', allQuotationRows.length);
-      console.log('First row:', allQuotationRows[0]);
 
       // Post to history - inserting multiple rows
       await insertQuotationHistory(allQuotationRows);
 
-      toast.success(`Successfully created ${selectedSuppliers.length} unique enquiry(s) for ${selectedSuppliers.length} supplier(s)`);
+      toast.success(`Successfully created Enquiry ${sharedQuotationNumber} for ${selectedSuppliers.length} supplier(s)`);
+
       form.reset();
       setSelectedItems([]);
       setSelectedSuppliers([]);
@@ -575,14 +588,19 @@ export default function QuotationPage() {
       groups[qNo].push(item);
     });
     
-    return Object.entries(groups).map(([quatationNo, items]) => ({
-      quatationNo,
-      items,
-      timestamp: items[0].timestamp,
-      supplierName: items[0].supplierName,
-      firm: items[0].firm,
-      pdfLink: items[0].pdfLink,
-    })).sort((a, b) => {
+    return Object.entries(groups).map(([quatationNo, items]) => {
+      const suppliers = Array.from(new Set(items.map(i => i.supplierName)));
+      return {
+        quatationNo,
+        items,
+        timestamp: items[0].timestamp,
+        supplierName: suppliers.length > 1 ? `${suppliers.length} Suppliers` : suppliers[0],
+        allSuppliers: suppliers,
+        firm: items[0].firm,
+        pdfLink: items[0].pdfLink,
+      };
+    }).sort((a, b) => {
+
         return new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime();
     });
   }, [filteredHistory]);
@@ -642,7 +660,13 @@ export default function QuotationPage() {
                       {group.timestamp ? formatDate(new Date(group.timestamp)) : 'N/A'}
                     </TableCell>
                     <TableCell className="font-medium text-blue-600">{group.quatationNo}</TableCell>
-                    <TableCell>{group.supplierName}</TableCell>
+                    <TableCell>
+                      <Badge className="bg-slate-50 text-slate-700 border-slate-200 font-bold">
+                        {group.allSuppliers.length} {group.allSuppliers.length === 1 ? 'Supplier' : 'Suppliers'}
+                      </Badge>
+                    </TableCell>
+
+
                     <TableCell>{group.firm || 'N/A'}</TableCell>
                     <TableCell>
                       <Badge className="bg-blue-50 text-blue-700 border-blue-200">
@@ -660,39 +684,64 @@ export default function QuotationPage() {
                     </TableCell>
                   </TableRow>
                   {expandedQuotation === group.quatationNo && (
-                    <TableRow className="bg-muted/5 animate-in fade-in slide-in-from-top-1 duration-200">
-                      <TableCell colSpan={7} className="p-0 border-t">
-                        <div className="px-12 py-6 bg-slate-50/50">
-                          <div className="border rounded-lg bg-white shadow-sm overflow-hidden">
+                    <TableRow className="bg-slate-50/50 border-b-2 border-indigo-100">
+                      <TableCell colSpan={7} className="p-4">
+                        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                          <div className="bg-slate-50 px-4 py-2 border-b flex justify-between items-center">
+                            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Suppliers in this Enquiry</span>
+                            <span className="text-[10px] text-slate-400">Click view to see product-wise rates</span>
+                          </div>
+                          <div className="p-0">
                             <Table>
                               <TableHeader>
-                                <TableRow className="bg-slate-100/80">
-                                  <TableHead className="h-9 text-xs font-bold text-slate-600">SR.</TableHead>
-                                  <TableHead className="h-9 text-xs font-bold text-slate-600">INDENT NO</TableHead>
-                                  <TableHead className="h-9 text-xs font-bold text-slate-600">PROJECT</TableHead>
-                                  <TableHead className="h-9 text-xs font-bold text-slate-600">PRODUCT</TableHead>
-
-                                  <TableHead className="h-9 text-xs font-bold text-slate-600 text-center">QTY</TableHead>
-                                  <TableHead className="h-9 text-xs font-bold text-slate-600">UNIT</TableHead>
+                                <TableRow className="bg-white/50">
+                                  <TableHead className="h-9 text-xs font-bold text-slate-600">SUPPLIER NAME</TableHead>
+                                  <TableHead className="h-9 text-xs font-bold text-slate-600 text-center">ITEMS</TableHead>
+                                  <TableHead className="h-9 text-xs font-bold text-slate-600 text-center">STATUS</TableHead>
+                                  <TableHead className="h-9 text-xs font-bold text-slate-600 text-right pr-6">ACTION</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
-                                {group.items.map((item, i) => (
-                                  <TableRow key={i} className="hover:bg-slate-50 border-b last:border-0">
-                                    <TableCell className="py-2.5 text-xs text-slate-600">{i + 1}</TableCell>
-                                    <TableCell className="py-2.5 text-xs text-slate-600">{item.indentNo}</TableCell>
-                                    <TableCell className="py-2.5 text-xs text-slate-600">{item.firm || 'N/A'}</TableCell>
-                                    <TableCell className="py-2.5 text-xs font-medium text-slate-900">
-                                      <div>{item.product}</div>
-                                      {item.description && <div className="text-[10px] text-slate-400 font-normal">{item.description}</div>}
-                                    </TableCell>
-
-
-
-                                    <TableCell className="py-2.5 text-xs text-center font-semibold text-slate-700">{item.qty}</TableCell>
-                                    <TableCell className="py-2.5 text-xs text-slate-600">{item.unit}</TableCell>
-                                  </TableRow>
-                                ))}
+                                {group.allSuppliers.map((supplierName, idx) => {
+                                  const supplierItems = group.items.filter(i => i.supplierName === supplierName);
+                                  const hasResponded = supplierItems.some(i => i.responded_at);
+                                  
+                                  return (
+                                    <TableRow key={idx} className="hover:bg-slate-50/80 transition-colors">
+                                      <TableCell className="py-3 text-xs font-bold text-slate-800 uppercase tracking-tight">
+                                        {supplierName}
+                                      </TableCell>
+                                      <TableCell className="py-3 text-xs text-center text-slate-500">
+                                        {supplierItems.length} Products
+                                      </TableCell>
+                                      <TableCell className="py-3 text-center">
+                                        {hasResponded ? (
+                                          <Badge className="bg-emerald-50 text-emerald-700 border-emerald-100 text-[10px]">
+                                            Responded
+                                          </Badge>
+                                        ) : (
+                                          <Badge className="bg-slate-100 text-slate-400 border-slate-200 text-[10px]">
+                                            Awaiting
+                                          </Badge>
+                                        )}
+                                      </TableCell>
+                                      <TableCell className="py-3 text-right pr-4">
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-7 text-[10px] font-bold border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700"
+                                          onClick={() => setSelectedSupplierBid({
+                                            supplierName,
+                                            quotationNo: group.quatationNo,
+                                            items: supplierItems
+                                          })}
+                                        >
+                                          View Details
+                                        </Button>
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
                               </TableBody>
                             </Table>
                           </div>
@@ -986,6 +1035,7 @@ export default function QuotationPage() {
   );
 
   return (
+
     <div className="w-full min-h-screen bg-gradient-to-br from-blue-100 via-purple-50 to-blue-50 rounded-md flex flex-col pb-10">
       <Tabs defaultValue="create" className="w-full flex flex-col flex-1" onValueChange={(v) => {
         setMode(v as Mode);
@@ -1024,6 +1074,92 @@ export default function QuotationPage() {
           </TabsContent>
         </div>
       </Tabs>
+
+      {/* Supplier Detail Modal */}
+      <Dialog open={!!selectedSupplierBid} onOpenChange={(open) => !open && setSelectedSupplierBid(null)}>
+        <DialogContent className="sm:max-w-none md:max-w-5xl max-h-[90vh] overflow-y-auto border-2">
+
+
+
+          <DialogHeader className="border-b pb-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-indigo-50 flex items-center justify-center border border-indigo-100">
+                <FilePlus2 className="h-5 w-5 text-indigo-600" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl font-black text-slate-900 tracking-tight uppercase">
+                  {selectedSupplierBid?.supplierName}
+                </DialogTitle>
+                <DialogDescription className="text-xs font-medium">
+                  Bid Details for Enquiry <span className="text-indigo-600 font-bold">#{selectedSupplierBid?.quotationNo}</span>
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="py-4">
+            <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50/80">
+                    <TableHead className="text-[11px] font-black uppercase text-slate-500">SR.</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase text-slate-500">Indent No</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase text-slate-500">Product</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase text-slate-500 text-center">Qty</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase text-slate-500">Unit</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase text-indigo-600 text-right pr-6">Offered Rate (₹)</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase text-slate-500 text-center">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {selectedSupplierBid?.items.map((item, i) => (
+                    <TableRow key={i} className="hover:bg-slate-50 transition-colors border-b last:border-0">
+                      <TableCell className="py-4 text-xs font-bold text-slate-400">{i + 1}</TableCell>
+                      <TableCell className="py-4 text-xs font-bold text-slate-600">
+                        {item.indentNo}
+                      </TableCell>
+                      <TableCell className="py-4">
+                        <div className="text-xs font-black text-slate-800">{item.product}</div>
+                        {item.description && (
+                          <div className="text-[10px] text-slate-400 font-normal leading-tight mt-0.5">{item.description}</div>
+                        )}
+                        <div className="text-[9px] text-indigo-500 font-bold mt-1 uppercase tracking-tighter">{item.firm}</div>
+                      </TableCell>
+                      <TableCell className="py-4 text-xs text-center font-black text-slate-700">{item.qty}</TableCell>
+                      <TableCell className="py-4 text-xs font-bold text-slate-500 uppercase">{item.unit}</TableCell>
+                      <TableCell className="py-4 text-right pr-6">
+                        <span className={`text-sm font-black ${item.vendor_rate ? 'text-indigo-600' : 'text-slate-300 italic'}`}>
+                          {item.vendor_rate ? `₹${Number(item.vendor_rate).toLocaleString('en-IN')}` : 'Not Quote'}
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-4 text-center">
+                        {item.responded_at ? (
+                          <div className="flex flex-col items-center gap-0.5">
+                            <Badge className="bg-emerald-50 text-emerald-700 border-emerald-100 text-[9px] h-4">Responded</Badge>
+                            <span className="text-[8px] text-slate-400 font-bold">{new Date(item.responded_at).toLocaleDateString()}</span>
+                          </div>
+                        ) : (
+                          <Badge className="bg-slate-100 text-slate-400 border-slate-200 text-[9px] h-4">Pending</Badge>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+
+          <DialogFooter className="bg-slate-50 -mx-6 -mb-6 p-4 border-t">
+            <Button 
+              className="w-full font-black uppercase tracking-widest text-[11px] shadow-lg shadow-indigo-100"
+              onClick={() => setSelectedSupplierBid(null)}
+            >
+              Close Details
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+

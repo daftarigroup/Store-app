@@ -442,8 +442,9 @@ export async function updateStoreInQuantityCheck(
             reason: updateData.reason,
         };
 
-        // ✅ If Debit Note is requested, trigger Stage 9 (planned9)
-        if (updateData.sendDebitNote === 'Yes') {
+        // ✅ If Debit Note is requested AND status is Accept, trigger Stage 9 (planned9)
+        // Reject status should NOT route to Debit Note
+        if (updateData.sendDebitNote === 'Yes' && updateData.status === 'Accept') {
             updateFields.planned9 = updateData.actual7;
         }
 

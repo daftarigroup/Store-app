@@ -225,12 +225,26 @@ export default () => {
 
             // ✅ Create Integrations ONLY if HOD approves
             if (values.status === 'Approved' && !triggerStage7) {
-                // Handle Advance payment related sync
-                const terms = (selectedItem.paymentTerms || '').toString().toLowerCase();
-                const isAdvanceTerm = terms.includes('advance') || terms.includes('pi');
+                // Product payment entry should be created for approved store-in records.
+                // Freight payment remains handled in Full Kitting flow.
+                let duplicateQuery = supabase
+                    .from('payments')
+                    .select('id')
+                    .eq('internal_code', selectedItem.indentNo)
+                    .eq('product', selectedItem.productName)
+                    .eq('payment_form', 'store_in');
 
-                if (isAdvanceTerm && selectedItem.transportationInclude !== 'Yes' && selectedItem.typeOfBill !== 'common') {
-                    console.log('✅ Advance payment detected. Creating payment entry...');
+                duplicateQuery = selectedItem.firm_id
+                    ? duplicateQuery.eq('firm_id', selectedItem.firm_id)
+                    : duplicateQuery.is('firm_id', null);
+
+                const { data: existingPayment, error: existingPaymentError } = await duplicateQuery.maybeSingle();
+
+                if (existingPaymentError && existingPaymentError.code !== 'PGRST116') {
+                    throw existingPaymentError;
+                }
+
+                if (!existingPayment) {
                     await createPaymentEntry({
                         indent_number: selectedItem.indentNo,
                         vendor_name: selectedItem.vendorName || '',
@@ -241,8 +255,9 @@ export default () => {
                         firm_name: selectedItem.firmNameMatch,
                         payment_terms: selectedItem.paymentTerms,
                         firm_id: selectedItem.firm_id,
+                        payment_form: 'store_in',
+                        remark: `Store In Product Bill - Indent ${selectedItem.indentNo}, Product ${selectedItem.productName}`,
                     });
-
                 }
 
                 // ✅ Sync with Audit Data (Tally Entry)

@@ -26,7 +26,8 @@ import Heading from '../element/Heading';
 import { formatDate, formatDateTime } from '@/lib/utils';
 import { Input } from '../ui/input';
 import { supabase, supabaseEnabled } from '@/lib/supabase';
-import { normalizeFirmAccess } from '@/lib/firmAccess';
+import { normalizeFirmAccess, applyFirmAccessFilter } from '@/lib/firmAccess';
+
 
 
 interface RateApprovalData {
@@ -56,15 +57,7 @@ interface HistoryData {
 
 export default () => {
     const { user } = useAuth();
-    const applyFirmAccessFilter = (query: any) => {
-        const userFirms = normalizeFirmAccess(user?.firm_access);
-        if (userFirms === undefined) return query;
-        if (userFirms.length === 0) return null;
 
-        const firmIds = userFirms.filter((firm) => /^\d+$/.test(firm)).map(Number);
-        if (firmIds.length === 0) return null;
-        return query.in('firm_id', firmIds);
-    };
 
     const [selectedIndent, setSelectedIndent] = useState<RateApprovalData | null>(null);
     const [selectedHistory, setSelectedHistory] = useState<HistoryData | null>(null);
@@ -86,7 +79,7 @@ export default () => {
                 .is('approved_vendor_name', null)
                 .in('vendor_type', ['Three Party', 'Regular']);
 
-            const filteredQuery = applyFirmAccessFilter(query);
+            const filteredQuery = applyFirmAccessFilter(query, user?.firm_access);
             if (!filteredQuery) {
                 setTableData([]);
                 return;
@@ -186,7 +179,7 @@ export default () => {
                 .not('approved_vendor_name', 'is', null)
                 .in('vendor_type', ['Three Party', 'Regular']);
 
-            const filteredQuery = applyFirmAccessFilter(query);
+            const filteredQuery = applyFirmAccessFilter(query, user?.firm_access);
             if (!filteredQuery) {
                 setHistoryData([]);
                 return;

@@ -1,5 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import type { QuotationHistorySheet } from '@/types';
+import { applyFirmAccessFilter } from '@/lib/firmAccess';
+
 
 /**
  * Quotation Service
@@ -9,12 +11,17 @@ import type { QuotationHistorySheet } from '@/types';
 /**
  * Fetch all quotation history records from Supabase
  */
-export async function fetchQuotationHistory(): Promise<QuotationHistorySheet[]> {
+export async function fetchQuotationHistory(permittedFirms?: (string | number)[]): Promise<QuotationHistorySheet[]> {
     try {
-        const { data, error } = await supabase
+        let query = supabase
             .from('quotation_history')
-            .select('*')
-            .order('timestamp', { ascending: false });
+            .select('*');
+        
+        // ID-first: applyFirmAccessFilter uses firm_id
+        query = applyFirmAccessFilter(query, permittedFirms);
+
+        const { data, error } = await query.order('timestamp', { ascending: false });
+
 
         if (error) throw error;
 
@@ -34,6 +41,7 @@ export async function fetchQuotationHistory(): Promise<QuotationHistorySheet[]> 
             token: r.token || '',
             vendor_rate: r.vendor_rate || 0,
             responded_at: r.responded_at || '',
+            firm_id: r.firm_id,
         }));
     } catch (error) {
         console.error('Error fetching quotation history:', error);
@@ -63,6 +71,7 @@ export async function insertQuotationHistory(records: any[]) {
             token: r.token,
             vendor_rate: r.vendor_rate,
             responded_at: r.responded_at,
+            firm_id: r.firm_id,
         }));
 
         const { error } = await supabase

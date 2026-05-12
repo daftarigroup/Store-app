@@ -49,7 +49,7 @@ interface StoreInPendingData {
     amount: number;
     // Add missing properties that are used in columns
     poDate: string;
-    plannedDate: string; // ✅ FIXED: Changed from 'planneDate' to 'plannedDate'
+    plannedDate: string; 
     poNumber: string;
     vendor: string;
     indentNumber: string;
@@ -61,8 +61,9 @@ interface StoreInPendingData {
     billStatus: string;
     leadTimeToLiftMaterial: number;
     discountAmount: number;
-    rowIndex?: number; // Added to fix the error
+    rowIndex?: number; 
     firmNameMatch: string;
+    firm_id?: number;
     challanNo: string;
     challanImage: string;
 }
@@ -98,12 +99,19 @@ export default () => {
     }, []);
 
     useEffect(() => {
-        const permittedFirms = (user?.firm_access || []).map(f => f.trim());
-        const hasNoAccess = permittedFirms.length === 0;
+        const permittedFirms = user?.firm_access || [];
+        const permittedIds = permittedFirms
+            .filter(f => /^\d+$/.test(f))
+            .map(Number);
+        const hasAll = permittedFirms.includes('all');
 
-        const filteredByFirm = hasNoAccess ? [] : allData.filter(item =>
-            permittedFirms.includes('all') || permittedFirms.includes((item.firmNameMatch || '').trim())
-        );
+        const filteredByFirm = allData.filter((item) => {
+            if (hasAll) return true;
+            // Primary: match by firm_id (ID-based security model)
+            if (item.firm_id != null) return permittedIds.includes(item.firm_id);
+            // Fallback: if firm_id is missing, deny access to keep data isolated
+            return false;
+        });
 
         setTableData(
             filteredByFirm
@@ -136,6 +144,7 @@ export default () => {
                     leadTimeToLiftMaterial: i.leadTimeToLiftMaterial || 0,
                     discountAmount: i.discountAmount || 0,
                     firmNameMatch: i.firmNameMatch || '',
+                    firm_id: i.firm_id,
                     challanNo: i.challanNo || '',
                     challanImage: i.challanImage || '',
                 }))

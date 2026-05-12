@@ -153,13 +153,15 @@ export default function IssueData() {
 
     const historyData = useMemo(() => {
         const filteredData = filterByFirmAccess(
-            allData.filter((item) => item.status === 'Approved'),
+            allData.filter((item) => ['Approved', 'Rejected', 'Yes', 'No'].includes(item.status)),
+
             user?.firm_access || [],
             { id: (i) => i.firm_id, name: (i) => i.firm_name }
         );
 
         return filteredData;
     }, [allData, user?.firm_access]);
+
 
     const damageData = useMemo(() => {
         const filteredData = filterByFirmAccess(
@@ -385,10 +387,11 @@ export default function IssueData() {
 
             await updateIssueApproval(selectedIssue.issue_no, {
                 actual1: currentDateTime,
-                status: values.status,
+                status: values.status === 'Yes' ? 'Approved' : 'Rejected',
                 given_qty: values.status === 'Yes' ? values.givenQty : null,
                 issue_slip: issuePdfUrl
             });
+
 
             toast.success(`Updated approval status of ${selectedIssue.issue_no}`);
             setOpenDialog(false);

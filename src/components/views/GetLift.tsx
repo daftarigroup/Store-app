@@ -39,6 +39,7 @@ import {
     type GetLiftIndentRecord,
     type GetLiftStoreInRecord,
 } from '@/services/getLiftService';
+import { createFullkittingEntry } from '@/services/fullkittingService';
 
 interface GetPurchaseData {
     indentNo: string;
@@ -540,6 +541,7 @@ export default function GetPurchase() {
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema) as any, // Add type assertion here
+        mode: 'onChange',
         defaultValues: {
             billStatus: '',
             billNo: '',
@@ -642,13 +644,13 @@ export default function GetPurchase() {
                     product: item.productName || '',
                     poNumber: item.poNumber || '',
                     quantity: Number(item.approvedQuantity) || 0,
-                    pendingLiftQty: item.pendingPoQty || 0,
-                    receivedQty: item.receivedQty || 0,
-                    pendingPoQty: item.pendingPoQty || 0,
+                    pendingLiftQty: Number(item.pendingPoQty) || 0,
+                    receivedQty: Number(item.receivedQty) || 0,
+                    pendingPoQty: Number(item.pendingPoQty) || 0,
                     approvedRate: item.approvedRate || '0',
-                    taxValue: item.taxValue || 0,
+                    taxValue: Number(item.taxValue) || 0,
                     withTax: item.withTax || 'No',
-                    liftQty: item.pendingPoQty || 0,
+                    liftQty: Number(item.pendingPoQty) || 0,
                     cancelQty: 0,
                     uom: item.uom || '',
                 })),
@@ -702,9 +704,6 @@ export default function GetPurchase() {
     async function onSubmit() {
         const values = form.getValues();
         try {
-            console.log('📝 Selected indent:', selectedIndent);
-            console.log('📋 Form values:', values);
-
             // ✅ VALIDATION: Ensure lifting quantity does not exceed pending lift quantity
             if (Number(values.qty) > (selectedIndent?.pendingLiftQty || 0)) {
                 toast.error(`Lifting quantity (${values.qty}) cannot exceed pending quantity (${selectedIndent?.pendingLiftQty || 0})`);
@@ -742,7 +741,6 @@ export default function GetPurchase() {
                     if (cancelQty > 0) {
                         await updateCancelQuantity(item.indentNo, cancelQty);
                         await updateActual5Timestamp(item.indentNo);
-                        console.log(`❌ Cancelled ${cancelQty} for ${item.indentNo}`);
                     }
 
                     if (liftQty > 0 && values.billStatus) {
@@ -776,7 +774,7 @@ export default function GetPurchase() {
                             driverMobileNo: values.driverMobileNo || '',
                             billRemark: values.billRemark || '',
                             firmNameMatch: selectedIndent?.firmNameMatch || user?.firmNameMatch || '',
-                            firm_id: selectedIndent?.firm_id ?? null,
+                            firm_id: selectedIndent?.firm_id || null,
                             rate: String(item.approvedRate || ''),
                             // department: selectedIndent?.department || '',
                             areaOfUse: selectedIndent?.areaOfUse || '',
@@ -789,13 +787,36 @@ export default function GetPurchase() {
 
                         await insertStoreInRecord(newStoreInRecord);
                         await updatePendingLiftQty(item.indentNo, liftQty);
-                        console.log(`✅ Lifted ${liftQty} for ${item.indentNo}`);
                     }
 
                     // Auto-complete status check
                     const remaining = (item.pendingLiftQty) - (liftQty + cancelQty);
                     if (remaining <= 0 && (liftQty > 0 || cancelQty > 0)) {
                         await updateLiftingStatus(item.indentNo, 'Complete');
+                    }
+                }
+
+                // Create one fullkitting entry per lifted product so freight appears in
+                // Pending immediately after lifting — and per-product records allow the
+                // duplicate check (indent_number + product_name + bill_no) to work correctly.
+                if (values.transportationInclude === 'Yes') {
+                    const liftedItems = values.items.filter(item => (Number(item.liftQty) || 0) > 0);
+                    for (const liftedItem of liftedItems) {
+                        await createFullkittingEntry({
+                            timestamp: currentDateTime,
+                            indent_number: liftedItem.indentNo,
+                            vendor_name: values.vendorName || selectedIndent?.vendorName || '',
+                            product_name: liftedItem.product,
+                            qty: Number(liftedItem.liftQty) || 0,
+                            bill_no: values.billNo || '',
+                            transporter_name: values.transporterName || '',
+                            amount: Number(values.amount) || 0,
+                            vehicle_no: values.vehicleNo || '',
+                            driver_name: values.driverName || '',
+                            driver_mobile_no: values.driverMobileNo || '',
+                            firm_name: selectedIndent?.firmNameMatch || '',
+                            firm_id: selectedIndent?.firm_id || null,
+                        });
                     }
                 }
 
@@ -874,7 +895,7 @@ export default function GetPurchase() {
                 {selectedIndent && (
                     <DialogContent
                         className="max-h-[95vh] overflow-y-auto"
-                        style={{ maxWidth: '80vw', width: '60vw' }}
+                        style={{ maxWidth: '95vw', width: '90vw' }}
                     >
                         <Form {...form}>
                             <form
@@ -904,7 +925,7 @@ export default function GetPurchase() {
                                 </div>
 
                                 {/* Product List Table */}
-                                <div className="border rounded-xl overflow-y-auto shadow-sm max-h-[400px]">
+                                <div className="border rounded-xl overflow-x-auto overflow-y-auto shadow-sm max-h-[400px]">
                                     <table className="w-full text-sm">
                                         <thead className="bg-muted/50 border-b sticky top-0 z-10">
                                             <tr>
@@ -954,7 +975,11 @@ export default function GetPurchase() {
                                                                         <FormControl>
                                                                             <Input
                                                                                 type="number"
-                                                                                {...inputField}
+                                                                                value={inputField.value ?? ''}
+                                                                                onChange={(e) => {
+                                                                                    const val = e.target.value === '' ? 0 : Number(e.target.value);
+                                                                                    inputField.onChange(val);
+                                                                                }}
                                                                                 className={`h-9 text-right ${form.formState.errors.items?.[index]?.liftQty ? 'border-destructive' : ''}`}
                                                                                 max={field.pendingLiftQty}
                                                                             />
@@ -973,7 +998,11 @@ export default function GetPurchase() {
                                                                         <FormControl>
                                                                             <Input
                                                                                 type="number"
-                                                                                {...inputField}
+                                                                                value={inputField.value ?? ''}
+                                                                                onChange={(e) => {
+                                                                                    const val = e.target.value === '' ? 0 : Number(e.target.value);
+                                                                                    inputField.onChange(val);
+                                                                                }}
                                                                                 className="h-9 text-right"
                                                                                 max={field.pendingLiftQty}
                                                                             />

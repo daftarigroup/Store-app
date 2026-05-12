@@ -72,8 +72,7 @@ export default function ApproveIndent() {
             
             // Secondary frontend check for absolute security/robustness
             const filtered = filterByFirmAccess(records, permittedFirms, {
-                id: (i) => i.firm_id,
-                name: (i) => i.firm_name
+                id: (i) => i.firm_id
             });
             
             setAllData(filtered);

@@ -29,7 +29,8 @@ import Heading from '../element/Heading';
 import { Pill } from '../ui/pill';
 import { formatDate, formatDateTime } from '@/lib/utils';
 import { supabase, supabaseEnabled } from '@/lib/supabase';
-import { normalizeFirmAccess } from '@/lib/firmAccess';
+import { applyFirmAccessFilter } from '@/lib/firmAccess';
+
 
 interface VendorUpdateData {
     id: number;
@@ -96,16 +97,26 @@ export default () => {
     const [selectedHistoryUOM, setSelectedHistoryUOM] = useState<string>('');
     const [historySearchQuery, setHistorySearchQuery] = useState<string>('');
     const [searchTermVendor, setSearchTermVendor] = useState('');
-
-    const applyFirmAccessFilter = (query: any) => {
-        const userFirms = normalizeFirmAccess(user.firm_access);
-        if (userFirms === undefined) return query;
-        if (userFirms.length === 0) return null;
-
-        const ids = userFirms.filter((firm) => /^\d+$/.test(firm)).map(Number);
-        if (ids.length === 0) return null;
-        return query.in('firm_id', ids);
+    const [indentQuotes, setIndentQuotes] = useState<any[]>([]);
+    const normalizeVendorKey = (value?: string) => (value || '').trim().toLowerCase();
+    const hasVendorRate = (quote: any) => Number(quote?.vendor_rate) > 0;
+    const findQuoteByVendorName = (vendorName?: string) => {
+        const normalizedName = normalizeVendorKey(vendorName);
+        if (!normalizedName) return undefined;
+        return indentQuotes.find((q) => normalizeVendorKey(q?.supplierName) === normalizedName);
     };
+    const getSortedVendorNames = (searchTerm: string) =>
+        (options?.vendorNames || [])
+            .filter((name) => name.toLowerCase().includes(searchTerm.toLowerCase()))
+            .sort((a, b) => {
+                const hasRateA = hasVendorRate(findQuoteByVendorName(a));
+                const hasRateB = hasVendorRate(findQuoteByVendorName(b));
+                if (hasRateA && !hasRateB) return -1;
+                if (!hasRateA && hasRateB) return 1;
+                return a.localeCompare(b);
+            });
+
+
 
     // Fetch pending vendor updates from Supabase
     const fetchPendingVendorUpdates = async () => {
@@ -118,7 +129,7 @@ export default () => {
                 .not('planned2', 'is', null)
                 .is('actual2', null);
 
-            const filteredQuery = applyFirmAccessFilter(query);
+            const filteredQuery = applyFirmAccessFilter(query, user?.firm_access);
             if (!filteredQuery) {
                 setTableData([]);
                 setFilteredTableData([]);
@@ -167,7 +178,7 @@ export default () => {
                 .not('planned2', 'is', null)
                 .not('actual2', 'is', null);
 
-            const filteredQuery = applyFirmAccessFilter(query);
+            const filteredQuery = applyFirmAccessFilter(query, user?.firm_access);
             if (!filteredQuery) {
                 setHistoryData([]);
                 setFilteredHistoryData([]);
@@ -214,6 +225,35 @@ export default () => {
             setDataLoading(false);
         }
     };
+
+    const fetchIndentQuotes = async () => {
+        if (!selectedIndent) return;
+        try {
+            const { data, error } = await supabase
+                .from('quotation_history')
+                .select('*')
+                .eq('indentNo', selectedIndent.indentNo);
+
+            if (error) throw error;
+            
+            // Filter by product in JS to be more robust with trimming
+            const filteredData = (data || []).filter(q => 
+                q.product?.trim().toLowerCase() === selectedIndent.product?.trim().toLowerCase()
+            );
+            
+            setIndentQuotes(filteredData);
+        } catch (err) {
+            console.error('Error fetching indent quotes:', err);
+        }
+    };
+
+    useEffect(() => {
+        if (selectedIndent && openDialog) {
+            fetchIndentQuotes();
+        } else {
+            setIndentQuotes([]);
+        }
+    }, [selectedIndent, openDialog]);
 
     // Fetch data on mount and when Project Name changes
     useEffect(() => {
@@ -708,13 +748,6 @@ export default () => {
         name: 'vendors',
     });
 
-    useEffect(() => {
-        if (amountToDetermineType >= 0) {
-            regularForm.setValue('rate', amountToDetermineType);
-            // Three Party rates should be manually input as requested
-        }
-    }, [amountToDetermineType, regularForm]);
-
     // Watch for vendor selection to fetch payment term
     const watchVendorRegular = regularForm.watch('vendorName');
     const watchVendor0 = threePartyForm.watch('vendors.0.vendorName');
@@ -722,40 +755,72 @@ export default () => {
     const watchVendor2 = threePartyForm.watch('vendors.2.vendorName');
 
     useEffect(() => {
-        if (watchVendorRegular && options?.vendors) {
-            const vendor = options.vendors.find(v => v.vendorName === watchVendorRegular);
-            if (vendor?.paymentTerm) {
-                regularForm.setValue('paymentTerm', vendor.paymentTerm);
+        if (watchVendorRegular) {
+            const quote = findQuoteByVendorName(watchVendorRegular);
+            if (quote && hasVendorRate(quote)) {
+                regularForm.setValue('quotationNo', quote.quatationNo || '');
+                regularForm.setValue('quotationDate', new Date(quote.timestamp).toISOString().split('T')[0]);
+                regularForm.setValue('rate', Number(quote.vendor_rate) || 0);
+            }
+            if (options?.vendors) {
+                const vendor = options.vendors.find(v => normalizeVendorKey(v.vendorName) === normalizeVendorKey(watchVendorRegular));
+                if (vendor?.paymentTerm) {
+                    regularForm.setValue('paymentTerm', vendor.paymentTerm);
+                }
             }
         }
-    }, [watchVendorRegular, options?.vendors, regularForm]);
+    }, [watchVendorRegular, indentQuotes, options?.vendors, regularForm]);
 
     useEffect(() => {
-        if (watchVendor0 && options?.vendors) {
-            const vendor = options.vendors.find(v => v.vendorName === watchVendor0);
-            if (vendor?.paymentTerm) {
-                threePartyForm.setValue('vendors.0.paymentTerm', vendor.paymentTerm);
+        if (watchVendor0) {
+            const quote = findQuoteByVendorName(watchVendor0);
+            if (quote && hasVendorRate(quote)) {
+                threePartyForm.setValue('vendors.0.quotationNo', quote.quatationNo || '');
+                threePartyForm.setValue('vendors.0.quotationDate', new Date(quote.timestamp).toISOString().split('T')[0]);
+                threePartyForm.setValue('vendors.0.rate', Number(quote.vendor_rate) || 0);
+            }
+            if (options?.vendors) {
+                const vendor = options.vendors.find(v => normalizeVendorKey(v.vendorName) === normalizeVendorKey(watchVendor0));
+                if (vendor?.paymentTerm) {
+                    threePartyForm.setValue('vendors.0.paymentTerm', vendor.paymentTerm);
+                }
             }
         }
-    }, [watchVendor0, options?.vendors, threePartyForm]);
+    }, [watchVendor0, indentQuotes, options?.vendors, threePartyForm]);
 
     useEffect(() => {
-        if (watchVendor1 && options?.vendors) {
-            const vendor = options.vendors.find(v => v.vendorName === watchVendor1);
-            if (vendor?.paymentTerm) {
-                threePartyForm.setValue('vendors.1.paymentTerm', vendor.paymentTerm);
+        if (watchVendor1) {
+            const quote = findQuoteByVendorName(watchVendor1);
+            if (quote && hasVendorRate(quote)) {
+                threePartyForm.setValue('vendors.1.quotationNo', quote.quatationNo || '');
+                threePartyForm.setValue('vendors.1.quotationDate', new Date(quote.timestamp).toISOString().split('T')[0]);
+                threePartyForm.setValue('vendors.1.rate', Number(quote.vendor_rate) || 0);
+            }
+            if (options?.vendors) {
+                const vendor = options.vendors.find(v => normalizeVendorKey(v.vendorName) === normalizeVendorKey(watchVendor1));
+                if (vendor?.paymentTerm) {
+                    threePartyForm.setValue('vendors.1.paymentTerm', vendor.paymentTerm);
+                }
             }
         }
-    }, [watchVendor1, options?.vendors, threePartyForm]);
+    }, [watchVendor1, indentQuotes, options?.vendors, threePartyForm]);
 
     useEffect(() => {
-        if (watchVendor2 && options?.vendors) {
-            const vendor = options.vendors.find(v => v.vendorName === watchVendor2);
-            if (vendor?.paymentTerm) {
-                threePartyForm.setValue('vendors.2.paymentTerm', vendor.paymentTerm);
+        if (watchVendor2) {
+            const quote = findQuoteByVendorName(watchVendor2);
+            if (quote && hasVendorRate(quote)) {
+                threePartyForm.setValue('vendors.2.quotationNo', quote.quatationNo || '');
+                threePartyForm.setValue('vendors.2.quotationDate', new Date(quote.timestamp).toISOString().split('T')[0]);
+                threePartyForm.setValue('vendors.2.rate', Number(quote.vendor_rate) || 0);
+            }
+            if (options?.vendors) {
+                const vendor = options.vendors.find(v => normalizeVendorKey(v.vendorName) === normalizeVendorKey(watchVendor2));
+                if (vendor?.paymentTerm) {
+                    threePartyForm.setValue('vendors.2.paymentTerm', vendor.paymentTerm);
+                }
             }
         }
-    }, [watchVendor2, options?.vendors, threePartyForm]);
+    }, [watchVendor2, indentQuotes, options?.vendors, threePartyForm]);
 
     async function onSubmitThreeParty(values: z.infer<typeof threePartySchema>) {
         try {
@@ -1097,19 +1162,6 @@ export default () => {
                                     </DialogDescription>
                                 </DialogHeader>
                                 <div className="grid gap-4">
-                                    <div className="grid gap-2">
-                                        <Label>Amount of Item</Label>
-                                        <Input
-                                            type="number"
-                                            min={0}
-                                            value={amountToDetermineType || (amountToDetermineType === 0 ? 0 : '')}
-                                            onChange={(e) => {
-                                                const val = e.target.value === '' ? 0 : Number(e.target.value);
-                                                setAmountToDetermineType(val);
-                                            }}
-                                            placeholder="Enter amount"
-                                        />
-                                    </div>
 
                                     <div className="grid gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
                                         <Label>Vendor Type Selection</Label>
@@ -1136,7 +1188,6 @@ export default () => {
                                     </DialogClose>
                                     <Button
                                         onClick={() => setDialogStep(2)}
-                                        disabled={amountToDetermineType === null || amountToDetermineType < 0}
                                     >
                                         Next
                                     </Button>
@@ -1181,15 +1232,22 @@ export default () => {
                                                                         className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
                                                                     />
                                                                 </div>
-                                                                {options?.vendorNames
-                                                                    ?.filter((v) =>
-                                                                        v.toLowerCase().includes(searchTermVendor.toLowerCase())
-                                                                    )
-                                                                    .map((v, i) => (
-                                                                        <SelectItem key={i} value={v}>
-                                                                            {v}
-                                                                        </SelectItem>
-                                                                    ))}
+                                                                {getSortedVendorNames(searchTermVendor)
+                                                                    .map((v, i) => {
+                                                                        const quote = findQuoteByVendorName(v);
+                                                                        return (
+                                                                            <SelectItem key={i} value={v}>
+                                                                                <div className="flex justify-between items-center w-full min-w-[200px] gap-2">
+                                                                                    <span className="truncate max-w-[150px]">{v}</span>
+                                                                                    {quote && hasVendorRate(quote) && (
+                                                                                        <span className="text-xs font-bold px-1.5 py-0.5 bg-primary/10 text-primary rounded border border-primary/20 shrink-0">
+                                                                                            ₹{quote.vendor_rate}
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+                                                                            </SelectItem>
+                                                                        );
+                                                                    })}
                                                             </SelectContent>
                                                         </Select>
                                                     </FormItem>
@@ -1203,9 +1261,9 @@ export default () => {
                                                 name="quotationNo"
                                                 render={({ field }) => (
                                                     <FormItem>
-                                                        <FormLabel>Quotation No</FormLabel>
+                                                        <FormLabel>Enquiry No</FormLabel>
                                                         <FormControl>
-                                                            <Input {...field} placeholder="Quotation no." />
+                                                            <Input {...field} placeholder="Enquiry no." />
                                                         </FormControl>
                                                     </FormItem>
                                                 )}
@@ -1215,7 +1273,7 @@ export default () => {
                                                 name="quotationDate"
                                                 render={({ field }) => (
                                                     <FormItem>
-                                                        <FormLabel>Quotation Date</FormLabel>
+                                                        <FormLabel>Enquiry Date</FormLabel>
                                                         <FormControl>
                                                             <Input type="date" {...field} />
                                                         </FormControl>
@@ -1410,11 +1468,22 @@ export default () => {
                                                                             className="h-10 w-full border-0 bg-transparent text-sm outline-none"
                                                                         />
                                                                     </div>
-                                                                    {options?.vendorNames
-                                                                        ?.filter((v) => v.toLowerCase().includes(searchTermVendor.toLowerCase()))
-                                                                        .map((v, i) => (
-                                                                            <SelectItem key={i} value={v}>{v}</SelectItem>
-                                                                        ))}
+                                                                    {getSortedVendorNames(searchTermVendor)
+                                                                        .map((v, i) => {
+                                                                            const quote = findQuoteByVendorName(v);
+                                                                            return (
+                                                                                <SelectItem key={i} value={v}>
+                                                                                    <div className="flex justify-between items-center w-full min-w-[200px] gap-2">
+                                                                                        <span className="truncate max-w-[150px]">{v}</span>
+                                                                                        {quote && hasVendorRate(quote) && (
+                                                                                            <span className="text-xs font-bold px-1.5 py-0.5 bg-primary/10 text-primary rounded border border-primary/20 shrink-0">
+                                                                                                ₹{quote.vendor_rate}
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </SelectItem>
+                                                                            );
+                                                                        })}
                                                                 </SelectContent>
                                                             </Select>
                                                             <FormMessage />
@@ -1428,7 +1497,7 @@ export default () => {
                                                         name={`vendors.${index}.quotationNo`}
                                                         render={({ field }) => (
                                                             <FormItem>
-                                                                <FormLabel>Quotation No</FormLabel>
+                                                                <FormLabel>Enquiry No</FormLabel>
                                                                 <FormControl>
                                                                     <Input {...field} placeholder="Quotation no." />
                                                                 </FormControl>
@@ -1441,7 +1510,7 @@ export default () => {
                                                         name={`vendors.${index}.quotationDate`}
                                                         render={({ field }) => (
                                                             <FormItem>
-                                                                <FormLabel>Quotation Date</FormLabel>
+                                                                <FormLabel>Enquiry Date</FormLabel>
                                                                 <FormControl>
                                                                     <Input type="date" {...field} />
                                                                 </FormControl>

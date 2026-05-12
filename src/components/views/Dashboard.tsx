@@ -452,10 +452,10 @@ export default function Dashboard() {
                                 <p className="font-semibold">Procurement Indents</p>
                                 <ClipboardList size={22} />
                             </div>
-                            <p className="text-4xl font-black text-blue-900 mt-2" title={indent.count.toLocaleString()}>{formatQty(indent.count)}</p>
-                            <div className="text-blue-600 flex justify-between mt-2 border-t border-blue-200 pt-2">
-                                <p className="text-xs font-medium uppercase tracking-wider">Quantity</p>
-                                <p className="font-bold" title={indent.quantity.toLocaleString()}>{formatQty(indent.quantity)}</p>
+                            <p className="text-2xl md:text-3xl font-black text-blue-900 mt-2" title={indent.count.toLocaleString()}>{formatQty(indent.count)}</p>
+                            <div className="text-blue-600 flex flex-col mt-2 border-t border-blue-200 pt-2">
+                                <p className="text-[10px] font-bold uppercase tracking-wider opacity-80">Quantity</p>
+                                <p className="text-lg font-black" title={indent.quantity.toLocaleString()}>{formatQty(indent.quantity)}</p>
                             </div>
                         </CardContent>
                     </Card>
@@ -465,12 +465,12 @@ export default function Dashboard() {
                                 <p className="font-semibold">Total PO Value</p>
                                 <CreditCard size={22} className="text-indigo-600" />
                             </div>
-                            <p className="text-4xl font-black text-indigo-900 mt-2 whitespace-nowrap overflow-hidden text-ellipsis" title={`₹${poTotal.toLocaleString()}`}>
+                            <p className="text-2xl md:text-3xl font-black text-indigo-900 mt-2 break-all" title={`₹${poTotal.toLocaleString()}`}>
                                 {formatCurrency(poTotal)}
                             </p>
-                            <div className="text-indigo-600 flex justify-between mt-2 border-t border-indigo-200 pt-2">
-                                <p className="text-xs font-medium uppercase tracking-wider">Avg/PO</p>
-                                <p className="font-bold" title={`₹${(indent.count > 0 ? poTotal / indent.count : 0).toLocaleString()}`}>
+                            <div className="text-indigo-600 flex flex-col mt-2 border-t border-indigo-200 pt-2">
+                                <p className="text-[10px] font-bold uppercase tracking-wider opacity-80">Avg/PO</p>
+                                <p className="text-lg font-black" title={`₹${(indent.count > 0 ? poTotal / indent.count : 0).toLocaleString()}`}>
                                     {formatCurrency(indent.count > 0 ? poTotal / indent.count : 0)}
                                 </p>
                             </div>
@@ -482,10 +482,10 @@ export default function Dashboard() {
                                 <p className="font-semibold">Items Received</p>
                                 <Truck size={22} />
                             </div>
-                            <p className="text-4xl font-black text-green-900 mt-2" title={purchase.count.toLocaleString()}>{formatQty(purchase.count)}</p>
-                            <div className="text-green-600 flex justify-between mt-2 border-t border-green-200 pt-2">
-                                <p className="text-xs font-medium uppercase tracking-wider">Total Qty</p>
-                                <p className="font-bold" title={purchase.quantity.toLocaleString()}>{formatQty(purchase.quantity)}</p>
+                            <p className="text-2xl md:text-3xl font-black text-green-900 mt-2" title={purchase.count.toLocaleString()}>{formatQty(purchase.count)}</p>
+                            <div className="text-green-600 flex flex-col mt-2 border-t border-green-200 pt-2">
+                                <p className="text-[10px] font-bold uppercase tracking-wider opacity-80">Total Qty</p>
+                                <p className="text-lg font-black" title={purchase.quantity.toLocaleString()}>{formatQty(purchase.quantity)}</p>
                             </div>
                         </CardContent>
                     </Card>
@@ -495,10 +495,10 @@ export default function Dashboard() {
                                 <p className="font-semibold">Stock Issued</p>
                                 <PackageCheck size={22} />
                             </div>
-                            <p className="text-4xl font-black text-orange-900 mt-2" title={out.count.toLocaleString()}>{formatQty(out.count)}</p>
-                            <div className="text-orange-600 flex justify-between mt-2 border-t border-orange-200 pt-2">
-                                <p className="text-xs font-medium uppercase tracking-wider">Issue Qty</p>
-                                <p className="font-bold" title={out.quantity.toLocaleString()}>{formatQty(out.quantity)}</p>
+                            <p className="text-2xl md:text-3xl font-black text-orange-900 mt-2" title={out.count.toLocaleString()}>{formatQty(out.count)}</p>
+                            <div className="text-orange-600 flex flex-col mt-2 border-t border-orange-200 pt-2">
+                                <p className="text-[10px] font-bold uppercase tracking-wider opacity-80">Issue Qty</p>
+                                <p className="text-lg font-black" title={out.quantity.toLocaleString()}>{formatQty(out.quantity)}</p>
                             </div>
                         </CardContent>
                     </Card>
@@ -508,12 +508,12 @@ export default function Dashboard() {
                                 <p className="font-semibold">Stock Alerts</p>
                                 <Warehouse size={22} />
                             </div>
-                            <p className="text-4xl font-black text-red-900 mt-2">
+                            <p className="text-2xl md:text-3xl font-black text-red-900 mt-2">
                                 {alerts.outOfStock}
                             </p>
-                            <div className="text-red-600 flex justify-between mt-2 border-t border-red-200 pt-2">
-                                <p className="text-xs font-medium uppercase tracking-wider">Low Stock</p>
-                                <p className="font-bold">{alerts.lowStock}</p>
+                            <div className="text-red-600 flex flex-col mt-2 border-t border-red-200 pt-2">
+                                <p className="text-[10px] font-bold uppercase tracking-wider opacity-80">Low Stock</p>
+                                <p className="text-lg font-black">{alerts.lowStock}</p>
                             </div>
                         </CardContent>
                     </Card>

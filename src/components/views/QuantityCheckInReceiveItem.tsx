@@ -156,10 +156,17 @@ export default () => {
 
     useEffect(() => {
         const permittedFirms = user?.firm_access || [];
+        const permittedIds = permittedFirms
+            .filter(f => /^\d+$/.test(f))
+            .map(Number);
+        const hasAll = permittedFirms.includes('all');
+
         const filteredByFirm = storeInRecords.filter((item) => {
-            const itemFirm = (item.firmNameMatch || '').trim();
-            return permittedFirms.includes('all') ||
-                permittedFirms.some(f => f.toLowerCase() === itemFirm.toLowerCase());
+            if (hasAll) return true;
+            // Primary: match by firm_id (ID-based security model)
+            if (item.firm_id != null) return permittedIds.includes(item.firm_id);
+            // Fallback: if firm_id is missing, deny access to keep data isolated
+            return false;
         });
 
         setPendingData(

@@ -126,10 +126,10 @@ function GatedRoute({
 
 function firmMatchesAccess(record: any, user: any) {
     return isAllowedFirm(
-        { 
-            id: record?.firm_id, 
-            name: record?.firmNameMatch || record?.firm_name || record?.firmName || record?.firm 
-        }, 
+        {
+            id: record?.firm_id,
+            name: record?.firmNameMatch || record?.firm_name || record?.firmName || record?.firm
+        },
         user?.firm_access
     );
 }
@@ -871,14 +871,6 @@ const routes: RouteAttributes[] = [
         },
     },
     {
-        path: 'manage-users',
-        gateKey: 'administrate',
-        name: 'Manage Users',
-        icon: <Users size={20} />,
-        element: <ManageUsers />,
-        notifications: () => 0,
-    },
-    {
         path: 'master-registry',
         gateKey: 'administrate',
         name: 'Master Registry',
@@ -900,9 +892,15 @@ const routes: RouteAttributes[] = [
         icon: <KeyRound size={20} />,
         element: <Liecense />,
         notifications: () => 0,
-
     },
-
+    {
+        path: 'manage-users',
+        gateKey: 'administrate',
+        name: 'Manage Users',
+        icon: <Users size={20} />,
+        element: <ManageUsers />,
+        notifications: () => 0,
+    },
 ];
 
 const rootElement = document.getElementById('root');

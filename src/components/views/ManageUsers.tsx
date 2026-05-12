@@ -361,7 +361,7 @@ export default function ManageUsers() {
         password: z.string().min(4, 'Password must be at least 4 characters'),
         modify_access: z.enum(['EDIT', 'VIEW']),
         firmNameMatch: z.string().optional(),
-        firm_access: z.array(z.string()),
+        firm_access: z.array(z.number()),
         permissions: z.array(z.string()),
     });
 
@@ -386,7 +386,7 @@ export default function ManageUsers() {
                 password: selectedUser.password,
                 modify_access: selectedUser.modify_access || 'EDIT',
                 firmNameMatch: selectedUser.firmNameMatch,
-                        firm_access: selectedUser.firm_access.map((firm) => firm.trim()).filter(Boolean),
+                        firm_access: selectedUser.firm_access.map(Number).filter((v) => !isNaN(v)),
                 permissions: selectedUser.permissions,
             });
             return;
@@ -417,7 +417,7 @@ export default function ManageUsers() {
             password: value.password,
             modify_access: value.modify_access,
             firmNameMatch: value.firmNameMatch || '',
-            firm_access: value.firm_access.map((firm) => firm.trim()).filter(Boolean),
+            firm_access: value.firm_access.map(Number).filter(id => !isNaN(id)),
         };
 
         allPermissionKeys.forEach((perm) => {
@@ -596,8 +596,8 @@ export default function ManageUsers() {
                                                 control={form.control}
                                                 name="firm_access"
                                                 render={({ field }) => {
-                                                    const selected = (field.value || []).map((v) => String(v).trim()).filter(Boolean);
-                                                    const allSelected = permittedProjects.length > 0 && permittedProjects.every((p) => selected.includes(String(p.id)));
+                                                    const selected = (field.value || []).map(Number).filter(v => !isNaN(v));
+                                                    const allSelected = permittedProjects.length > 0 && permittedProjects.every((p) => selected.includes(p.id));
 
                                                     return (
                                                         <FormItem className="flex items-center justify-between rounded-xl border bg-background p-3">
@@ -614,7 +614,7 @@ export default function ManageUsers() {
                                                                     id="select-all-projects"
                                                                     checked={allSelected}
                                                                     onCheckedChange={(checked) => {
-                                                                        field.onChange(checked ? permittedProjects.map(p => String(p.id)) : []);
+                                                                        field.onChange(checked ? permittedProjects.map(p => p.id) : []);
                                                                     }}
                                                                 />
                                                             </FormControl>
@@ -630,9 +630,9 @@ export default function ManageUsers() {
                                                     control={form.control}
                                                     name="firm_access"
                                                     render={({ field }) => {
-                                                        const values = (field.value || []).map((v) => String(v).trim()).filter(Boolean);
-                                                        const firmIdStr = String(firm.id);
-                                                        const checked = values.includes(firmIdStr) || values.includes(firm.name); // Support both for transition
+                                                        const values = (field.value || []).map(Number).filter(v => !isNaN(v));
+                                                        const firmId = firm.id;
+                                                        const checked = values.includes(firmId);
 
                                                         return (
                                                             <FormItem className="flex items-center space-x-2 space-y-0 p-2 rounded-lg hover:bg-muted/50 transition-colors">
@@ -643,8 +643,8 @@ export default function ManageUsers() {
                                                                         onCheckedChange={(isChecked) => {
                                                                             field.onChange(
                                                                                 isChecked
-                                                                                    ? Array.from(new Set([...values.filter(v => v !== firm.name), firmIdStr])) // Prefer ID when selecting
-                                                                                    : values.filter((v) => v !== firmIdStr && v !== firm.name)
+                                                                                    ? Array.from(new Set([...values, firmId]))
+                                                                                    : values.filter((v) => v !== firmId)
                                                                             );
                                                                         }}
                                                                     />

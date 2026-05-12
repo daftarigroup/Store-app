@@ -27,6 +27,8 @@ import { fetchMasterOptions, type MasterData } from '@/services/masterService';
 import { useAuth } from '@/context/AuthContext';
 import { useSheets } from '@/context/SheetsContext';
 import { calculateRealInventory } from '@/lib/inventoryUtils';
+import { isAllowedFirm } from '@/lib/firmAccess';
+
 
 export default () => {
     const { user } = useAuth();
@@ -291,13 +293,7 @@ export default () => {
         }
     };
 
-    if (dataLoading) {
-        return (
-            <div className="flex justify-center items-center h-screen">
-                <Loader size={40} color="#0f172a" />
-            </div>
-        );
-    }
+
 
     return (
         <div className="pb-10">
@@ -322,13 +318,12 @@ export default () => {
                                 <SelectContent>
                                     {sheetIssues
                                         .filter(i => {
-                                            const permittedFirms = (user?.firm_access || []).map(f => f.trim().toLowerCase());
-                                            const sheetFirm = (i.projectName || i.firm_name || '').trim().toLowerCase();
-                                            const isFirmMatch = permittedFirms.includes('all') || permittedFirms.includes(sheetFirm);
+                                            const isFirmMatch = isAllowedFirm({ id: i.firm_id, name: i.projectName || i.firm_name }, user?.firm_access || []);
                                             const isIssued = i.actual1 && i.actual1 !== '';
                                             const isNotReturned = !(i.return_slip || i.return_person_name || (i.rejected_damage_qty && i.rejected_damage_qty !== '0' && i.rejected_damage_qty !== ''));
                                             return isFirmMatch && isIssued && isNotReturned;
                                         })
+
                                         .map((issue) => (
                                             <SelectItem key={issue.id} value={String(issue.id)}>
                                                 {issue.issueNo} - {issue.productName}

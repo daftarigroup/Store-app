@@ -28,7 +28,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { fetchFullkittingRecords, updateFullkittingRecord, uploadBiltyImage, type FullkittingRecord } from '@/services/fullkittingService';
 import { createPaymentEntry } from '@/services/storeInService';
 import { formatDateTime, parseCustomDate } from '@/lib/utils';
-import { supabase } from '@/lib/supabase';
+import { filterByFirmAccess } from '@/lib/firmAccess';
 
 // Helper function to format date as "YYYY-MM-DD"
 function formatDate(date: Date): string {
@@ -50,32 +50,25 @@ export default function FullKiting() {
     const fetchData = async () => {
         try {
             setDataLoading(true);
-            const data = await fetchFullkittingRecords(user?.firm_access);
+            const data = await fetchFullkittingRecords(user?.firm_access || []);
 
-            // Fetch store_in records to check HOD status
-            const { data: storeInData } = await supabase
-                .from('store_in')
-                .select('indent_no, lift_number, hod_status');
+            // Simple filter: only records where transportation is included
+            const freightRecords = data.filter(item => item.transportingInclude?.toLowerCase() === 'yes');
 
-            // Records are already firm-filtered by the service using firm_id first.
-            const filteredData = data.filter(item => {
-                // Only show if HOD check is complete (Approved)
-                const linkedStoreIn = (storeInData || []).find(s => 
-                    s.indent_no === item.indentNumber || s.lift_number === item.indentNumber
-                );
-                
-                if (linkedStoreIn && linkedStoreIn.hod_status !== 'Approved') {
-                    return false;
+            // Secondary client-side guard (defense in depth)
+            const firmScopedData = filterByFirmAccess(
+                freightRecords,
+                user?.firm_access || [],
+                {
+                    id: (i: any) => i.firm_id,
+                    name: (i: any) => i.firmNameMatch
                 }
+            );
 
-                return true;
-            });
-
-            // Pending: everything that hasn't been completed yet (actual is empty)
-            setPendingData(filteredData.filter(i => !i.actual));
-
-            // History: everything that has been completed (actual is set)
-            setHistoryData(filteredData.filter(i => i.actual));
+            // Pending: no actual date yet (freight details not filled)
+            setPendingData(firmScopedData.filter(i => !i.actual));
+            // History: actual date set (freight details filled in FullKiting form)
+            setHistoryData(firmScopedData.filter(i => !!i.actual));
         } catch (error) {
             console.error('Error fetching fullkitting data:', error);
             toast.error('Failed to fetch data');
@@ -236,6 +229,7 @@ export default function FullKiting() {
             }
 
             await updateFullkittingRecord(selectedIndent.indentNumber, {
+                id: selectedIndent.id,
                 actual: currentDateTime,
                 status: 'Yes',
                 vehicleNumber: values.vehicleNumber,

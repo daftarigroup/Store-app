@@ -664,6 +664,7 @@ export type QuotationHistorySheet = {
     token?: string;
     vendor_rate?: number;
     responded_at?: string;
+    firm_id?: number;
 };
 
 export type MasterDataRow = Record<string, any>;

@@ -328,8 +328,6 @@ export async function insertStoreInRecord(storeInData: StoreInInsertData) {
             receiver_name: null,
         };
 
-        console.log('📤 Inserting store-in record (Full Schema):', mappedData);
-
         const { data, error } = await supabase
             .from('store_in')
             .insert([mappedData])
@@ -345,7 +343,6 @@ export async function insertStoreInRecord(storeInData: StoreInInsertData) {
             throw error;
         }
 
-        console.log('✅ Store-in record inserted:', data);
         return data;
     } catch (error) {
         console.error('Error inserting store-in record:', error);
@@ -428,7 +425,6 @@ export async function updatePendingLiftQty(indentNumber: string, liftQty: number
 
         if (error) throw error;
 
-        console.log(`✅ Updated pending_lift_qty for indent ${indentNumber}: ${liftQty}`);
         return true;
     } catch (error) {
         console.error('Error updating pending lift qty:', error);

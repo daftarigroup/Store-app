@@ -18,7 +18,6 @@ import {
 import { Truck, Building, FileText, IndianRupee, Plus } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel } from '../ui/form';
-import { PuffLoader as Loader } from 'react-spinners';
 import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Input } from '../ui/input';
@@ -42,6 +41,7 @@ import {
     createPaymentEntry,
     type StoreInRecord,
 } from '@/services/storeInService';
+import { createFullkittingEntry } from '@/services/fullkittingService';
 
 interface StoreInPendingData {
     liftNumber: string;
@@ -689,6 +689,10 @@ export default () => {
                     challanImage: challanImageUrl || '',
                 });
 
+                // Note: fullkitting entry was already created in GetLift when transportation=Yes.
+                // Creating it again here would produce duplicates. Direct entries handle
+                // their own fullkitting creation in onDirectSubmit below.
+
                 // If Not Received, also create a record in the direct table
                 if (values.status === 'Not Received') {
                     await createDirectRecord({
@@ -706,7 +710,7 @@ export default () => {
                         receiverName: user?.name || 'Store User',
                         transportationInclude: 'No',
                         firmNameMatch: selectedIndent.firmNameMatch,
-                        firm_id: selectedIndent.firm_id,
+                        firm_id: selectedIndent.firm_id || options?.firmObjects?.find((f: any) => f.name === selectedIndent.firmNameMatch)?.id,
                         timestamp: currentDateTime,
                     });
 
@@ -846,6 +850,25 @@ export default () => {
                     payment_terms: 'Advance', // Default to advance to show up in Make Payment
 
                     prefix: 'DIRECT'
+                });
+            }
+
+            // 4. Trigger Freight Payment flow if transportation is included
+            if (values.anyTransport === 'Yes') {
+                await createFullkittingEntry({
+                    timestamp: new Date().toISOString(),
+                    indent_number: indentId,
+                    vendor_name: values.vendorName,
+                    product_name: values.productName,
+                    qty: values.receivingQty || 0,
+                    bill_no: values.billNo || values.challanNo || '',
+                    transporter_name: values.transporterName || '',
+                    amount: values.transportAmount || 0,
+                    vehicle_no: values.vehicleNo || '',
+                    driver_name: '',
+                    driver_mobile_no: '',
+                    firm_name: values.firmName,
+                    firm_id: firmId,
                 });
             }
 
@@ -1165,7 +1188,7 @@ export default () => {
 
                                             <DialogFooter className="pt-4">
                                                 <Button type="submit" disabled={directForm.formState.isSubmitting} className="w-full md:w-auto">
-                                                    {directForm.formState.isSubmitting ? <Loader className="animate-spin h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+                                                    <Plus className="h-4 w-4 mr-2" />
                                                     Submit Direct Entry
                                                 </Button>
                                             </DialogFooter>
@@ -1508,13 +1531,6 @@ export default () => {
                                     </DialogClose>
 
                                     <Button type="submit" disabled={form.formState.isSubmitting}>
-                                        {form.formState.isSubmitting && (
-                                            <Loader
-                                                size={20}
-                                                color="white"
-                                                aria-label="Loading Spinner"
-                                            />
-                                        )}
                                         {(selectedIndent.originalItems?.length || 0) > 1
                                             ? `Store In`
                                             : 'Store In'

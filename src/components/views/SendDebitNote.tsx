@@ -10,6 +10,7 @@ import {
     uploadDebitNoteCopy,
     type StoreInRecord,
 } from '@/services/storeInService';
+import { createTallyEntryRecord } from '@/services/tallyEntryService';
 import {
     Dialog,
     DialogContent,
@@ -64,6 +65,8 @@ interface StoreInPendingData {
     transporterName: string;
     amount: number;
     firmNameMatch: string;
+    poNumber: string;
+    firm_id?: number;
     reason: string;
     plannedDate: string;
     timestamp: string;
@@ -136,10 +139,18 @@ export default () => {
     }, [user?.firm_access]);
 
     useEffect(() => {
+        const permittedFirms = user?.firm_access || [];
+        const permittedIds = permittedFirms
+            .filter(f => /^\d+$/.test(f))
+            .map(Number);
+        const hasAll = permittedFirms.includes('all');
+
         const filteredByFirm = storeInRecords.filter((item) => {
-            const permittedFirms = (user?.firm_access || []).map(f => f.trim().toLowerCase());
-            const itemFirm = (item.firmNameMatch || '').trim().toLowerCase();
-            return permittedFirms.includes('all') || permittedFirms.includes(itemFirm);
+            if (hasAll) return true;
+            // Primary: match by firm_id (ID-based security model)
+            if (item.firm_id != null) return permittedIds.includes(item.firm_id);
+            // Fallback: if firm_id is missing, deny access to keep data isolated
+            return false;
         });
 
         setPendingData(
@@ -161,6 +172,8 @@ export default () => {
                     transporterName: i.transporterName || '',
                     amount: i.amount || 0,
                     firmNameMatch: i.firmNameMatch || '',
+                    poNumber: i.poNumber || '',
+                    firm_id: i.firm_id,
                     reason: i.reason || '',
                     plannedDate: i.planned9 || '',
                     timestamp: i.timestamp || '',
@@ -246,6 +259,30 @@ export default () => {
                     firmNameMatch: selectedItem.firmNameMatch, // Pass project name to sync
                 }
             );
+
+            // ✅ Create Audit Data (tally_entry) after Debit Note is processed
+            try {
+                const formattedDateOnly = currentDateTime.split('T')[0];
+                await createTallyEntryRecord({
+                    timestamp: currentDateTime,
+                    lift_number: selectedItem.liftNumber || '',
+                    indent_number: selectedItem.indentNumber || '',
+                    po_number: selectedItem.poNumber || '',
+                    material_in_date: formattedDateOnly,
+                    product_name: selectedItem.productName || '',
+                    bill_status: 'Bill Received',
+                    qty: Number(selectedItem.qty || 0),
+                    party_name: selectedItem.vendorName || '',
+                    bill_amt: Number(selectedItem.billAmount || 0),
+                    bill_image: selectedItem.photoOfBill || '',
+                    bill_no: selectedItem.billNo || '',
+                    planned1: formattedDateOnly,
+                    firmNameMatch: selectedItem.firmNameMatch,
+                    firm_id: selectedItem.firm_id,
+                });
+            } catch (auditError) {
+                console.error('Failed to create audit entry during Debit Note:', auditError);
+            }
 
             console.log('✅ Update successful');
             toast.success(`Updated status for ${selectedItem.indentNumber}`);

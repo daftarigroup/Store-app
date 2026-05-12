@@ -195,12 +195,16 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                     location: r.location,
                     status: r.status,
                     givenQty: r.given_qty,
+                    timestamp: r.timestamp || '',
                     projectName: r.firm_name,
+                    firm_name: r.firm_name || '',
+                    firmNameMatch: r.firmNameMatch || r.firm_name || '',
+                    firm_id: r.firm_id,
                     firmId: r.firm_id,
                     constructorName: r.constructor_name,
-
                     siteLocation: r.site_location,
                     rejected_damage_qty: r.rejected_damage_qty,
+                    return_slip: r.return_slip || '',
                     returnPersonName: r.return_person_name,
                     issuePersonName: r.issue_person_name,
                 }));
