@@ -55,7 +55,7 @@ interface StoreInPendingData {
     indentNumber: string;
     product: string;
     uom: string;
-    quantity: number;
+    quantity: number
     poCopy: string;
 
     billStatus: string;

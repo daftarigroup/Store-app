@@ -665,7 +665,7 @@ export default function GetPurchase() {
                 const qty = item.pendingPoQty || 0;
                 return sum + (effectiveRate * qty);
             }, 0);
-            form.setValue('billAmount', initialTotal);
+            form.setValue('billAmount', Number(initialTotal.toFixed(2)));
 
             setVendorSearch('');
         }
@@ -688,7 +688,7 @@ export default function GetPurchase() {
     const currentCalculatedTotal = calculateTotalAmount(itemsWatcher);
 
     useEffect(() => {
-        form.setValue('billAmount', currentCalculatedTotal);
+        form.setValue('billAmount', Number(currentCalculatedTotal.toFixed(2)));
     }, [currentCalculatedTotal, form]);
 
     const handleOpenChange = (open: boolean) => {
@@ -703,6 +703,7 @@ export default function GetPurchase() {
 
     async function onSubmit() {
         const values = form.getValues();
+        const roundedBillAmount = Number((Number(values.billAmount) || 0).toFixed(2));
         try {
             // ✅ VALIDATION: Ensure lifting quantity does not exceed pending lift quantity
             if (Number(values.qty) > (selectedIndent?.pendingLiftQty || 0)) {
@@ -753,7 +754,7 @@ export default function GetPurchase() {
                             qty: liftQty,
                             discountAmount: 0,
                             typeOfBill: values.typeOfBill || '',
-                            billAmount: Number(values.billAmount) || 0,
+                            billAmount: roundedBillAmount,
                             paymentType: '',
                             advanceAmountIfAny: 0,
                             photoOfBill: photoUrl,
@@ -1247,8 +1248,14 @@ export default function GetPurchase() {
                                                                     <FormControl>
                                                                         <Input
                                                                             type="number"
+                                                                            step="0.01"
                                                                             {...field}
                                                                             value={field.value || 0}
+                                                                            onBlur={(e) => {
+                                                                                field.onBlur();
+                                                                                const rounded = Number((Number(e.target.value) || 0).toFixed(2));
+                                                                                field.onChange(rounded);
+                                                                            }}
                                                                             className="h-11 font-semibold"
                                                                         />
                                                                     </FormControl>

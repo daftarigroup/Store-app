@@ -788,6 +788,7 @@ export default () => {
 
     async function onDirectSubmit(values: DirectFormValues) {
         try {
+            const roundedBillAmount = Number((values.billAmount || 0).toFixed(2));
             const firmId = values.firmId || options?.firmObjects?.find((firm) => firm.name === values.firmName)?.id;
             if (!firmId) {
                 toast.error('Project ID is required for direct entry');
@@ -820,7 +821,7 @@ export default () => {
                 receivedQuantity: values.receivingQty || 0,
                 receivingStatus: values.status,
                 billNo: values.billNo || '',
-                billAmount: values.billAmount || 0,
+                billAmount: roundedBillAmount,
                 photoOfProduct: photoUrl,
                 photoOfBill: billUrl,
                 receiverName: values.receiverName,
@@ -842,7 +843,7 @@ export default () => {
                     indent_number: indentId,
                     vendor_name: values.vendorName,
                     po_number: liftId,
-                    bill_amount: values.billAmount || 0,
+                    bill_amount: roundedBillAmount,
                     photo_of_bill: billUrl,
                     product_name: values.productName,
                     firm_name: values.firmName,
@@ -1045,7 +1046,17 @@ export default () => {
                                                                 <FormItem>
                                                                     <FormLabel>Bill Amount</FormLabel>
                                                                     <FormControl>
-                                                                        <Input type="number" {...field} placeholder="Enter amount" />
+                                                                        <Input
+                                                                            type="number"
+                                                                            step="0.01"
+                                                                            {...field}
+                                                                            onBlur={(e) => {
+                                                                                field.onBlur();
+                                                                                const rounded = Number((Number(e.target.value) || 0).toFixed(2));
+                                                                                field.onChange(rounded);
+                                                                            }}
+                                                                            placeholder="Enter amount"
+                                                                        />
                                                                     </FormControl>
                                                                 </FormItem>
                                                             )}
@@ -1229,7 +1240,7 @@ export default () => {
                                 {
                                     accessorKey: 'billAmount',
                                     header: 'Bill Amount',
-                                    cell: ({ getValue }) => `₹${(getValue() as number || 0).toLocaleString('en-IN')}`
+                                    cell: ({ getValue }) => `₹${(getValue() as number || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                                 },
                                 { accessorKey: 'qty', header: 'Qty' },
                                 { accessorKey: 'receivingStatus', header: 'Rec. Status' },
