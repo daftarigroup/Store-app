@@ -12,8 +12,14 @@ import {
     SelectContent,
     SelectItem,
 } from '@/components/ui/select';
+import {
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
 import { ClipLoader as Loader } from 'react-spinners';
-import { RotateCcw } from 'lucide-react';
+import { RotateCcw, Trash, Package, ClipboardList } from 'lucide-react';
 import { pdf } from '@react-pdf/renderer';
 import IssuePdf from '../element/IssuePdf';
 const logo = "/logo.png";
@@ -304,277 +310,241 @@ export default () => {
                 <RotateCcw size={50} className="text-primary" />
             </Heading>
 
-            <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit, onError)} className="space-y-6 p-5">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 bg-primary/5 p-4 rounded-xl border border-primary/20 items-end">
-                        <FormItem className="overflow-hidden">
-                            <FormLabel>Select Issue Number</FormLabel>
-                            <Select onValueChange={handleIssueSelect}>
-                                <FormControl>
-                                    <SelectTrigger className="w-full overflow-hidden text-left h-auto min-h-[40px] py-1">
-                                        <SelectValue placeholder="Select issue" className="truncate whitespace-normal line-clamp-1" />
-                                    </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                    {sheetIssues
-                                        .filter(i => {
-                                            const isFirmMatch = isAllowedFirm({ id: i.firm_id, name: i.projectName || i.firm_name }, user?.firm_access || []);
-                                            const isIssued = i.actual1 && i.actual1 !== '';
-                                            const isNotReturned = !(i.return_slip || i.return_person_name || (i.rejected_damage_qty && i.rejected_damage_qty !== '0' && i.rejected_damage_qty !== ''));
-                                            return isFirmMatch && isIssued && isNotReturned;
-                                        })
+            <div className="max-w-6xl mx-auto px-4">
+                <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit, onError)} className="space-y-8">
+                        <Card className="border-slate-200 shadow-sm overflow-hidden">
+                            <CardHeader className="bg-slate-50/50 border-b border-slate-100">
+                                <CardTitle className="text-sm font-bold uppercase tracking-widest text-slate-500">Return Context</CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                    <FormItem className="lg:col-span-1">
+                                        <FormLabel className="text-slate-600 font-semibold text-xs uppercase">Select Issue Number <span className="text-destructive">*</span></FormLabel>
+                                        <Select onValueChange={handleIssueSelect}>
+                                            <FormControl>
+                                                <SelectTrigger className="w-full h-11 bg-white border-slate-200 focus:ring-primary/20">
+                                                    <SelectValue placeholder="Search issue no." />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                {sheetIssues
+                                                    .filter(i => {
+                                                        const isFirmMatch = isAllowedFirm({ id: i.firm_id, name: i.projectName || i.firm_name }, user?.firm_access || []);
+                                                        const isIssued = i.actual1 && i.actual1 !== '';
+                                                        const isNotReturned = !(i.return_slip || i.return_person_name || (i.rejected_damage_qty && i.rejected_damage_qty !== '0' && i.rejected_damage_qty !== ''));
+                                                        return isFirmMatch && isIssued && isNotReturned;
+                                                    })
+                                                    .map((issue) => (
+                                                        <SelectItem key={issue.id} value={String(issue.id)}>
+                                                            {issue.issueNo} - {issue.productName}
+                                                        </SelectItem>
+                                                    ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </FormItem>
 
-                                        .map((issue) => (
-                                            <SelectItem key={issue.id} value={String(issue.id)}>
-                                                {issue.issueNo} - {issue.productName}
-                                            </SelectItem>
-                                        ))}
-                                </SelectContent>
-                            </Select>
-                        </FormItem>
-                        <FormField
-                            control={form.control}
-                            name="constructorName"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Contractor Name</FormLabel>
-                                    <FormControl>
-                                        <Input {...field} />
-                                    </FormControl>
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="siteLocation"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Site Location</FormLabel>
-                                    <FormControl>
-                                        <Input {...field} />
-                                    </FormControl>
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="projectName"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Project Name</FormLabel>
-                                    <Select onValueChange={field.onChange} value={field.value}>
-                                        <FormControl>
-                                            <SelectTrigger className="w-full h-10">
-                                                <SelectValue placeholder="Select project" />
-                                            </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                            {(options?.firms || []).map((firm, i) => (
-                                                <SelectItem key={i} value={firm}>
-                                                    {firm}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="issuePersonName"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Issue Person Name</FormLabel>
-                                    <FormControl>
-                                        <Input {...field} />
-                                    </FormControl>
-                                </FormItem>
-                            )}
-                        />
+                                    <FormField
+                                        control={form.control}
+                                        name="projectName"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-slate-600 font-semibold text-xs uppercase">Project Name</FormLabel>
+                                                <FormControl>
+                                                    <Input {...field} disabled className="h-11 bg-slate-50" />
+                                                </FormControl>
+                                            </FormItem>
+                                        )}
+                                    />
+                                    
+                                    <FormField
+                                        control={form.control}
+                                        name="constructorName"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-slate-600 font-semibold text-xs uppercase">Contractor Name</FormLabel>
+                                                <FormControl>
+                                                    <Input {...field} disabled className="h-11 bg-slate-50" />
+                                                </FormControl>
+                                            </FormItem>
+                                        )}
+                                    />
 
-                        <FormField
-                            control={form.control}
-                            name="returnPersonName"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Return Person Name</FormLabel>
-                                    <FormControl>
-                                        <Input placeholder="Enter returner name" {...field} />
-                                    </FormControl>
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="remarks"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Issue Remarks</FormLabel>
-                                    <FormControl>
-                                        <Input {...field} />
-                                    </FormControl>
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="damageRemark"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Damage Remark</FormLabel>
-                                    <FormControl>
-                                        <Input placeholder="Enter damage details" {...field} />
-                                    </FormControl>
-                                </FormItem>
-                            )}
-                        />
-                    </div>
-
-                    <div className="space-y-4">
-                        {fields.map((field, index) => {
-                            const groupHead = products[index]?.groupHead;
-                            const groupHeadOptions = options?.allGroupHeads || [];
-                            const productOptions = options?.products[groupHead] || [];
-                            const originalIssue = sheetIssues.find(i => i.id === form.watch('id'));
-
-                            return (
-                                <div
-                                    key={field.id}
-                                    className="flex flex-col gap-4 border p-4 rounded-lg relative"
-                                >
-                                    <div className="grid grid-cols-1 md:grid-cols-[1.2fr_2fr_1fr_1.5fr_0.8fr] gap-4 items-end">
-                                        {/* <FormField
-                                            control={form.control}
-                                            name={`products.${index}.department`}
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Department</FormLabel>
-                                                    <Select onValueChange={field.onChange} value={field.value}>
-                                                        <FormControl>
-                                                            <SelectTrigger className="w-full overflow-hidden text-left">
-                                                                <SelectValue className="truncate" />
-                                                            </SelectTrigger>
-                                                        </FormControl>
-                                                        <SelectContent>
-                                                            {(options?.departments || []).map((dep, i) => (
-                                                                <SelectItem key={i} value={dep}>{dep}</SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </FormItem>
-                                            )}
-                                        /> */}
-                                        <FormField
-                                            control={form.control}
-                                            name={`products.${index}.groupHead`}
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Group Head</FormLabel>
-                                                    <Select onValueChange={field.onChange} value={field.value}>
-                                                        <FormControl>
-                                                            <SelectTrigger className="w-full overflow-hidden text-left h-auto min-h-[40px] py-1">
-                                                                <SelectValue className="truncate whitespace-normal line-clamp-1" />
-                                                            </SelectTrigger>
-                                                        </FormControl>
-                                                        <SelectContent>
-                                                            {groupHeadOptions.map((gh, i) => (
-                                                                <SelectItem key={i} value={gh}>{gh}</SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </FormItem>
-                                            )}
-                                        />
-                                        <FormField
-                                            control={form.control}
-                                            name={`products.${index}.productName`}
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Product Name {originalIssue ? `(Issue Qty: ${originalIssue.quantity})` : ''}</FormLabel>
-                                                    <Select onValueChange={field.onChange} value={field.value}>
-                                                        <FormControl>
-                                                            <SelectTrigger className="w-full overflow-hidden text-left h-auto min-h-[40px] py-1">
-                                                                <SelectValue placeholder="Select" className="truncate whitespace-normal line-clamp-1" />
-                                                            </SelectTrigger>
-                                                        </FormControl>
-                                                        <SelectContent>
-                                                            {productOptions.map((p, i) => {
-                                                                const inv = realInventory.find(item => item.itemName === p);
-                                                                const stock = inv ? inv.current : 0;
-                                                                return (
-                                                                    <SelectItem key={i} value={p}>
-                                                                        {p} (Stock: {stock})
-                                                                    </SelectItem>
-                                                                );
-                                                            })}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </FormItem>
-                                            )}
-                                        />
-                                        <FormField
-                                            control={form.control}
-                                            name={`products.${index}.quantity`}
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Return Qty</FormLabel>
-                                                    <FormControl><Input type="number" {...field} /></FormControl>
-                                                </FormItem>
-                                            )}
-                                        />
-                                        <FormField
-                                            control={form.control}
-                                            name="rejectedDamageQty"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Reject/Damage Qty</FormLabel>
-                                                    <FormControl>
-                                                        <Input type="number" placeholder="Qty" {...field} />
-                                                    </FormControl>
-                                                </FormItem>
-                                            )}
-                                        />
-                                        <FormField
-                                            control={form.control}
-                                            name={`products.${index}.uom`}
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>UOM</FormLabel>
-                                                    <Select onValueChange={field.onChange} value={field.value}>
-                                                        <FormControl>
-                                                            <SelectTrigger className="w-full overflow-hidden">
-                                                                <SelectValue className="truncate" />
-                                                            </SelectTrigger>
-                                                        </FormControl>
-                                                        <SelectContent>
-                                                            {(options?.uoms || []).map((u, i) => (
-                                                                <SelectItem key={i} value={u}>{u}</SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </FormItem>
-                                            )}
-                                        />
-                                    </div>
+                                    <FormField
+                                        control={form.control}
+                                        name="siteLocation"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-slate-600 font-semibold text-xs uppercase">Site Location</FormLabel>
+                                                <FormControl>
+                                                    <Input {...field} disabled className="h-11 bg-slate-50" />
+                                                </FormControl>
+                                            </FormItem>
+                                        )}
+                                    />
                                 </div>
-                            );
-                        })}
-                    </div>
+                            </CardContent>
+                        </Card>
 
-                    <div>
-                        <Button
-                            className="w-full bg-orange-600 hover:bg-orange-700 font-bold"
-                            type="submit"
-                            disabled={form.formState.isSubmitting}
-                        >
-                            {form.formState.isSubmitting && (
-                                <Loader size={20} color="white" aria-label="Loading Spinner" />
-                            )}
-                            Confirm Return
-                        </Button>
-                    </div>
-                </form>
-            </Form>
+                        <Card className="border-slate-200 shadow-sm overflow-hidden">
+                            <CardHeader className="bg-slate-50/50 border-b border-slate-100">
+                                <CardTitle className="text-sm font-bold uppercase tracking-widest text-slate-500">Return Details</CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    <FormField
+                                        control={form.control}
+                                        name="returnPersonName"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-slate-600 font-semibold">Returner Name <span className="text-destructive">*</span></FormLabel>
+                                                <FormControl>
+                                                    <Input placeholder="Who is returning?" className="h-11 bg-white border-slate-200 focus:ring-primary/20" {...field} />
+                                                </FormControl>
+                                            </FormItem>
+                                        )}
+                                    />
+
+                                    <FormField
+                                        control={form.control}
+                                        name="issuePersonName"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-slate-600 font-semibold">Original Issuer</FormLabel>
+                                                <FormControl>
+                                                    <Input {...field} disabled className="h-11 bg-slate-50" />
+                                                </FormControl>
+                                            </FormItem>
+                                        )}
+                                    />
+
+                                    <FormField
+                                        control={form.control}
+                                        name="damageRemark"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-slate-600 font-semibold">Damage Remarks</FormLabel>
+                                                <FormControl>
+                                                    <Input placeholder="Condition of returned item" className="h-11 bg-white border-slate-200 focus:ring-primary/20" {...field} />
+                                                </FormControl>
+                                            </FormItem>
+                                        )}
+                                    />
+                                    
+                                    <FormField
+                                        control={form.control}
+                                        name="remarks"
+                                        render={({ field }) => (
+                                            <FormItem className="lg:col-span-3">
+                                                <FormLabel className="text-slate-600 font-semibold">Original Issue Remarks</FormLabel>
+                                                <FormControl>
+                                                    <Input {...field} disabled className="h-11 bg-slate-50" />
+                                                </FormControl>
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-2 px-1">
+                                <div className="w-2 h-6 bg-primary rounded-full" />
+                                <h3 className="text-lg font-bold text-slate-700">Material Being Returned</h3>
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-4">
+                                {fields.map((field, index) => {
+                                    const groupHead = products[index]?.groupHead;
+                                    const originalIssue = sheetIssues.find(i => i.id === form.watch('id'));
+
+                                    return (
+                                        <Card
+                                            key={field.id}
+                                            className="border-slate-200 shadow-sm hover:border-primary/30 transition-colors"
+                                        >
+                                            <CardContent className="p-4 sm:p-6">
+                                                <div className="flex justify-between items-center mb-4">
+                                                    <div className="bg-slate-100 px-3 py-1 rounded-full text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                                        Returning Item #{index + 1}
+                                                    </div>
+                                                </div>
+                                                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
+                                                    <FormItem>
+                                                        <FormLabel className="text-xs font-semibold text-slate-500 uppercase">Group Head</FormLabel>
+                                                        <Input value={groupHead} disabled className="h-11 bg-slate-50" />
+                                                    </FormItem>
+
+                                                    <FormItem className="md:col-span-1">
+                                                        <FormLabel className="text-xs font-semibold text-slate-500 uppercase">Product Name</FormLabel>
+                                                        <Input value={products[index]?.productName} disabled className="h-11 bg-slate-50" />
+                                                    </FormItem>
+
+                                                    <FormField
+                                                        control={form.control}
+                                                        name={`products.${index}.quantity`}
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel className="text-xs font-semibold text-slate-700 uppercase">
+                                                                    Good Qty to Return {originalIssue ? `(Max: ${originalIssue.quantity})` : ''}
+                                                                </FormLabel>
+                                                                <FormControl>
+                                                                    <Input
+                                                                        type="number"
+                                                                        className="h-11 bg-white border-primary/20 focus:ring-primary/20 font-bold text-primary"
+                                                                        {...field}
+                                                                    />
+                                                                </FormControl>
+                                                            </FormItem>
+                                                        )}
+                                                    />
+
+                                                    <FormField
+                                                        control={form.control}
+                                                        name="rejectedDamageQty"
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel className="text-xs font-semibold text-red-500 uppercase">
+                                                                    Rejected/Damage Qty
+                                                                </FormLabel>
+                                                                <FormControl>
+                                                                    <Input
+                                                                        type="number"
+                                                                        placeholder="0"
+                                                                        className="h-11 bg-white border-red-200 focus:ring-red-100 text-red-600 font-bold"
+                                                                        {...field}
+                                                                    />
+                                                                </FormControl>
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        <div className="pt-4 pb-10">
+                            <Button
+                                className="w-full h-11 font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-200/50 transition-all active:scale-[0.98]"
+                                type="submit"
+                                disabled={form.formState.isSubmitting}
+                            >
+                                {form.formState.isSubmitting ? (
+                                    <Loader size={20} color="white" />
+                                ) : (
+                                    <span className="flex items-center gap-2">
+                                        <RotateCcw size={20} />
+                                        Process Material Return
+                                    </span>
+                                )}
+                            </Button>
+                        </div>
+                    </form>
+                </Form>
+            </div>
         </div>
     );
 };

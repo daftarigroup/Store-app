@@ -53,9 +53,17 @@ export function ComboBox({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between">
-          <span className="text-muted-foreground truncate max-w-[150px]">{displayLabel()}</span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50" />
+        <Button 
+          variant="outline" 
+          role="combobox" 
+          aria-expanded={open} 
+          className={cn(
+            "w-full justify-between h-10 px-3 border-slate-200/80 bg-white hover:bg-slate-50 transition-colors font-medium",
+            value.length > 0 ? "text-foreground" : "text-muted-foreground"
+          )}
+        >
+          <span className="truncate max-w-[150px]">{displayLabel()}</span>
+          <ChevronsUpDown className="ml-2 h-3.5 w-3.5 opacity-40 shrink-0" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[200px] p-0">

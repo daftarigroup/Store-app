@@ -13,6 +13,12 @@ import {
     SelectContent,
     SelectItem,
 } from '@/components/ui/select';
+import {
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
 import { ClipLoader as Loader } from 'react-spinners';
 import { ClipboardList, Trash, Search, RotateCcw } from 'lucide-react';
 import { pdf } from '@react-pdf/renderer';
@@ -368,324 +374,304 @@ export default () => {
                 <ClipboardList size={50} className="text-primary" />
             </Heading>
 
-            <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit, onError)} className="space-y-6 p-5">
-                    <div className="grid grid-cols-1 md:grid-cols-5 gap-6 bg-secondary/20 p-4 rounded-xl border border-secondary/30">
-                        <FormField
-                            control={form.control}
-                            name="constructorName"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Contractor Name <span className="text-destructive">*</span></FormLabel>
-                                    <Select onValueChange={field.onChange} value={field.value}>
-                                        <FormControl>
-                                            <SelectTrigger className="w-full h-10">
-                                                <SelectValue placeholder="Select contractor" />
-                                            </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                            {(options?.contractors || []).map((c, i) => (
-                                                <SelectItem key={i} value={c.contractorName}>
-                                                    {c.contractorName}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="issuePersonName"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Issue Person Name</FormLabel>
-                                    <FormControl>
-                                        <Input placeholder="Enter issuer name" {...field} />
-                                    </FormControl>
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="siteLocation"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Site Location <span className="text-destructive">*</span></FormLabel>
-                                    <Select onValueChange={field.onChange} value={field.value}>
-                                        <FormControl>
-                                            <SelectTrigger className="w-full h-10">
-                                                <SelectValue placeholder="Select location" />
-                                            </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                            {(options?.siteLocations || []).map((loc, i) => (
-                                                <SelectItem key={i} value={loc}>
-                                                    {loc}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="projectName"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Project Name <span className="text-destructive">*</span></FormLabel>
-                                    <Select 
-                                        onValueChange={(val) => {
-                                            field.onChange(val);
-                                            const firmObj = options?.firmObjects?.find(f => f.name === val);
-                                            if (firmObj) form.setValue('firmId', firmObj.id);
-                                        }} 
-                                        value={field.value}
-                                    >
-                                        <FormControl>
-                                            <SelectTrigger className="w-full h-10">
-                                                <SelectValue placeholder="Select project" />
-                                            </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                            {(options?.firmObjects || [])
-                                                .filter(f => isAllowedFirm({ id: f.id, name: f.name }, user?.firm_access || []))
-                                                .map((firm) => (
-                                                    <SelectItem key={firm.id} value={firm.name}>
-                                                        {firm.name}
-                                                    </SelectItem>
-                                                ))}
-                                        </SelectContent>
-                                    </Select>
-
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="remarks"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Remarks</FormLabel>
-                                    <FormControl>
-                                        <Input placeholder="Enter remarks" {...field} />
-                                    </FormControl>
-                                </FormItem>
-                            )}
-                        />
-                    </div>
-
-                    <div className="space-y-4">
-                        {fields.map((field, index) => {
-                            const groupHead = products[index]?.groupHead;
-                            const groupHeadOptions = options?.allGroupHeads || [];
-                            const productOptions = options?.products[groupHead] || [];
-
-                            return (
-                                <div
-                                    key={field.id}
-                                    className="flex flex-col gap-4 border p-4 rounded-lg relative"
-                                >
-                                    <div className="flex justify-between items-center mb-2">
-                                        <h3 className="text-md font-semibold">Product {index + 1}</h3>
-                                        {fields.length > 1 && (
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                className="text-destructive hover:bg-destructive/10"
-                                                onClick={() => remove(index)}
-                                            >
-                                                <Trash size={18} />
-                                            </Button>
-                                        )}
-                                    </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-[1.5fr_2fr_1fr_1fr] gap-4 items-end">
-                                        {/* Department Field */}
-                                        {/* <FormField
-                                            control={form.control}
-                                            name={`products.${index}.department`}
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>
-                                                        Department
-                                                    </FormLabel>
-                                                    <Select
-                                                        onValueChange={field.onChange}
-                                                        value={field.value}
-                                                    >
-                                                        <FormControl>
-                                                            <SelectTrigger className="w-full overflow-hidden">
-                                                                <SelectValue placeholder="Select" className="truncate" />
-                                                            </SelectTrigger>
-                                                        </FormControl>
-                                                        <SelectContent>
-                                                            {(options?.departments || [])
-                                                                .map((dep, i) => (
-                                                                    <SelectItem key={i} value={dep}>
-                                                                        {dep}
-                                                                    </SelectItem>
-                                                                ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </FormItem>
-                                            )}
-                                        /> */}
-
-                                        {/* Group Head Field */}
-                                        <FormField
-                                            control={form.control}
-                                            name={`products.${index}.groupHead`}
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>
-                                                        Group Head
-                                                        <span className="text-destructive">*</span>
-                                                    </FormLabel>
-                                                    <Select
-                                                        onValueChange={field.onChange}
-                                                        value={field.value}
-                                                    >
-                                                        <FormControl>
-                                                            <SelectTrigger className="w-full overflow-hidden text-left h-auto min-h-[40px] py-1">
-                                                                <SelectValue placeholder="Select" className="truncate whitespace-normal line-clamp-1" />
-                                                            </SelectTrigger>
-                                                        </FormControl>
-                                                        <SelectContent>
-                                                            {groupHeadOptions
-                                                                .map((gh, i) => (
-                                                                    <SelectItem key={i} value={gh}>
-                                                                        {gh}
-                                                                    </SelectItem>
-                                                                ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </FormItem>
-                                            )}
-                                        />
-
-                                        {/* Product Name Field */}
-                                        <FormField
-                                            control={form.control}
-                                            name={`products.${index}.productName`}
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>
-                                                        Product Name
-                                                        <span className="text-destructive">*</span>
-                                                    </FormLabel>
-                                                    <Select
-                                                        onValueChange={field.onChange}
-                                                        value={field.value}
-                                                        disabled={!groupHead}
-                                                    >
-                                                        <FormControl>
-                                                            <SelectTrigger className="w-full overflow-hidden text-left h-auto min-h-[40px] py-1">
-                                                                <SelectValue placeholder="Select" className="truncate whitespace-normal line-clamp-1" />
-                                                            </SelectTrigger>
-                                                        </FormControl>
-                                                        <SelectContent>
-                                                            {productOptions
-                                                                .map((p, i) => {
-                                                                    const inv = realInventory.find(item => item.itemName === p);
-                                                                    const stock = inv ? inv.current : 0;
-                                                                    return (
-                                                                        <SelectItem key={i} value={p}>
-                                                                            {p} (Stock: {stock})
-                                                                        </SelectItem>
-                                                                    );
-                                                                })}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </FormItem>
-                                            )}
-                                        />
-
-                                        {/* Quantity Field */}
-                                        <FormField
-                                            control={form.control}
-                                            name={`products.${index}.quantity`}
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>
-                                                        Quantity
-                                                        <span className="text-destructive">*</span>
-                                                    </FormLabel>
+            <div className="max-w-6xl mx-auto px-4">
+                <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit, onError)} className="space-y-8">
+                        <Card className="border-slate-200 shadow-sm overflow-hidden">
+                            <CardHeader className="bg-slate-50/50 border-b border-slate-100">
+                                <CardTitle className="text-sm font-bold uppercase tracking-widest text-slate-500">Issue Details</CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    <FormField
+                                        control={form.control}
+                                        name="projectName"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-slate-600 font-semibold">Project Name <span className="text-destructive">*</span></FormLabel>
+                                                <Select
+                                                    onValueChange={(val) => {
+                                                        field.onChange(val);
+                                                        const firmObj = options?.firmObjects?.find(f => f.name === val);
+                                                        if (firmObj) form.setValue('firmId', firmObj.id);
+                                                    }}
+                                                    value={field.value}
+                                                >
                                                     <FormControl>
-                                                        <Input
-                                                            type="number"
-                                                            {...field}
-                                                            disabled={!groupHead}
-                                                        />
+                                                        <SelectTrigger className="w-full h-11 bg-white border-slate-200 focus:ring-primary/20">
+                                                            <SelectValue placeholder="Select project" />
+                                                        </SelectTrigger>
                                                     </FormControl>
-                                                </FormItem>
-                                            )}
-                                        />
-
-                                        {/* UOM Field */}
-                                        <FormField
-                                            control={form.control}
-                                            name={`products.${index}.uom`}
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>
-                                                        UOM
-                                                        <span className="text-destructive">*</span>
-                                                    </FormLabel>
-                                                    <Select
-                                                        onValueChange={field.onChange}
-                                                        value={field.value}
-                                                        disabled={!groupHead}
-                                                    >
-                                                        <FormControl>
-                                                            <SelectTrigger className="w-full overflow-hidden">
-                                                                <SelectValue placeholder="UOM" className="truncate" />
-                                                            </SelectTrigger>
-                                                        </FormControl>
-                                                        <SelectContent>
-                                                            {(options?.uoms || [])
-                                                                .map((uom, i) => (
-                                                                    <SelectItem key={i} value={uom}>
-                                                                        {uom}
-                                                                    </SelectItem>
-                                                                ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </FormItem>
-                                            )}
-                                        />
-                                    </div>
+                                                    <SelectContent>
+                                                        {(options?.firmObjects || [])
+                                                            .filter(f => isAllowedFirm({ id: f.id, name: f.name }, user?.firm_access || []))
+                                                            .map((firm) => (
+                                                                <SelectItem key={firm.id} value={firm.name}>
+                                                                    {firm.name}
+                                                                </SelectItem>
+                                                            ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name="constructorName"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-slate-600 font-semibold">Contractor Name <span className="text-destructive">*</span></FormLabel>
+                                                <Select onValueChange={field.onChange} value={field.value}>
+                                                    <FormControl>
+                                                        <SelectTrigger className="w-full h-11 bg-white border-slate-200 focus:ring-primary/20">
+                                                            <SelectValue placeholder="Select contractor" />
+                                                        </SelectTrigger>
+                                                    </FormControl>
+                                                    <SelectContent>
+                                                        {(options?.contractors || []).map((c, i) => (
+                                                            <SelectItem key={i} value={c.contractorName}>
+                                                                {c.contractorName}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name="siteLocation"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-slate-600 font-semibold">Site Location <span className="text-destructive">*</span></FormLabel>
+                                                <Select onValueChange={field.onChange} value={field.value}>
+                                                    <FormControl>
+                                                        <SelectTrigger className="w-full h-11 bg-white border-slate-200 focus:ring-primary/20">
+                                                            <SelectValue placeholder="Select location" />
+                                                        </SelectTrigger>
+                                                    </FormControl>
+                                                    <SelectContent>
+                                                        {(options?.siteLocations || []).map((loc, i) => (
+                                                            <SelectItem key={i} value={loc}>
+                                                                {loc}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name="issuePersonName"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-slate-600 font-semibold">Issuer Name</FormLabel>
+                                                <FormControl>
+                                                    <Input placeholder="Person issuing material" className="h-11 bg-white border-slate-200 focus:ring-primary/20" {...field} />
+                                                </FormControl>
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name="remarks"
+                                        render={({ field }) => (
+                                            <FormItem className="md:col-span-2">
+                                                <FormLabel className="text-slate-600 font-semibold">Purpose / Remarks</FormLabel>
+                                                <FormControl>
+                                                    <Input placeholder="Enter issue purpose or additional notes" className="h-11 bg-white border-slate-200 focus:ring-primary/20" {...field} />
+                                                </FormControl>
+                                            </FormItem>
+                                        )}
+                                    />
                                 </div>
-                            );
-                        })}
-                    </div>
+                            </CardContent>
+                        </Card>
 
-                    <div className="flex justify-center mt-4">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            className="bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
-                            onClick={() => append({ uom: '', productName: '', quantity: 1, groupHead: '', /* department: '' */ })}
-                        >
-                            Add Product
-                        </Button>
-                    </div>
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between px-1">
+                                <h3 className="text-lg font-bold text-slate-700 flex items-center gap-2">
+                                    <div className="w-2 h-6 bg-primary rounded-full" />
+                                    Material List
+                                </h3>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="bg-primary/5 text-primary border-primary/20 hover:bg-primary/10 font-bold"
+                                    onClick={() => append({ uom: '', productName: '', quantity: 1, groupHead: '', /* department: '' */ })}
+                                >
+                                    + Add Item
+                                </Button>
+                            </div>
 
-                    <div>
-                        <Button
-                            className="w-full"
-                            type="submit"
-                            disabled={form.formState.isSubmitting}
-                        >
-                            {form.formState.isSubmitting && (
-                                <Loader size={20} color="white" aria-label="Loading Spinner" />
-                            )}
-                            Store Issue
-                        </Button>
-                    </div>
-                </form>
-            </Form>
+                            <div className="grid grid-cols-1 gap-4">
+                                {fields.map((field, index) => {
+                                    const groupHead = products[index]?.groupHead;
+                                    const groupHeadOptions = options?.allGroupHeads || [];
+                                    const productOptions = options?.products[groupHead] || [];
+
+                                    return (
+                                        <Card
+                                            key={field.id}
+                                            className="border-slate-200 shadow-sm hover:border-primary/30 transition-colors"
+                                        >
+                                            <CardContent className="p-4 sm:p-6">
+                                                <div className="flex justify-between items-center mb-4">
+                                                    <div className="bg-slate-100 px-3 py-1 rounded-full text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                                        Product Item #{index + 1}
+                                                    </div>
+                                                    {fields.length > 1 && (
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8 text-destructive hover:bg-destructive/10 rounded-full"
+                                                            onClick={() => remove(index)}
+                                                        >
+                                                            <Trash size={16} />
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                                                    <FormField
+                                                        control={form.control}
+                                                        name={`products.${index}.groupHead`}
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel className="text-xs font-semibold text-slate-500 uppercase">
+                                                                    Group Head <span className="text-destructive">*</span>
+                                                                </FormLabel>
+                                                                <Select
+                                                                    onValueChange={field.onChange}
+                                                                    value={field.value}
+                                                                >
+                                                                    <FormControl>
+                                                                        <SelectTrigger className="w-full h-10 bg-slate-50/50 border-slate-200">
+                                                                            <SelectValue placeholder="Select Head" className="truncate" />
+                                                                        </SelectTrigger>
+                                                                    </FormControl>
+                                                                    <SelectContent>
+                                                                        {groupHeadOptions.map((gh, i) => (
+                                                                            <SelectItem key={i} value={gh}>
+                                                                                {gh}
+                                                                            </SelectItem>
+                                                                        ))}
+                                                                    </SelectContent>
+                                                                </Select>
+                                                            </FormItem>
+                                                        )}
+                                                    />
+
+                                                    <FormField
+                                                        control={form.control}
+                                                        name={`products.${index}.productName`}
+                                                        render={({ field }) => (
+                                                            <FormItem className="md:col-span-1">
+                                                                <FormLabel className="text-xs font-semibold text-slate-500 uppercase">
+                                                                    Product Name <span className="text-destructive">*</span>
+                                                                </FormLabel>
+                                                                <Select
+                                                                    onValueChange={field.onChange}
+                                                                    value={field.value}
+                                                                    disabled={!groupHead}
+                                                                >
+                                                                    <FormControl>
+                                                                        <SelectTrigger className="w-full h-10 bg-slate-50/50 border-slate-200">
+                                                                            <SelectValue placeholder="Select Product" className="truncate" />
+                                                                        </SelectTrigger>
+                                                                    </FormControl>
+                                                                    <SelectContent>
+                                                                        {productOptions.map((p, i) => {
+                                                                            const inv = realInventory.find(item => item.itemName === p);
+                                                                            const stock = inv ? inv.current : 0;
+                                                                            return (
+                                                                                <SelectItem key={i} value={p}>
+                                                                                    {p} (Stock: {stock})
+                                                                                </SelectItem>
+                                                                            );
+                                                                        })}
+                                                                    </SelectContent>
+                                                                </Select>
+                                                            </FormItem>
+                                                        )}
+                                                    />
+
+                                                    <FormField
+                                                        control={form.control}
+                                                        name={`products.${index}.quantity`}
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel className="text-xs font-semibold text-slate-500 uppercase">
+                                                                    Quantity <span className="text-destructive">*</span>
+                                                                </FormLabel>
+                                                                <FormControl>
+                                                                    <Input
+                                                                        type="number"
+                                                                        className="h-10 bg-slate-50/50 border-slate-200"
+                                                                        {...field}
+                                                                        disabled={!groupHead}
+                                                                    />
+                                                                </FormControl>
+                                                            </FormItem>
+                                                        )}
+                                                    />
+
+                                                    <FormField
+                                                        control={form.control}
+                                                        name={`products.${index}.uom`}
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel className="text-xs font-semibold text-slate-500 uppercase">
+                                                                    UOM <span className="text-destructive">*</span>
+                                                                </FormLabel>
+                                                                <Select
+                                                                    onValueChange={field.onChange}
+                                                                    value={field.value}
+                                                                    disabled={!groupHead}
+                                                                >
+                                                                    <FormControl>
+                                                                        <SelectTrigger className="w-full h-10 bg-slate-50/50 border-slate-200">
+                                                                            <SelectValue placeholder="UOM" className="truncate" />
+                                                                        </SelectTrigger>
+                                                                    </FormControl>
+                                                                    <SelectContent>
+                                                                        {(options?.uoms || []).map((uom, i) => (
+                                                                            <SelectItem key={i} value={uom}>
+                                                                                {uom}
+                                                                            </SelectItem>
+                                                                        ))}
+                                                                    </SelectContent>
+                                                                </Select>
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        <div className="pt-4 pb-10">
+                            <Button
+                                className="w-full h-11 font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-200/50 transition-all active:scale-[0.98]"
+                                type="submit"
+                                disabled={form.formState.isSubmitting}
+                            >
+                                {form.formState.isSubmitting ? (
+                                    <Loader size={20} color="white" />
+                                ) : (
+                                    <>Submit Store Issue</>
+                                )}
+                            </Button>
+                        </div>
+                    </form>
+                </Form>
+            </div>
         </div>
     );
 };
+

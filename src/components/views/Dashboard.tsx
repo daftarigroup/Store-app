@@ -7,6 +7,7 @@ import {
     Truck,
     Warehouse,
     CreditCard,
+    Filter,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { ChartContainer, ChartTooltip, type ChartConfig } from '../ui/chart';
@@ -380,97 +381,112 @@ export default function Dashboard() {
             </Heading>
 
             <div className="grid gap-3 m-3">
-                <div className="gap-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
-                    <Popover>
-                        <PopoverTrigger asChild>
-                            <Button
-                                variant="outline"
-                                data-empty={!startDate}
-                                className="data-[empty=true]:text-muted-foreground w-full min-w-0 justify-start text-left font-normal"
-                            >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {startDate ? (
-                                    format(startDate, 'PPP')
-                                ) : (
-                                    <span>Pick a start date</span>
-                                )}
-                            </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                            <Calendar mode="single" selected={startDate} onSelect={setStartDate} />
-                        </PopoverContent>
-                    </Popover>
-                    <Popover>
-                        <PopoverTrigger asChild>
-                            <Button
-                                variant="outline"
-                                data-empty={!endDate}
-                                className="data-[empty=true]:text-muted-foreground w-full min-w-0 justify-start text-left font-normal"
-                            >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {endDate ? format(endDate, 'PPP') : <span>Pick an end date</span>}
-                            </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                            <Calendar mode="single" selected={endDate} onSelect={setEndDate} />
-                        </PopoverContent>
-                    </Popover>
-                    <ComboBox
-                        multiple
-                        options={allVendors.map((v) => ({ label: v, value: v }))}
-                        value={filteredVendors}
-                        onChange={setFilteredVendors}
-                        placeholder="Select Vendors"
-                    />
-                    <ComboBox
-                        multiple
-                        options={allProducts.map((v) => ({ label: v, value: v }))}
-                        value={filteredProducts}
-                        onChange={setFilteredProducts}
-                        placeholder="Select Products"
-                    />
-                    {/* <ComboBox
-                        multiple
-                        options={allDepartments.map((v) => ({ label: v, value: v }))}
-                        value={filteredDepartments}
-                        onChange={setFilteredDepartments}
-                        placeholder="Select Departments"
-                    /> */}
-                    <ComboBox
-                        multiple
-                        options={allProjects.map((v) => ({ label: v, value: v }))}
-                        value={filteredProjects}
-                        onChange={setFilteredProjects}
-                        placeholder="Select Projects"
-                    />
+                <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-200/60 shadow-sm mb-1 backdrop-blur-sm">
+                    <div className="flex items-center gap-2 mb-3 text-slate-500">
+                        <Filter size={14} className="text-primary" />
+                        <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Analytics Filters</span>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase px-1">Start Date</label>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        data-empty={!startDate}
+                                        className="data-[empty=true]:text-muted-foreground w-full justify-between text-left font-medium border-slate-200/80 bg-white hover:bg-slate-50 hover:border-slate-300 transition-colors h-10 px-3"
+                                    >
+                                        <span className="truncate">{startDate ? format(startDate, 'PPP') : "Pick a start date"}</span>
+                                        <CalendarIcon className="h-3.5 w-3.5 opacity-40 shrink-0" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                    <Calendar mode="single" selected={startDate} onSelect={setStartDate} />
+                                </PopoverContent>
+                            </Popover>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase px-1">End Date</label>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        data-empty={!endDate}
+                                        className="data-[empty=true]:text-muted-foreground w-full justify-between text-left font-medium border-slate-200/80 bg-white hover:bg-slate-50 hover:border-slate-300 transition-colors h-10 px-3"
+                                    >
+                                        <span className="truncate">{endDate ? format(endDate, 'PPP') : "Pick an end date"}</span>
+                                        <CalendarIcon className="h-3.5 w-3.5 opacity-40 shrink-0" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                    <Calendar mode="single" selected={endDate} onSelect={setEndDate} />
+                                </PopoverContent>
+                            </Popover>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase px-1">Vendors</label>
+                            <ComboBox
+                                multiple
+                                options={allVendors.map((v) => ({ label: v, value: v }))}
+                                value={filteredVendors}
+                                onChange={setFilteredVendors}
+                                placeholder="All Vendors"
+                            />
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase px-1">Products</label>
+                            <ComboBox
+                                multiple
+                                options={allProducts.map((v) => ({ label: v, value: v }))}
+                                value={filteredProducts}
+                                onChange={setFilteredProducts}
+                                placeholder="All Products"
+                            />
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase px-1">Projects</label>
+                            <ComboBox
+                                multiple
+                                options={allProjects.map((v) => ({ label: v, value: v }))}
+                                value={filteredProjects}
+                                onChange={setFilteredProjects}
+                                placeholder="All Projects"
+                            />
+                        </div>
+                    </div>
                 </div>
 
                 <div className="grid md:grid-cols-4 gap-3 lg:grid-cols-5">
                     <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/20 border-blue-200">
                         <CardContent className="pt-6">
-                            <div className="text-blue-600 flex justify-between">
-                                <p className="font-semibold">Procurement Indents</p>
-                                <ClipboardList size={22} />
+                            <div className="text-blue-600 flex justify-between items-center">
+                                <p className="font-semibold text-sm">Procurement Indents</p>
+                                <ClipboardList size={18} />
                             </div>
-                            <p className="text-2xl md:text-3xl font-black text-blue-900 mt-2" title={indent.count.toLocaleString()}>{formatQty(indent.count)}</p>
+                            <p className="text-lg md:text-xl font-black text-blue-900 mt-2" title={indent.count.toLocaleString()}>{formatQty(indent.count)}</p>
                             <div className="text-blue-600 flex flex-col mt-2 border-t border-blue-200 pt-2">
                                 <p className="text-[10px] font-bold uppercase tracking-wider opacity-80">Quantity</p>
-                                <p className="text-lg font-black" title={indent.quantity.toLocaleString()}>{formatQty(indent.quantity)}</p>
+                                <p className="text-base font-black" title={indent.quantity.toLocaleString()}>{formatQty(indent.quantity)}</p>
                             </div>
                         </CardContent>
                     </Card>
                     <Card className="bg-gradient-to-br from-indigo-500/10 to-indigo-600/20 border-indigo-200">
                         <CardContent className="pt-6">
-                            <div className="text-indigo-600 flex justify-between">
-                                <p className="font-semibold">Total PO Value</p>
-                                <CreditCard size={22} className="text-indigo-600" />
+                            <div className="text-indigo-600 flex justify-between items-center">
+                                <p className="font-semibold text-sm">Total PO Value</p>
+                                <CreditCard size={18} className="text-indigo-600" />
                             </div>
-                            <p className="text-2xl md:text-3xl font-black text-indigo-900 mt-2 break-all" title={`₹${poTotal.toLocaleString()}`}>
+                            <p className="text-lg md:text-xl font-black text-indigo-900 mt-2 truncate" title={`₹${poTotal.toLocaleString()}`}>
                                 {formatCurrency(poTotal)}
                             </p>
                             <div className="text-indigo-600 flex flex-col mt-2 border-t border-indigo-200 pt-2">
                                 <p className="text-[10px] font-bold uppercase tracking-wider opacity-80">Avg/PO</p>
-                                <p className="text-lg font-black" title={`₹${(indent.count > 0 ? poTotal / indent.count : 0).toLocaleString()}`}>
+                                <p className="text-base font-black" title={`₹${(indent.count > 0 ? poTotal / indent.count : 0).toLocaleString()}`}>
                                     {formatCurrency(indent.count > 0 ? poTotal / indent.count : 0)}
                                 </p>
                             </div>
@@ -478,42 +494,42 @@ export default function Dashboard() {
                     </Card>
                     <Card className="bg-gradient-to-br from-green-500/10 to-green-600/20 border-green-200">
                         <CardContent className="pt-6">
-                            <div className="text-green-600 flex justify-between">
-                                <p className="font-semibold">Items Received</p>
-                                <Truck size={22} />
+                            <div className="text-green-600 flex justify-between items-center">
+                                <p className="font-semibold text-sm">Items Received</p>
+                                <Truck size={18} />
                             </div>
-                            <p className="text-2xl md:text-3xl font-black text-green-900 mt-2" title={purchase.count.toLocaleString()}>{formatQty(purchase.count)}</p>
+                            <p className="text-lg md:text-xl font-black text-green-900 mt-2" title={purchase.count.toLocaleString()}>{formatQty(purchase.count)}</p>
                             <div className="text-green-600 flex flex-col mt-2 border-t border-green-200 pt-2">
                                 <p className="text-[10px] font-bold uppercase tracking-wider opacity-80">Total Qty</p>
-                                <p className="text-lg font-black" title={purchase.quantity.toLocaleString()}>{formatQty(purchase.quantity)}</p>
+                                <p className="text-base font-black" title={purchase.quantity.toLocaleString()}>{formatQty(purchase.quantity)}</p>
                             </div>
                         </CardContent>
                     </Card>
                     <Card className="bg-gradient-to-br from-orange-500/10 to-orange-600/20 border-orange-200">
                         <CardContent className="pt-6">
-                            <div className="text-orange-600 flex justify-between">
-                                <p className="font-semibold">Stock Issued</p>
-                                <PackageCheck size={22} />
+                            <div className="text-orange-600 flex justify-between items-center">
+                                <p className="font-semibold text-sm">Stock Issued</p>
+                                <PackageCheck size={18} />
                             </div>
-                            <p className="text-2xl md:text-3xl font-black text-orange-900 mt-2" title={out.count.toLocaleString()}>{formatQty(out.count)}</p>
+                            <p className="text-lg md:text-xl font-black text-orange-900 mt-2" title={out.count.toLocaleString()}>{formatQty(out.count)}</p>
                             <div className="text-orange-600 flex flex-col mt-2 border-t border-orange-200 pt-2">
                                 <p className="text-[10px] font-bold uppercase tracking-wider opacity-80">Issue Qty</p>
-                                <p className="text-lg font-black" title={out.quantity.toLocaleString()}>{formatQty(out.quantity)}</p>
+                                <p className="text-base font-black" title={out.quantity.toLocaleString()}>{formatQty(out.quantity)}</p>
                             </div>
                         </CardContent>
                     </Card>
                     <Card className="bg-gradient-to-br from-red-500/10 to-red-600/20 border-red-200 text-red-600 md:col-span-4 lg:col-span-1">
                         <CardContent className="pt-6">
-                            <div className="flex justify-between">
-                                <p className="font-semibold">Stock Alerts</p>
-                                <Warehouse size={22} />
+                            <div className="flex justify-between items-center">
+                                <p className="font-semibold text-sm">Stock Alerts</p>
+                                <Warehouse size={18} />
                             </div>
-                            <p className="text-2xl md:text-3xl font-black text-red-900 mt-2">
+                            <p className="text-lg md:text-xl font-black text-red-900 mt-2">
                                 {alerts.outOfStock}
                             </p>
                             <div className="text-red-600 flex flex-col mt-2 border-t border-red-200 pt-2">
                                 <p className="text-[10px] font-bold uppercase tracking-wider opacity-80">Low Stock</p>
-                                <p className="text-lg font-black">{alerts.lowStock}</p>
+                                <p className="text-base font-black">{alerts.lowStock}</p>
                             </div>
                         </CardContent>
                     </Card>
