@@ -173,7 +173,18 @@ const styles = StyleSheet.create({
         borderTop: '1 solid #000000',
         textAlign: 'center',
         paddingTop: 5,
-    }
+    },
+    pdfFooter: {
+        marginTop: 12,
+        paddingTop: 8,
+        borderTop: '1 solid #e2e8f0',
+        textAlign: 'center',
+    },
+    pdfFooterText: {
+        fontSize: 7,
+        color: '#94a3b8',
+        letterSpacing: 1,
+    },
 });
 
 export interface POPdfProps {
@@ -332,6 +343,10 @@ const QuotationPdf = (props: POPdfProps) => {
                             <Text style={styles.companyText}>Authorized Signatory</Text>
                         </View>
                     </View>
+                </View>
+
+                <View style={styles.pdfFooter}>
+                    <Text style={styles.pdfFooterText}>POWERED BY BOTIVATE</Text>
                 </View>
             </Page>
         </Document>

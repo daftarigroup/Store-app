@@ -128,16 +128,19 @@ export default function VendorBidding() {
         try {
             let logoBase64 = '';
             try {
-                const logoResponse = await fetch(window.location.origin + '/logo.png');
+                const logoResponse = await fetch('/logo.png');
                 if (logoResponse.ok) {
                     const logoBlob = await logoResponse.blob();
-                    logoBase64 = await new Promise<string>((resolve) => {
+                    logoBase64 = await new Promise<string>((resolve, reject) => {
                         const reader = new FileReader();
                         reader.onloadend = () => resolve(reader.result as string);
+                        reader.onerror = reject;
                         reader.readAsDataURL(logoBlob);
                     });
                 }
-            } catch {}
+            } catch (logoErr) {
+                console.warn('Could not load logo for PDF:', logoErr);
+            }
 
             const pdfProps: POPdfProps = {
                 companyName: 'POOJA CONSTRUCTIONS',
@@ -175,7 +178,7 @@ export default function VendorBidding() {
                 terms: [],
                 preparedBy: '',
                 approvedBy: '',
-                logo: logoBase64 || window.location.origin + '/logo.png',
+                logo: logoBase64 || undefined,
             };
 
             const blob = await pdf(<POPdf {...pdfProps} /> as any).toBlob();
@@ -457,7 +460,7 @@ export default function VendorBidding() {
                 </div>
                 
                 <footer className="text-center text-slate-400 text-[10px] uppercase tracking-widest pb-8">
-                    <p>© {new Date().getFullYear()} {firstItem.firm}. Generated via Store Management System.</p>
+                    <p>Powered by Botivate</p>
                 </footer>
             </div>
         </div>
