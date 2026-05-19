@@ -296,26 +296,13 @@ export default function QuotationPage() {
 
 
 
-  // Handle checkbox selection
-  const handleItemSelection = (rowIndex: string, checked: boolean) => {
-    setSelectedItems(prev => {
-      if (checked) {
-        return [...prev, rowIndex];
-      } else {
-        return prev.filter(item => item !== rowIndex);
-      }
-    });
-  };
-
-
-  // Handle select all checkbox
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      const allRowIndexes = eligibleItems.map(item => item.rowIndex);
-      setSelectedItems(allRowIndexes);
-    } else {
-      setSelectedItems([]);
-    }
+  // Handle row selection — multiple select allowed
+  const handleItemSelection = (rowIndex: string) => {
+    setSelectedItems(prev =>
+      prev.includes(rowIndex)
+        ? prev.filter(id => id !== rowIndex)
+        : [...prev, rowIndex]
+    );
   };
 
 
@@ -865,7 +852,16 @@ export default function QuotationPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-12">
-                    <Checkbox checked={selectedItems.length === eligibleItems.length && eligibleItems.length > 0} onCheckedChange={handleSelectAll} />
+                    <Checkbox 
+                      checked={eligibleItems.length > 0 && selectedItems.length === eligibleItems.length}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedItems(eligibleItems.map(item => item.rowIndex));
+                        } else {
+                          setSelectedItems([]);
+                        }
+                      }}
+                    />
                   </TableHead>
                   <TableHead>SR.</TableHead>
                   <TableHead>INDENT NO</TableHead>
@@ -885,9 +881,9 @@ export default function QuotationPage() {
                   </TableRow>
                 ) : (
                   eligibleItems.map((item, index) => (
-                    <TableRow key={item.rowIndex}>
-                      <TableCell>
-                        <Checkbox checked={selectedItems.includes(item.rowIndex)} onCheckedChange={(checked) => handleItemSelection(item.rowIndex, checked as boolean)} />
+                    <TableRow key={item.rowIndex} className="cursor-pointer" onClick={() => handleItemSelection(item.rowIndex)}>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <Checkbox checked={selectedItems.includes(item.rowIndex)} onCheckedChange={() => handleItemSelection(item.rowIndex)} />
                       </TableCell>
                       <TableCell>{index + 1}</TableCell>
                       <TableCell>{item.indentNumber}</TableCell>

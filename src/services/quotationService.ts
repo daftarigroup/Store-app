@@ -107,7 +107,7 @@ export async function fetchQuotationByToken(token: string) {
 /**
  * Update vendor rate for a specific item in a quotation
  */
-export async function updateVendorRate(token: string, indentNo: string, rate: number) {
+export async function updateVendorRate(token: string, indentNo: string, product: string, rate: number) {
     try {
         const { data, error } = await supabase
             .from('quotation_history')
@@ -115,7 +115,7 @@ export async function updateVendorRate(token: string, indentNo: string, rate: nu
                 vendor_rate: rate,
                 responded_at: new Date().toISOString()
             })
-            .match({ token, indentNo })
+            .match({ token, indentNo, product })
             .select();
 
         if (error) throw error;

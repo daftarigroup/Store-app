@@ -70,7 +70,8 @@ export default function VendorBidding() {
                     // Initialize rates with existing values if any
                     const initialRates: { [key: string]: string } = {};
                     data.forEach((item: any) => {
-                        initialRates[item.indentNo] = item.vendor_rate ? String(item.vendor_rate) : '';
+                        const key = `${item.indentNo}_${item.product}`;
+                        initialRates[key] = item.vendor_rate ? String(item.vendor_rate) : '';
                     });
                     setRates(initialRates);
                 }
@@ -85,15 +86,15 @@ export default function VendorBidding() {
         loadQuotation();
     }, [token]);
 
-    const handleRateChange = (indentNo: string, value: string) => {
-        setRates(prev => ({ ...prev, [indentNo]: value }));
+    const handleRateChange = (key: string, value: string) => {
+        setRates(prev => ({ ...prev, [key]: value }));
     };
 
     const handleSubmit = async () => {
         if (!token) return;
         
         // Validate all rates are entered
-        const missingRates = quotation.some(item => !rates[item.indentNo]);
+        const missingRates = quotation.some(item => !rates[`${item.indentNo}_${item.product}`]);
         if (missingRates) {
             toast.error('Please enter rates for all items.');
             return;
@@ -102,8 +103,9 @@ export default function VendorBidding() {
         setSubmitting(true);
         try {
             for (const item of quotation) {
-                const success = await updateVendorRate(token, item.indentNo, parseFloat(rates[item.indentNo]));
-                if (!success) throw new Error(`Failed to update item ${item.indentNo}`);
+                const key = `${item.indentNo}_${item.product}`;
+                const success = await updateVendorRate(token, item.indentNo, item.product, parseFloat(rates[key]));
+                if (!success) throw new Error(`Failed to update item ${item.indentNo} - ${item.product}`);
             }
             toast.success('Rates submitted successfully!');
             setSubmitted(true);
@@ -354,8 +356,8 @@ export default function VendorBidding() {
                                                         type="number"
                                                         placeholder="0.00"
                                                         className="h-8 text-xs pl-5 text-right font-bold border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-sm"
-                                                        value={rates[item.indentNo] || ''}
-                                                        onChange={(e) => handleRateChange(item.indentNo, e.target.value)}
+                                                        value={rates[`${item.indentNo}_${item.product}`] || ''}
+                                                        onChange={(e) => handleRateChange(`${item.indentNo}_${item.product}`, e.target.value)}
                                                     />
                                                 </div>
                                             </div>

@@ -274,6 +274,7 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                     poQty: r.po_qty || 0,
                     pendingPoQty: (r.approved_quantity || 0) - (Number(r.po_qty) || 0),
                     pendingLiftQty: (r.approved_quantity || 0) - (Number(r.received_quantity) || 0),
+                    rowIndex: String(r.id),
                 }));
                 setIndentSheet(mapped as unknown as IndentSheet[]);
                 setIndentLoading(false);
