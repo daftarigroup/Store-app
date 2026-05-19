@@ -7,6 +7,7 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
 	plugins: [react(), tailwindcss()],
 	server: {
+		host: true,
 		proxy: {
 			'/api/resend': {
 				target: 'https://api.resend.com',

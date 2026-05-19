@@ -118,6 +118,12 @@ export default function VendorBidding() {
     };
 
     const handleDownloadPdf = async () => {
+        const missingRates = quotation.some(item => !rates[`${item.indentNo}_${item.product}`]);
+        if (missingRates) {
+            toast.error('Please enter rates for all items before downloading the PDF.');
+            return;
+        }
+
         setIsDownloading(true);
         try {
             let logoBase64 = '';
@@ -158,7 +164,7 @@ export default function VendorBidding() {
                     description: item.description || '',
                     quantity: Number(item.qty) || 0,
                     unit: item.unit || '',
-                    rate: 0,
+                    rate: Number(rates[`${item.indentNo}_${item.product}`]) || 0,
                     gst: 0,
                     discount: 0,
                     amount: 0,
@@ -247,10 +253,10 @@ export default function VendorBidding() {
         <div className="min-h-screen bg-slate-50 py-10 px-4">
             <div className="max-w-5xl mx-auto space-y-6">
                 {/* Dashboard-style Header */}
-                <div className="space-y-4 p-8 bg-white shadow-md rounded-sm border-t-4 border-indigo-600">
-                    <div className="flex items-center justify-center gap-6 bg-indigo-50/50 p-6 rounded-lg">
-                        <img src="/logo.png" alt="Company Logo" className="w-24 h-24 object-contain" />
-                        <div className="text-center md:text-left">
+                <div className="space-y-4 p-4 md:p-8 bg-white shadow-md rounded-sm border-t-4 border-indigo-600">
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-4 bg-indigo-50/50 p-4 md:p-6 rounded-lg">
+                        <img src="/logo.png" alt="Company Logo" className="w-20 h-20 md:w-24 md:h-24 object-contain" />
+                        <div className="text-center sm:text-left">
                             <h1 className="text-3xl font-bold text-slate-900">POOJA CONSTRUCTIONS</h1>
                             <div>
                                 <p className="text-sm text-slate-600 max-w-md">104, 1ST FLOOR, BEHIND DAFTARI ARCADE, DHUNIWALE CHOWK, DAFTARI BUILDING, NAGPUR ROAD, WARDHA</p>
@@ -327,8 +333,55 @@ export default function VendorBidding() {
                         <p className="text-sm text-slate-600 italic">{firstItem.description || 'No additional description provided.'}</p>
                     </div>
 
-                    {/* Items Table - Matches Create Tab Styling */}
-                    <div className="border rounded-lg bg-white shadow-sm overflow-hidden mt-6">
+                    {/* Mobile: Card layout */}
+                    <div className="md:hidden mt-6 space-y-3">
+                        {quotation.map((item, index) => {
+                            const key = `${item.indentNo}_${item.product}`;
+                            const filled = !!rates[key];
+                            return (
+                                <div key={index} className={`bg-white border rounded-xl p-4 shadow-sm transition-colors ${filled ? 'border-indigo-200' : 'border-slate-200'}`}>
+                                    <div className="flex items-start gap-3 mb-3">
+                                        <span className="flex-shrink-0 w-7 h-7 rounded-full bg-indigo-50 text-indigo-600 text-xs font-bold flex items-center justify-center border border-indigo-100">
+                                            {index + 1}
+                                        </span>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-bold text-slate-900 leading-tight">{item.product}</p>
+                                            {item.description && (
+                                                <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">{item.description}</p>
+                                            )}
+                                            <div className="flex items-center gap-3 mt-1.5 text-[11px] text-slate-500">
+                                                <span>Qty: <span className="font-bold text-slate-700">{item.qty}</span></span>
+                                                <span className="text-slate-300">|</span>
+                                                <span>Unit: <span className="font-bold text-slate-700 uppercase">{item.unit}</span></span>
+                                                {item.indentNo && (
+                                                    <>
+                                                        <span className="text-slate-300">|</span>
+                                                        <span className="text-indigo-400 font-medium">{item.indentNo}</span>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="relative">
+                                        <label className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider mb-1.5 block">Your Rate (₹)</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">₹</span>
+                                            <Input
+                                                type="number"
+                                                placeholder="Enter rate"
+                                                className="h-12 text-base pl-8 font-bold border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg"
+                                                value={rates[key] || ''}
+                                                onChange={(e) => handleRateChange(key, e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Desktop: Table layout */}
+                    <div className="hidden md:block border rounded-lg bg-white shadow-sm mt-6">
                         <Table>
                             <TableHeader>
                                 <TableRow className="bg-slate-100/80">
@@ -350,7 +403,7 @@ export default function VendorBidding() {
                                         <TableCell className="py-3 text-xs text-slate-600">{item.unit}</TableCell>
                                         <TableCell className="py-3 pr-4">
                                             <div className="flex justify-end">
-                                                <div className="relative w-32">
+                                                <div className="relative w-36">
                                                     <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-bold">₹</span>
                                                     <Input
                                                         type="number"
@@ -368,29 +421,25 @@ export default function VendorBidding() {
                         </Table>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-slate-100">
-                        <div className="flex items-center gap-2 text-xs text-slate-500">
-                            <AlertCircle className="w-4 h-4 text-amber-500" />
+                    <div className="flex flex-col gap-4 pt-6 border-t border-slate-100">
+                        <div className="flex items-start gap-2 text-xs text-slate-500">
+                            <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
                             <p>Rates should be exclusive of taxes and duties unless otherwise specified.</p>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center sm:justify-end gap-3">
                             <Button
                                 size="lg"
                                 variant="outline"
-                                className="h-11 px-6 rounded-sm border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-bold transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2"
+                                className="h-12 sm:h-11 px-6 rounded-lg sm:rounded-sm border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-bold transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
                                 onClick={handleDownloadPdf}
                                 disabled={isDownloading}
                             >
-                                {isDownloading ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                    <Download className="h-4 w-4" />
-                                )}
+                                {isDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                                 {isDownloading ? 'Generating...' : 'Download PDF'}
                             </Button>
                             <Button
                                 size="lg"
-                                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-11 px-8 rounded-sm shadow-md transition-all active:scale-95 disabled:opacity-50"
+                                className="h-12 sm:h-11 px-8 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg sm:rounded-sm shadow-md transition-all active:scale-95 disabled:opacity-50"
                                 onClick={handleSubmit}
                                 disabled={submitting}
                             >

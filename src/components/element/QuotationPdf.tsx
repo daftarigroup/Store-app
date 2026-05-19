@@ -134,12 +134,13 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         borderRight: '1 solid #000000',
     },
-    colSr: { width: '6%' },
-    colInternal: { width: '15%' },
-    colProject: { width: '15%' },
-    colProduct: { width: '44%' },
-    colQty: { width: '10%' },
-    colUnit: { width: '10%' },
+    colSr: { width: '5%' },
+    colInternal: { width: '12%' },
+    colProject: { width: '12%' },
+    colProduct: { width: '37%' },
+    colQty: { width: '8%' },
+    colUnit: { width: '8%' },
+    colRate: { width: '18%' },
     
     rightAlign: { textAlign: 'right' },
     centerAlign: { textAlign: 'center' },
@@ -292,6 +293,7 @@ const QuotationPdf = (props: POPdfProps) => {
                             <Text style={[styles.tableHeaderCell, styles.colProduct]}>PRODUCT</Text>
                             <Text style={[styles.tableHeaderCell, styles.colQty]}>QTY</Text>
                             <Text style={[styles.tableHeaderCell, styles.colUnit]}>UNIT</Text>
+                            <Text style={[styles.tableHeaderCell, styles.colRate, styles.rightAlign]}>RATE (₹)</Text>
                         </View>
 
                         {items.map((item, index) => (
@@ -305,6 +307,7 @@ const QuotationPdf = (props: POPdfProps) => {
                                 </View>
                                 <Text style={[styles.tableCell, styles.colQty]}>{String(item.quantity || '0')}</Text>
                                 <Text style={[styles.tableCell, styles.colUnit]}>{String(item.unit || '')}</Text>
+                                <Text style={[styles.tableCell, styles.colRate, styles.rightAlign]}>{item.rate ? `₹ ${Number(item.rate).toFixed(2)}` : '-'}</Text>
                             </View>
                         ))}
                     </View>
