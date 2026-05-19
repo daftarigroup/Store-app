@@ -28,10 +28,26 @@ import Heading from '../element/Heading';
 import { useState, useEffect } from 'react';
 import { supabase, supabaseEnabled } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
-import IndentPdf from '../element/IndentPdf';
-import { pdf } from '@react-pdf/renderer';
 import { calculateRealInventory } from '@/lib/inventoryUtils';
+import type { IndentPdfProps } from '../element/IndentPdf';
 const logo = "/logo.png";
+
+/** Generate an indent PDF on a background thread — never blocks the UI. */
+function generateIndentPdf(props: IndentPdfProps): Promise<Blob> {
+    return new Promise((resolve, reject) => {
+        const worker = new Worker(
+            new URL('../../workers/indentPdf.worker.ts', import.meta.url),
+            { type: 'module' }
+        );
+        worker.onmessage = (e: MessageEvent<{ ok: boolean; blob?: Blob; error?: string }>) => {
+            worker.terminate();
+            if (e.data.ok && e.data.blob) resolve(e.data.blob);
+            else reject(new Error(e.data.error ?? 'PDF generation failed'));
+        };
+        worker.onerror = (err) => { worker.terminate(); reject(err); };
+        worker.postMessage(props);
+    });
+}
 
 export default () => {
     const {
@@ -41,7 +57,7 @@ export default () => {
         issueSheet,
         indentSheet,
         updateInventorySheet,
-        updateAll
+        updateMasterSheet,
     } = useSheets();
     const { user } = useAuth();
     const [searchTerm, setSearchTerm] = useState('');
@@ -54,7 +70,6 @@ export default () => {
     const [historyLoading, setHistoryLoading] = useState(false);
 
     const [indenterOptions, setIndenterOptions] = useState<string[]>([]);
-    const [indenterLoading, setIndenterLoading] = useState(false);
     const [searchTermIndenter, setSearchTermIndenter] = useState('');
     const [isAddingProject, setIsAddingProject] = useState(false);
     const [isAddingDept, setIsAddingDept] = useState(false);
@@ -197,34 +212,13 @@ export default () => {
         },
     ];
 
-    const handleFirmNameSelect = async (val: string) => {
+    // Resolve contact person from already-loaded context — zero DB round trips
+    const handleFirmNameSelect = (val: string) => {
         form.setValue('indenterName', '');
-        setIndenterOptions([]);
-        setIndenterLoading(true);
-        try {
-            const { data, error } = await supabase
-                .from('firm')
-                .select('contact_person')
-                .eq('firm_name', val);
-
-            if (!error && data) {
-                const unique = Array.from(
-                    new Set(
-                        data
-                            .map((r: any) => r.contact_person)
-                            .filter(Boolean)
-                    )
-                ) as string[];
-                setIndenterOptions(unique);
-                if (unique.length === 1) {
-                    form.setValue('indenterName', unique[0]);
-                }
-            }
-        } catch (err) {
-            console.error('Error fetching indenter names:', err);
-        } finally {
-            setIndenterLoading(false);
-        }
+        const contactPerson = options?.firmCompanyMap?.[val]?.companyContactPerson || '';
+        const unique = contactPerson ? [contactPerson] : [];
+        setIndenterOptions(unique);
+        if (unique.length === 1) form.setValue('indenterName', unique[0]);
     };
 
     const handleAddProject = async () => {
@@ -241,7 +235,7 @@ export default () => {
 
             toast.success(`Project "${searchTermFirmName}" added successfully!`);
             // Refresh firms list from context
-            updateAll();
+            updateMasterSheet();
             // Automatically select the newly added project
             form.setValue('firmName', searchTermFirmName.trim());
             if (data) form.setValue('firmId', data.id);
@@ -274,7 +268,7 @@ export default () => {
             toast.success(`Area "${value}" added successfully!`);
             form.setValue(`products.${index}.areaOfUse`, value.trim());
             setSearchTermAreaOfUse('');
-            updateAll();
+            updateMasterSheet();
         } catch (error) {
             console.error('Error adding area of use:', error);
             toast.error('Failed to add area of use.');
@@ -296,7 +290,7 @@ export default () => {
 
             toast.success(`Department "${searchTerm}" added successfully!`);
             // Refresh options from context
-            updateAll();
+            updateMasterSheet();
             // Automatically select the newly added department for this row
             // form.setValue(`products.${index}.department`, searchTerm.trim());
             setSearchTerm('');
@@ -331,40 +325,23 @@ export default () => {
         }
     };
 
-    // Function to handle Item selection
-    const handleItemChange = async (index: number, itemName: string) => {
+    // Resolve item details from context maps — zero DB round trips
+    const handleItemChange = (index: number, itemName: string) => {
         form.setValue(`products.${index}.productName`, itemName);
-        
-        try {
-            // Fetch item details to auto-fill Group Head and UOM
-            const { data, error } = await supabase
-                .from('item')
-                .select(`
-                    id,
-                    item_name,
-                    group_head:group_head_id ( name ),
-                    uom:uom_id ( name )
-                `)
-                .eq('item_name', itemName)
-                .maybeSingle();
 
-            if (!error && data) {
-                const itemData = data as any;
-                const groupHeadName = Array.isArray(itemData.group_head) ? itemData.group_head[0]?.name : itemData.group_head?.name;
-                const uomName = Array.isArray(itemData.uom) ? itemData.uom[0]?.name : itemData.uom?.name;
+        const groupHeadName = options?.itemGroupHeadMap?.[itemName] || '';
+        const uomName = options?.itemUomMap?.[itemName] || '';
 
-                if (groupHeadName) {
-                    form.setValue(`products.${index}.groupHead`, groupHeadName);
-                }
-                if (uomName) {
-                    form.setValue(`products.${index}.uom`, uomName);
-                }
-                
-                // Trigger inventory check
-                handleProductSelect(index, itemName, groupHeadName || '');
-            }
-        } catch (err) {
-            console.error('Error fetching item details:', err);
+        if (groupHeadName) form.setValue(`products.${index}.groupHead`, groupHeadName);
+        if (uomName) form.setValue(`products.${index}.uom`, uomName);
+
+        // Update displayed stock qty from context (synchronous, no DB call)
+        if (groupHeadName) {
+            const realInventory = calculateRealInventory(
+                inventorySheet || [], indentSheet || [], storeInSheet || [], issueSheet || []
+            );
+            const thisItem = realInventory.find(i => i.itemName === itemName && i.groupHead === groupHeadName);
+            form.setValue(`products.${index}.minStockQty`, thisItem?.current ?? 0);
         }
     };
 
@@ -397,7 +374,6 @@ export default () => {
             );
 
             if (thisItem) {
-                console.log(`Dynamic stock for ${productName}: ${thisItem.current}`);
                 form.setValue(`products.${index}.minStockQty`, thisItem.current);
             } else {
                 console.warn(`Item ${productName} not found in inventory master`);
@@ -421,7 +397,6 @@ export default () => {
                 // Update the indented column by adding 1
                 const currentIndented = Number(inventoryData.indented) || 0;
                 const newIndented = currentIndented + 1;
-                console.log("indent hereeee-->>  " + newIndented);
 
 
                 const { error: updateError } = await supabase
@@ -435,7 +410,6 @@ export default () => {
                     console.error('Error updating inventory:', updateError);
                     toast.error('Failed to update inventory');
                 } else {
-                    console.log(`Inventory updated for ${productName}: indented increased to ${newIndented}`);
                 }
             } else {
                 // If no inventory record exists, create one with indented = 1
@@ -454,7 +428,6 @@ export default () => {
                     console.error('Error creating inventory record:', insertError);
                     toast.error('Failed to create inventory record');
                 } else {
-                    console.log(`New inventory record created for ${productName} with indented = 1`);
                 }
             }
         } catch (error) {
@@ -463,28 +436,14 @@ export default () => {
         }
     };
 
-    // Helper: Generate next indent number from Supabase
-    const getNextIndentNumber = async (): Promise<string> => {
-        try {
-            const { data, error } = await supabase
-                .from('indent')
-                .select('indent_number')
-                .order('indent_number', { ascending: false })
-                .limit(1);
-
-            if (error) throw error;
-
-            if (!data || data.length === 0) return 'SI-0001';
-
-            const lastIndent = data[0].indent_number;
-            if (!lastIndent || !/^SI-\d+$/.test(lastIndent)) return 'SI-0001';
-
-            const lastNumber = parseInt(lastIndent.split('-')[1], 10);
-            return `SI-${String(lastNumber + 1).padStart(4, '0')}`;
-        } catch (error) {
-            console.error('Error generating indent number:', error);
-            return 'SI-0001';
-        }
+    // Derive next indent number from already-loaded context — zero DB round trips
+    const getNextIndentNumber = (): string => {
+        const max = indentSheet.reduce((m, r) => {
+            const match = String(r.indentNumber || '').match(/^SI-(\d+)$/i);
+            const n = match ? parseInt(match[1], 10) : 0;
+            return Math.max(m, n);
+        }, 0);
+        return `SI-${String(max + 1).padStart(4, '0')}`;
     };
 
     // Helper: Upload file to Supabase Storage
@@ -518,127 +477,118 @@ export default () => {
                 return;
             }
 
-            // Generate next indent number
-            const nextIndentNumber = await getNextIndentNumber();
-
-            // 1. Generate PDF of the indent
-            let indentUrl = '';
-            try {
-                const blob = await pdf(
-                    <IndentPdf
-                        indentNumber={nextIndentNumber}
-                        indenterName={data.indenterName}
-                        firmName={data.firmName}
-                        indentStatus={data.indentStatus}
-                        date={formatDateTimeFull(new Date())}
-                        products={data.products}
-                        logo={logo}
-                    />
-                ).toBlob();
-
-                const pdfFile = new File([blob], `${nextIndentNumber}_indent.pdf`, { type: 'application/pdf' });
-
-                // 2. Upload PDF to Supabase
-                const fileName = `${nextIndentNumber}_${Date.now()}.pdf`;
-                const filePath = `indent-pdfs/${fileName}`;
-
-                const { error: uploadError } = await supabase.storage
-                    .from('indent_attachment')
-                    .upload(filePath, pdfFile);
-
-                if (uploadError) throw uploadError;
-
-                const { data: { publicUrl } } = supabase.storage
-                    .from('indent_attachment')
-                    .getPublicUrl(filePath);
-
-                indentUrl = publicUrl;
-            } catch (pdfError) {
-                console.error('PDF generation/upload failed:', pdfError);
-                toast.warning('Indent PDF could not be generated, continuing...');
-            }
-
-            // Prepare rows for insertion (with snake_case for database)
             const firmId = data.firmId || options?.firmObjects?.find((f: { name: string; id: number }) => f.name === data.firmName)?.id;
             if (!firmId) {
                 toast.error('Project ID is required to create an indent');
                 return;
             }
 
-            const rows = [];
-            for (const product of data.products) {
-                let attachmentUrl = '';
+            // 1. Indent number from context (synchronous, zero DB round trips)
+            //    + attachment uploads in parallel
+            const nextIndentNumber = getNextIndentNumber();
+            const attachmentUrls = await Promise.all(
+                data.products.map(product =>
+                    product.attachment instanceof File
+                        ? uploadFileToSupabase(product.attachment, nextIndentNumber).catch(err => {
+                            console.error('File upload failed:', err);
+                            toast.warning('Attachment upload failed, continuing without it');
+                            return '';
+                        })
+                        : Promise.resolve('')
+                )
+            );
 
-                // Upload attachment if exists
-                if (product.attachment && product.attachment instanceof File) {
-                    try {
-                        attachmentUrl = await uploadFileToSupabase(
-                            product.attachment,
-                            nextIndentNumber
-                        );
-                    } catch (uploadError) {
-                        console.error('File upload failed:', uploadError);
-                        toast.warning('Attachment upload failed, continuing without it');
-                    }
-                }
+            // 2. Insert rows immediately — don't wait for PDF
+            const timestamp = new Date().toISOString();
+            const rows = data.products.map((product, i) => ({
+                timestamp,
+                indent_number: nextIndentNumber,
+                indenter_name: data.indenterName,
+                area_of_use: product.areaOfUse,
+                group_head: product.groupHead,
+                product_name: product.productName,
+                quantity: product.quantity,
+                min_stock_qty: product.minStockQty || 0,
+                uom: product.uom,
+                firm_name: data.firmName,
+                firm_id: firmId,
+                specifications: product.specifications || '',
+                indent_status: data.indentStatus,
+                expected_req_date: product.expectedRequirementDate,
+                attachment: attachmentUrls[i] || '',
+                indent_url: '', // filled in background after PDF generation
+                status: 'Pending',
+            }));
 
-                // Map to database schema (snake_case)
-                const row = {
-                    timestamp: new Date().toISOString(),
-                    indent_number: nextIndentNumber,
-                    indenter_name: data.indenterName,
-                    // department: product.department,
-                    area_of_use: product.areaOfUse,
-                    group_head: product.groupHead,
-                    product_name: product.productName,
-                    quantity: product.quantity,
-                    min_stock_qty: product.minStockQty || 0,
-                    uom: product.uom,
-                    firm_name: data.firmName,
-                    firm_id: firmId,
-
-                    specifications: product.specifications || '',
-
-
-                    indent_status: data.indentStatus,
-                    expected_req_date: product.expectedRequirementDate,
-                    attachment: attachmentUrl,
-                    indent_url: indentUrl, // New field for PDF URL
-                    status: 'Pending',
-                };
-
-                rows.push(row);
-            }
-
-            // Insert into Supabase
             const { error } = await supabase.from('indent').insert(rows);
-
             if (error) throw error;
 
-            fetchHistory(); // Refresh history tab
+            // 3. Show success immediately — user is unblocked
+            fetchHistory();
             toast.success(`Indent ${nextIndentNumber} created successfully!`);
 
-            // Reset form
+            // 4. Increment inventory 'indented' counts in background (non-blocking)
+            data.products.forEach(product => {
+                const groupHead = product.groupHead || options?.itemGroupHeadMap?.[product.productName] || '';
+                if (!groupHead || !firmId) return;
+                handleProductSelect(0, product.productName, groupHead).catch(console.error);
+            });
+
+            // 5. Generate PDF in a Web Worker (off main thread) then upload + patch row.
+            //    The worker runs on a separate thread so the UI is never blocked.
+            generateIndentPdf({
+                indentNumber: nextIndentNumber,
+                indenterName: data.indenterName,
+                firmName: data.firmName,
+                indentStatus: data.indentStatus,
+                date: formatDateTimeFull(new Date()),
+                products: data.products,
+                logo,
+            }).then(async (blob) => {
+                try {
+                    const pdfFile = new File([blob], `${nextIndentNumber}_indent.pdf`, { type: 'application/pdf' });
+                    const filePath = `indent-pdfs/${nextIndentNumber}_${Date.now()}.pdf`;
+
+                    const { error: uploadError } = await supabase.storage
+                        .from('indent_attachment')
+                        .upload(filePath, pdfFile);
+
+                    if (uploadError) throw uploadError;
+
+                    const { data: { publicUrl } } = supabase.storage
+                        .from('indent_attachment')
+                        .getPublicUrl(filePath);
+
+                    await supabase
+                        .from('indent')
+                        .update({ indent_url: publicUrl })
+                        .eq('indent_number', nextIndentNumber);
+
+                    // Refresh history now that the PDF URL is stored
+                    fetchHistory();
+                } catch (uploadErr) {
+                    console.error('Background PDF upload failed:', uploadErr);
+                }
+            }).catch((pdfErr) => {
+                console.error('Background PDF generation failed:', pdfErr);
+            });
+
             form.reset({
                 indenterName: '',
                 firmName: '',
                 firmId: undefined,
                 indentStatus: '' as any,
-
-                products: [
-                    {
-                        attachment: undefined,
-                        uom: '',
-                        productName: '',
-                        specifications: '',
-                        quantity: '' as any,
-                        minStockQty: 0,
-                        areaOfUse: '',
-                        expectedRequirementDate: '',
-                        groupHead: '',
-                        // department: '',
-                    },
-                ],
+                products: [{
+                    attachment: undefined,
+                    uom: '',
+                    productName: '',
+                    specifications: '',
+                    quantity: '' as any,
+                    minStockQty: 0,
+                    areaOfUse: '',
+                    expectedRequirementDate: '',
+                    groupHead: '',
+                }],
             });
             setIndenterOptions([]);
         } catch (error) {
@@ -756,15 +706,7 @@ export default () => {
                                                 Indenter Name
                                                 <span className="text-destructive">*</span>
                                             </FormLabel>
-                                            {indenterLoading ? (
-                                                <div className="flex items-center h-10 px-3 border rounded-md text-sm text-muted-foreground gap-2">
-                                                    <svg className="animate-spin h-4 w-4 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                                                    </svg>
-                                                    Fetching indenters...
-                                                </div>
-                                            ) : indenterOptions.length > 1 ? (
+                                            {indenterOptions.length > 1 ? (
                                                 // Multiple indenters → show dropdown
                                                 <Select onValueChange={field.onChange} value={field.value}>
                                                     <FormControl>

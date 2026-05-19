@@ -884,7 +884,7 @@ export default () => {
     }
 
     function onError(e: any) {
-        console.log(e);
+        console.error(e);
         if (e.qty) {
             toast.error(e.qty.message || 'Received quantity cannot exceed lifting quantity');
             return;

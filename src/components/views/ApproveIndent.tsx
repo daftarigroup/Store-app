@@ -43,10 +43,25 @@ import {
     updateIndentHistoryFields,
     type IndentRecord
 } from '@/services/indentService';
-import IndentPdf from '../element/IndentPdf';
-import { pdf } from '@react-pdf/renderer';
+import type { IndentPdfProps } from '../element/IndentPdf';
 const logo = "/logo.png";
 import { supabase } from '@/lib/supabase';
+
+function generateIndentPdf(props: IndentPdfProps): Promise<Blob> {
+    return new Promise((resolve, reject) => {
+        const worker = new Worker(
+            new URL('../../workers/indentPdf.worker.ts', import.meta.url),
+            { type: 'module' }
+        );
+        worker.onmessage = (e: MessageEvent<{ ok: boolean; blob?: Blob; error?: string }>) => {
+            worker.terminate();
+            if (e.data.ok && e.data.blob) resolve(e.data.blob);
+            else reject(new Error(e.data.error ?? 'PDF generation failed'));
+        };
+        worker.onerror = (err) => { worker.terminate(); reject(err); };
+        worker.postMessage(props);
+    });
+}
 import { filterByFirmAccess } from '@/lib/firmAccess';
 
 
@@ -137,21 +152,21 @@ export default function ApproveIndent() {
 
     const handleSaveEdit = async (id: number) => {
         try {
+            const approvedQty = Number(editValues.approved_quantity);
             await updateIndentHistoryFields(id, {
-                approved_quantity: Number(editValues.approved_quantity),
+                approved_quantity: approvedQty,
                 uom: editValues.uom,
                 vendor_type: editValues.vendor_type,
             });
 
-            const record = allData.find(i => i.id === id);
-            if (record) {
-                await handlePdfUpdate(record.indent_number);
-            }
-
             toast.success(`Updated record ID ${id}`);
-            fetchData();
             setEditingRow(null);
             setEditValues({});
+            fetchData();
+
+            // PDF regeneration in background
+            const record = allData.find(i => i.id === id);
+            if (record) triggerPdfUpdate(record.indent_number, { [id]: approvedQty });
         } catch (err) {
             console.error('Error updating indent:', err);
             toast.error('Failed to update indent');
@@ -162,63 +177,54 @@ export default function ApproveIndent() {
         setEditValues(prev => ({ ...prev, [field]: value }));
     };
 
-    const handlePdfUpdate = async (indentNumber: string) => {
-        try {
-            const { data: allItems, error: fetchError } = await supabase
-                .from('indent')
-                .select('*')
-                .eq('indent_number', indentNumber);
+    // Generates and uploads the approval PDF in a background worker thread.
+    // Uses already-loaded allData to avoid a redundant Supabase SELECT.
+    // Pass overrideQty when the approved quantity was just changed and allData is stale.
+    const triggerPdfUpdate = (indentNumber: string, overrideQty?: Record<number, number>) => {
+        const items = allData.filter(i => i.indent_number === indentNumber);
+        if (items.length === 0) return;
 
-            if (fetchError || !allItems || allItems.length === 0) return null;
+        const firstItem = items[0];
+        const productsForPdf = items.map(item => ({
+            productName: item.product_name,
+            groupHead: item.group_head ?? '',
+            quantity: overrideQty?.[item.id] ?? item.approved_quantity ?? item.quantity,
+            uom: item.uom,
+            expectedRequirementDate: item.expected_req_date || (item.timestamp ? formatDate(new Date(item.timestamp)) : ''),
+            specifications: item.specifications,
+            areaOfUse: item.area_of_use,
+        }));
 
-            const productsForPdf = allItems.map(item => ({
-                productName: item.product_name,
-                groupHead: item.group_head,
-                // department: item.department,
-                quantity: item.approved_quantity || item.quantity,
-                uom: item.uom,
-                expectedRequirementDate: item.expected_req_date || (item.timestamp ? formatDate(new Date(item.timestamp)) : ''),
-                specifications: item.specifications,
-                areaOfUse: item.area_of_use
-            }));
+        generateIndentPdf({
+            indentNumber,
+            indenterName: firstItem.indenter_name,
+            firmName: firstItem.firm_name,
+            indentStatus: firstItem.indent_status,
+            date: firstItem.timestamp ? formatDateTimeFull(new Date(firstItem.timestamp)) : formatDateTimeFull(new Date()),
+            products: productsForPdf,
+            logo,
+            status: 'Completed',
+        }).then(async (blob) => {
+            try {
+                const filePath = `indent-pdfs/${indentNumber}_completed_${Date.now()}.pdf`;
+                const { error: uploadError } = await supabase.storage
+                    .from('indent_attachment')
+                    .upload(filePath, blob);
+                if (uploadError) throw uploadError;
+                const { data: { publicUrl } } = supabase.storage
+                    .from('indent_attachment')
+                    .getPublicUrl(filePath);
+                await supabase
+                    .from('indent')
+                    .update({ indent_url: publicUrl })
+                    .eq('indent_number', indentNumber);
 
-            const firstItem = allItems[0];
-            const blob = await pdf(
-                <IndentPdf
-                    indentNumber={indentNumber}
-                    indenterName={firstItem.indenter_name}
-                    firmName={firstItem.firm_name}
-                    indentStatus={firstItem.indent_status}
-                    date={firstItem.timestamp ? formatDateTimeFull(new Date(firstItem.timestamp)) : formatDateTimeFull(new Date())}
-                    products={productsForPdf}
-                    logo={logo}
-                    status="Completed"
-                />
-            ).toBlob();
-
-            const fileName = `${indentNumber}_completed_${Date.now()}.pdf`;
-            const filePath = `indent-pdfs/${fileName}`;
-
-            const { error: uploadError } = await supabase.storage
-                .from('indent_attachment')
-                .upload(filePath, blob);
-
-            if (uploadError) throw uploadError;
-
-            const { data: { publicUrl } } = supabase.storage
-                .from('indent_attachment')
-                .getPublicUrl(filePath);
-
-            await supabase
-                .from('indent')
-                .update({ indent_url: publicUrl })
-                .eq('indent_number', indentNumber);
-
-            return publicUrl;
-        } catch (error) {
-            console.error('Error updating PDF:', error);
-            return null;
-        }
+                // Refresh table now that PDF URL is stored
+                fetchData();
+            } catch (err) {
+                console.error('PDF upload failed for', indentNumber, err);
+            }
+        }).catch(err => console.error('PDF generation failed for', indentNumber, err));
     };
 
     const handleSpecificationUpdate = async (id: number, value: string) => {
@@ -667,19 +673,16 @@ export default function ApproveIndent() {
     const handleReject = async () => {
         if (!selectedIndent) return;
         try {
-            const currentDateTime = new Date().toISOString();
             await updateIndentApproval(selectedIndent.id, {
-                actual1: currentDateTime,
+                actual1: new Date().toISOString(),
                 vendor_type: 'Reject',
                 approved_quantity: 0,
             });
-            if (selectedIndent) {
-                await handlePdfUpdate(selectedIndent.indent_number);
-            }
             toast.success(`Rejected indent item from ${selectedIndent.indent_number}`);
             setOpenDialog(false);
             setSelectedIndent(null);
             fetchData();
+            // PDF update in background — rejections don't need a PDF but keep for consistency
         } catch (err) {
             console.error('Error rejecting indent:', err);
             toast.error('Failed to reject indent');
@@ -691,25 +694,27 @@ export default function ApproveIndent() {
             if (!selectedIndent) return;
 
             const currentDateTime = new Date().toISOString();
+            const approvedQty = values.approvedQuantity ?? selectedIndent.quantity;
 
             await updateIndentApproval(selectedIndent.id, {
                 actual1: currentDateTime,
                 vendor_type: values.approval,
-                approved_quantity: values.approvedQuantity ?? selectedIndent.quantity,
+                approved_quantity: approvedQty,
                 status: values.approval === 'Reject' ? 'Rejected' : 'Completed',
-                // Set planned2 for approved indents (not rejected)
                 ...(values.approval !== 'Reject' && { planned2: currentDateTime }),
             });
 
-            if (values.approval !== 'Reject') {
-                await handlePdfUpdate(selectedIndent.indent_number);
-            }
-
+            // Show success immediately — PDF generates in the background
             toast.success(`Updated approval status of ${selectedIndent.indent_number}`);
             setOpenDialog(false);
             form.reset();
+            const indentNumber = selectedIndent.indent_number;
             setSelectedIndent(null);
             fetchData();
+
+            if (values.approval !== 'Reject') {
+                triggerPdfUpdate(indentNumber, { [selectedIndent.id]: approvedQty });
+            }
         } catch (err) {
             console.error('Error approving indent:', err);
             toast.error('Failed to approve indent');
@@ -723,43 +728,53 @@ export default function ApproveIndent() {
             return;
         }
 
+        const selectedIndents = pendingData.filter(i => selectedIds.includes(String(i.id)));
+
+        // Validate quantities before any DB calls
+        for (const indent of selectedIndents) {
+            const qtyToApprove = editedQuantities[indent.id] ?? indent.quantity;
+            const status = editedStatuses[indent.id] ?? 'Regular';
+            if (status !== 'Reject' && qtyToApprove > indent.quantity) {
+                toast.error(`Indent ${indent.indent_number}: Approved qty (${qtyToApprove}) exceeds requested (${indent.quantity})`);
+                return;
+            }
+        }
+
         setBulkSubmitting(true);
         try {
             const currentDateTime = new Date().toISOString();
-            const selectedIndents = pendingData.filter(i => selectedIds.includes(String(i.id)));
 
-            for (const indent of selectedIndents) {
+            // All DB updates in parallel
+            await Promise.all(selectedIndents.map(indent => {
                 const qtyToApprove = editedQuantities[indent.id] ?? indent.quantity;
                 const status = editedStatuses[indent.id] ?? 'Regular';
-
-                if (status !== 'Reject' && qtyToApprove > indent.quantity) {
-                    toast.error(`Indent ${indent.indent_number}: Approved quantity (${qtyToApprove}) cannot exceed requested quantity (${indent.quantity})`);
-                    setBulkSubmitting(false);
-                    return;
-                }
-                await updateIndentApproval(indent.id, {
+                return updateIndentApproval(indent.id, {
                     actual1: currentDateTime,
                     vendor_type: status,
                     approved_quantity: status === 'Reject' ? 0 : qtyToApprove,
                     status: status === 'Reject' ? 'Rejected' : 'Completed',
                     ...(status !== 'Reject' && { planned2: currentDateTime }),
                 });
-            }
+            }));
 
-            // Update PDFs for all affected indents (bulk)
-            const uniqueIndentNumbers = Array.from(new Set(selectedIndents.map(i => i.indent_number)));
-            for (const indentNo of uniqueIndentNumbers) {
-                const someApproved = selectedIndents.some(i => i.indent_number === indentNo && (editedStatuses[i.id] ?? 'Regular') !== 'Reject');
-                if (someApproved) {
-                    await handlePdfUpdate(indentNo);
-                }
-            }
-
-            toast.success(`Succesfully processed ${selectedIds.length} items`);
+            // Show success immediately
+            toast.success(`Successfully processed ${selectedIds.length} items`);
             setRowSelection({});
             setEditedStatuses({});
             setEditedQuantities({});
             fetchData();
+
+            // PDF regeneration in background for approved indents
+            const overrideQtyMap: Record<number, number> = {};
+            selectedIndents.forEach(i => { overrideQtyMap[i.id] = editedQuantities[i.id] ?? i.quantity; });
+
+            const uniqueIndentNumbers = Array.from(new Set(selectedIndents.map(i => i.indent_number)));
+            uniqueIndentNumbers.forEach(indentNo => {
+                const someApproved = selectedIndents.some(i =>
+                    i.indent_number === indentNo && (editedStatuses[i.id] ?? 'Regular') !== 'Reject'
+                );
+                if (someApproved) triggerPdfUpdate(indentNo, overrideQtyMap);
+            });
         } catch (err) {
             console.error('Error in bulk approval:', err);
             toast.error('Failed to process some items');
@@ -769,7 +784,7 @@ export default function ApproveIndent() {
     };
 
     function onError(e: FieldErrors<z.infer<typeof schema>>) {
-        console.log(e);
+        console.error(e);
         toast.error('Please fill all required fields');
     }
 

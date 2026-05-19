@@ -56,7 +56,7 @@ export default function POHistory() {
                 // Fetch PO Master data
                 let poQuery = supabase
                     .from('po_master')
-                    .select('*')
+                    .select('po_number, approved_by, pdf, prepared_by, total_po_amount, party_name, timestamp, firm_id')
                     .order('timestamp', { ascending: false });
 
                 const userFirms = normalizeFirmAccess(user?.firm_access) || [];

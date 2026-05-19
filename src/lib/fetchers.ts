@@ -65,6 +65,5 @@ export async function uploadFile({
         throw new Error('Failed to retrieve public URL from Supabase Storage');
     }
 
-    console.log('✅ Uploaded to Supabase Storage:', urlData.publicUrl);
     return urlData.publicUrl;
 }

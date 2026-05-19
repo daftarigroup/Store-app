@@ -137,7 +137,7 @@ export async function addItemToInventory(input: InventoryItemInput): Promise<{ s
 
         const { data: existingRecord, error: fetchError } = await supabase
             .from('inventory')
-            .select('*')
+            .select('opening, current, individual_rate, group_head, uom, firm_name, firm_id')
             .eq('item_name', input.itemName)
             .eq('firm_id', input.firmId)
             .maybeSingle();

@@ -105,8 +105,6 @@ export async function fetchTallyEntryRecords(permittedFirms?: string[]): Promise
             storeMap.set(key, item);
         });
 
-        console.log(`📊 Fetched ${tallyData?.length || 0} tally entries and ${storeData?.length || 0} store_in records for join.`);
-
         const mapped = (tallyData || []).map((r: any) => {
             const liftKey = String(r.lift_number || '').trim();
             const indentKey = String(r.indent_number || '').trim();

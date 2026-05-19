@@ -589,7 +589,6 @@ export default function GetPurchase() {
         }
 
         try {
-            console.log('❌ Processing cancel pending quantity only:', cancelQty);
 
             if (!selectedIndent?.indentNo) {
                 toast.error('Could not find the indent record to update');
@@ -610,7 +609,6 @@ export default function GetPurchase() {
                 ]);
                 setIndentRecords(indents);
                 setStoreInRecords(storeIns);
-                console.log('🔄 Data refreshed after cancel');
             }, 1500);
         } catch (error) {
             console.error('❌ Error in cancel quantity:', error);
@@ -837,7 +835,6 @@ export default function GetPurchase() {
                 ]);
                 setIndentRecords(indents);
                 setStoreInRecords(storeIns);
-                console.log('🔄 Data refreshed after insert');
             }, 1500);
         } catch (error) {
             console.error('❌ Error in onSubmit:', error);
@@ -846,7 +843,7 @@ export default function GetPurchase() {
     }
 
     function onError(e: any) {
-        console.log('❌ Form validation errors:', e);
+        console.error('Form validation errors:', e);
         
         // Extract field names from errors
         const errorFields = Object.keys(e).map(field => {

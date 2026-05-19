@@ -798,7 +798,7 @@ export default function PIApprovals() {
     }
 
     function onError(e: any) {
-        console.log(e);
+        console.error(e);
         toast.error('Please fill all required fields correctly');
     }
 

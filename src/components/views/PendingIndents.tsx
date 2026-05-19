@@ -73,7 +73,7 @@ export default () => {
             setDataLoading(true);
             let query = supabase
                 .from('indent')
-                .select('*')
+                .select('id, timestamp, indent_number, firm_name, firm_id, product_name, pending_po_qty, approved_rate, with_tax_or_not1, uom, approved_vendor_name, approved_payment_term, specifications, planned4')
                 .eq('status', 'Pending')
                 .not('approved_vendor_name', 'is', null)
                 .neq('approved_vendor_name', '')
@@ -136,7 +136,7 @@ export default () => {
             setDataLoading(true);
             let query = supabase
                 .from('indent')
-                .select('*')
+                .select('timestamp, indent_number, firm_name, firm_id, product_name, pending_po_qty, quantity, approved_rate, rate1, with_tax_or_not1, uom, approved_vendor_name, vendor_name1, approved_payment_term, payment_term1, specifications')
                 .not('po_requred', 'is', null)
                 .neq('po_requred', '')
                 .in('po_requred', ['Yes', 'No']);

@@ -53,7 +53,7 @@ export default () => {
         storeInLoading,
         issueLoading,
         masterSheet,
-        updateAll,
+        updateStockTransferSheet,
         stockTransferSheet
     } = useSheets();
     const { user } = useAuth();
@@ -663,7 +663,7 @@ export default () => {
 
                                                 toast.success("Transfer Successful!");
                                                 setTransferDialog(prev => ({ ...prev, open: false, itemName: '', quantity: 0, toProject: '' }));
-                                                updateAll();
+                                                updateStockTransferSheet(true);
                                             } catch (err: any) {
                                                 toast.error("Error: " + err.message);
                                             } finally {

@@ -49,7 +49,7 @@ export default () => {
     }
 
     function onError(e: any) {
-        console.log(e);
+        console.error(e);
     }
 
     return (

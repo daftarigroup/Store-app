@@ -249,18 +249,15 @@ export default () => {
 
     async function onSubmit(values: FormValues) {
         try {
-            console.log('📝 Form values:', values);
 
             let billCopyAttachedUrl = '';
 
             if (values.billCopyAttached) {
                 try {
-                    console.log('📤 Uploading bill copy...');
                     billCopyAttachedUrl = await uploadBillCopy(
                         values.billCopyAttached,
                         selectedItem?.liftNumber || 'unknown'
                     );
-                    console.log('✅ Bill copy uploaded:', billCopyAttachedUrl);
                 } catch (uploadError) {
                     console.error('❌ Upload error:', uploadError);
                     toast.error('Failed to upload bill copy');
@@ -275,7 +272,6 @@ export default () => {
                 return;
             }
 
-            console.log('📤 Updating record in Supabase...');
 
             await updateStoreInQuantityCheck(
                 selectedItem.liftNumber,
@@ -290,7 +286,6 @@ export default () => {
                 }
             );
 
-            console.log('✅ Update successful');
             toast.success(`Updated status for ${selectedItem.liftNumber}`);
             setOpenDialog(false);
 

@@ -125,7 +125,7 @@ export default () => {
             setDataLoading(true);
             let query = supabase
                 .from('indent')
-                .select('*')
+                .select('id, indent_number, firm_name, firm_id, indenter_name, product_name, approved_quantity, uom, vendor_type, planned2, actual2, specifications')
                 .not('planned2', 'is', null)
                 .is('actual2', null);
 
@@ -174,7 +174,7 @@ export default () => {
             setDataLoading(true);
             let query = supabase
                 .from('indent')
-                .select('*')
+                .select('id, timestamp, indent_number, firm_name, firm_id, indenter_name, product_name, approved_quantity, quantity, uom, vendor_type, planned2, actual2, specifications, approved_rate, rate1, vendor_name1, rate2, vendor_name2, rate3, vendor_name3, payment_term1, actual4')
                 .not('planned2', 'is', null)
                 .not('actual2', 'is', null);
 
@@ -927,7 +927,7 @@ export default () => {
 
 
     function onError(e: any) {
-        console.log(e);
+        console.error(e);
         toast.error('Please fill all required fields');
     }
 

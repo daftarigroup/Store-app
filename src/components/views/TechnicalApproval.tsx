@@ -100,7 +100,7 @@ export default () => {
             setDataLoading(true);
             let query = supabase
                 .from('indent')
-                .select('*')
+                .select('id, timestamp, indent_number, firm_name, firm_id, indenter_name, product_name, comparison_sheet, planned3, vendor_name1, rate1, payment_term1, select_rate_type1, with_tax_or_not1, tax_value1, quotation_no1, quotation_date1, vendor1_rank, delivery_time1, make1, vendor_name2, rate2, payment_term2, select_rate_type2, with_tax_or_not2, tax_value2, quotation_no2, quotation_date2, vendor2_rank, delivery_time2, make2, vendor_name3, rate3, payment_term3, select_rate_type3, with_tax_or_not3, tax_value3, quotation_no3, quotation_date3, vendor3_rank, delivery_time3, make3')
                 .not('planned3', 'is', null)
                 .is('actual3', null)
                 .in('vendor_type', ['Three Party', 'Regular']);
@@ -196,7 +196,7 @@ export default () => {
             setDataLoading(true);
             let query = supabase
                 .from('indent')
-                .select('*')
+                .select('id, timestamp, actual3, indent_number, firm_name, firm_id, indenter_name, product_name, vendor_name1, rate1, payment_term1, select_rate_type1, with_tax_or_not1, tax_value1, quotation_no1, quotation_date1, vendor1_rank, delivery_time1, make1, vendor_name2, rate2, payment_term2, select_rate_type2, with_tax_or_not2, tax_value2, quotation_no2, quotation_date2, vendor2_rank, delivery_time2, make2, vendor_name3, rate3, payment_term3, select_rate_type3, with_tax_or_not3, tax_value3, quotation_no3, quotation_date3, vendor3_rank, delivery_time3, make3')
                 .not('planned3', 'is', null)
                 .in('vendor_type', ['Three Party', 'Regular']);
 
@@ -594,7 +594,7 @@ export default () => {
     }
 
     function onError(e: any) {
-        console.log(e);
+        console.error(e);
         toast.error('Please fill all required fields');
     }
 

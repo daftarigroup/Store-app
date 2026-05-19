@@ -238,12 +238,12 @@ export async function fetchMasterData() {
             termsResult,
             seResult,
         ] = await Promise.all([
-            supabase.from('company').select('*').order('company_name'),
+            supabase.from('company').select('company_name, destination_address, gstin, pan, email, phone, address, contact_person, billing_address').order('company_name'),
             supabase.from('firm').select('*, company:company_id(*)').order('firm_name'),
-            supabase.from('vendors').select('*').order('vendor_name'),
+            supabase.from('vendors').select('vendor_name, gstin, address, email, payment_term').order('vendor_name'),
             supabase.from('item').select('*, group_head:group_head_id(name), uom:uom_id(name)').order('item_name'),
-            supabase.from('default_po_terms').select('*').eq('active', true).order('sort_order', { ascending: true }),
-            supabase.from('site_engineer_details').select('*'),
+            supabase.from('default_po_terms').select('term_text').eq('active', true).order('sort_order', { ascending: true }),
+            supabase.from('site_engineer_details').select('name, number, email'),
         ]);
 
         const firstError = [companiesResult, firmsResult, vendorsResult, itemsResult, termsResult, seResult].find(result => result.error)?.error;

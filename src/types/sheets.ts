@@ -275,10 +275,12 @@ export type MasterSheet = {
     areaOfUses: string[];
     allGroupHeads: string[];
 
-    firmCompanyMap: Record<string, { companyName: string; companyAddress: string; destinationAddress: string; }>;
+    firmCompanyMap: Record<string, { companyName: string; companyAddress: string; destinationAddress: string; companyContactPerson: string; billingAddress?: string; }>;
     siteEngineers: { name: string; number: string; email: string }[];
     contractors: { contractorName: string; contractorGstin: string; contractorAddress: string; contractorEmail: string; responsiblePerson: string; location: string; phone: string }[];
     siteLocations: string[];
+    itemUomMap: Record<string, string>;
+    itemGroupHeadMap: Record<string, string>;
 };
 
 

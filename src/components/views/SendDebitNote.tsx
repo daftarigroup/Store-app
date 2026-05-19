@@ -220,18 +220,15 @@ export default () => {
 
     async function onSubmit(values: FormValues) {
         try {
-            console.log('📝 Form values:', values);
 
             let debitNoteCopyUrl = '';
 
             if (values.debitNoteCopy) {
                 try {
-                    console.log('📤 Uploading debit note copy...');
                     debitNoteCopyUrl = await uploadDebitNoteCopy(
                         values.debitNoteCopy,
                         selectedItem?.liftNumber || 'unknown'
                     );
-                    console.log('✅ File uploaded:', debitNoteCopyUrl);
                 } catch (uploadError) {
                     console.error('❌ Upload error:', uploadError);
                     toast.error('Failed to upload file');
@@ -246,7 +243,6 @@ export default () => {
                 return;
             }
 
-            console.log('📤 Updating record in Supabase...');
 
             await updateStoreInDebitNote(
                 selectedItem.liftNumber,
@@ -284,7 +280,6 @@ export default () => {
                 console.error('Failed to create audit entry during Debit Note:', auditError);
             }
 
-            console.log('✅ Update successful');
             toast.success(`Updated status for ${selectedItem.indentNumber}`);
             setOpenDialog(false);
 

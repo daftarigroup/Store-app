@@ -20,6 +20,10 @@ export interface MasterData {
     departments: string[];
     groupHeads: Record<string, string[]>;
     products: Record<string, string[]>;
+    /** item_name → uom name — avoids per-selection DB lookups in forms */
+    itemUomMap: Record<string, string>;
+    /** item_name → group head name */
+    itemGroupHeadMap: Record<string, string>;
     companyName: string;
     companyAddress: string;
     companyEmail: string;
@@ -79,7 +83,7 @@ export async function fetchMasterOptions(permittedFirms?: string[]): Promise<Mas
         // 2. Fetch Group Heads
         const { data: ghData, error: ghError } = await supabase
             .from('group_head')
-            .select('*')
+            .select('name')
             .order('name');
 
         if (ghError) throw ghError;
@@ -87,7 +91,7 @@ export async function fetchMasterOptions(permittedFirms?: string[]): Promise<Mas
         // 3. Fetch UOMs
         const { data: uomData, error: uomError } = await supabase
             .from('uom')
-            .select('*')
+            .select('name')
             .order('name');
 
         if (uomError) throw uomError;
@@ -95,7 +99,7 @@ export async function fetchMasterOptions(permittedFirms?: string[]): Promise<Mas
         // 4. Fetch Area of Use
         const { data: aouData, error: aouError } = await supabase
             .from('area_of_use')
-            .select('*')
+            .select('name')
             .order('name');
 
         if (aouError) throw aouError;
@@ -116,31 +120,31 @@ export async function fetchMasterOptions(permittedFirms?: string[]): Promise<Mas
         // 6. Fetch Vendors
         const { data: vendorData, error: vendorError } = await supabase
             .from('vendors')
-            .select('*')
+            .select('vendor_name, gstin, address, email, payment_term, person_name')
             .order('vendor_name');
 
         if (vendorError) throw vendorError;
 
         const { data: departmentData } = await supabase
             .from('department')
-            .select('*')
+            .select('name')
             .order('name');
 
         const { data: defaultTermsData } = await supabase
             .from('default_po_terms')
-            .select('*')
+            .select('term_text')
             .eq('active', true)
             .order('sort_order', { ascending: true });
 
         // 7. Fetch Site Engineers, Contractors, Site Locations (Stay same for now)
-        const { data: seData } = await supabase.from('site_engineer_details').select('*');
+        const { data: seData } = await supabase.from('site_engineer_details').select('name, number, email');
         const siteEngineers = (seData || []).map((se: any) => ({
             name: se.name,
             number: se.number,
             email: se.email
         }));
 
-        const { data: contractorData } = await supabase.from('contractor_details').select('*');
+        const { data: contractorData } = await supabase.from('contractor_details').select('contractor_name, contractor_gstin, contractor_address, contractor_email, responsible_person, location, phone');
         const contractors = (contractorData || []).map((c: any) => ({
             contractorName: c.contractor_name,
             contractorGstin: c.contractor_gstin || '',
@@ -197,17 +201,22 @@ export async function fetchMasterOptions(permittedFirms?: string[]): Promise<Mas
         const defaultTerms = (defaultTermsData || []).map((t: any) => t.term_text).filter(Boolean);
 
         // Group Heads and Products mapping
-        const groupHeadsMap: Record<string, string[]> = {}; 
+        const groupHeadsMap: Record<string, string[]> = {};
         const productsMap: Record<string, string[]> = {};
-        
+        const itemUomMap: Record<string, string> = {};
+        const itemGroupHeadMap: Record<string, string> = {};
+
         (itemData || []).forEach((item: any) => {
             const ghName = item.group_head?.name;
+            const uomName = item.uom?.name;
             if (ghName) {
                 if (!productsMap[ghName]) productsMap[ghName] = [];
                 if (!productsMap[ghName].includes(item.item_name)) {
                     productsMap[ghName].push(item.item_name);
                 }
+                itemGroupHeadMap[item.item_name] = ghName;
             }
+            if (uomName) itemUomMap[item.item_name] = uomName;
         });
 
         // Vendors
@@ -225,6 +234,8 @@ export async function fetchMasterOptions(permittedFirms?: string[]): Promise<Mas
             groupHeads: groupHeadsMap,
             allGroupHeads,
             products: productsMap,
+            itemUomMap,
+            itemGroupHeadMap,
             uoms,
             firms,
             firmObjects,
@@ -284,6 +295,8 @@ export async function fetchMasterOptions(permittedFirms?: string[]): Promise<Mas
             siteLocations: [],
             defaultTerms: [],
             firmCompanyMap: {},
+            itemUomMap: {},
+            itemGroupHeadMap: {},
         };
     }
 }
@@ -306,15 +319,15 @@ export async function fetchMasterRecords(): Promise<any[]> {
             departments,
             defaultTerms,
         ] = await Promise.all([
-            supabase.from('company').select('*').order('company_name'),
+            supabase.from('company').select('id, company_name, gstin, pan, email, phone, address, contact_person, billing_address, destination_address').order('company_name'),
             supabase.from('firm').select('*, company:company_id(*)').order('firm_name'),
-            supabase.from('group_head').select('*').order('name'),
-            supabase.from('uom').select('*').order('name'),
-            supabase.from('area_of_use').select('*').order('name'),
-            supabase.from('vendors').select('*').order('vendor_name'),
+            supabase.from('group_head').select('id, name').order('name'),
+            supabase.from('uom').select('id, name').order('name'),
+            supabase.from('area_of_use').select('id, name').order('name'),
+            supabase.from('vendors').select('id, vendor_name, gstin, address, email, payment_term, person_name, phone, location').order('vendor_name'),
             supabase.from('item').select('*, group_head:group_head_id(name), uom:uom_id(name)').order('item_name'),
-            supabase.from('department').select('*').order('name'),
-            supabase.from('default_po_terms').select('*').order('sort_order', { ascending: true }),
+            supabase.from('department').select('id, name').order('name'),
+            supabase.from('default_po_terms').select('id, term_text, sort_order').order('sort_order', { ascending: true }),
         ]);
 
         const firstError = [companies, firms, groupHeads, uoms, areaOfUses, vendors, items, departments, defaultTerms].find(result => result.error)?.error;
@@ -602,7 +615,7 @@ export async function fetchSiteEngineers() {
     try {
         const { data, error } = await supabase
             .from('site_engineer_details')
-            .select('*')
+            .select('name, number, email')
             .order('name', { ascending: true });
 
         if (error) throw error;
@@ -696,7 +709,7 @@ export async function fetchContractors() {
     try {
         const { data, error } = await supabase
             .from('contractor_details')
-            .select('*')
+            .select('id, contractor_name, contractor_gstin, contractor_address, contractor_email, responsible_person, location, phone')
             .order('contractor_name', { ascending: true });
         if (error) throw error;
         return data || [];
@@ -746,7 +759,7 @@ export async function fetchSiteLocations() {
     try {
         const { data, error } = await supabase
             .from('site_location_details')
-            .select('*')
+            .select('id, location')
             .order('location', { ascending: true });
         if (error) throw error;
         return data || [];

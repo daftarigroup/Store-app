@@ -13,7 +13,7 @@ export async function fetchPcReportRecords(): Promise<PcReportSheet[]> {
     try {
         const { data, error } = await supabase
             .from('pc_report')
-            .select('*')
+            .select('stage, total_pending, total_complete, pending_pmpl, pending_purab, pending_pmmpl, pending_refrasynth, created_at')
             .order('created_at', { ascending: false });
 
         if (error) throw error;

@@ -306,21 +306,16 @@ export default () => {
 
     async function onSubmit(values: z.infer<typeof schema>) {
         try {
-            console.log('🔄 Starting form submission...');
-            console.log('📝 Selected indent:', selectedIndent);
-            console.log('📋 Form values:', values);
 
             let billImageUrl = '';
 
             // Upload file if provided
             if (values.billImageStatus) {
-                console.log('📤 Uploading file...');
                 try {
                     billImageUrl = await uploadBillCopy(
                         values.billImageStatus,
                         selectedIndent?.liftNumber || 'unknown'
                     );
-                    console.log('✅ File uploaded:', billImageUrl);
                     toast.success('Document uploaded successfully');
                 } catch (uploadError) {
                     console.error('❌ File upload error:', uploadError);
@@ -336,7 +331,6 @@ export default () => {
                 return;
             }
 
-            console.log('📤 Updating record');
 
             await updateStoreInBillStatus(
                 selectedIndent.liftNumber,
@@ -349,14 +343,12 @@ export default () => {
                 }
             );
 
-            console.log('✅ Update successful');
             toast.success(`Bill status updated for ${selectedIndent?.indentNo}`);
             setOpenDialog(false);
 
             // Refresh data
             setTimeout(() => {
                 fetchAllData();
-                console.log('🔄 Data refreshed after update');
             }, 1000);
 
         } catch (err) {

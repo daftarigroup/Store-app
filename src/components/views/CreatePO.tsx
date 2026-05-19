@@ -249,7 +249,7 @@ type FormData = z.infer<typeof schema>;
 
 const CreatePO = () => {
     const { user } = useAuth();
-    const { updateAll } = useSheets();
+    const { updateMasterSheet } = useSheets();
 
     // Supabase state
     const [indentSheet, setIndentSheet] = useState<IndentSheetItem[]>([]);
@@ -333,7 +333,7 @@ const CreatePO = () => {
             if (res.success) {
                 toast.success('Engineer saved');
                 loadData(); // Refresh local state
-                updateAll(true); // Sync other components
+                updateMasterSheet(); // Sync other components
             } else {
                 toast.error('Failed to save engineer');
             }

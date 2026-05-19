@@ -271,7 +271,7 @@ export default function ReauditData() {
     }
 
     function onError(e: any) {
-        console.log(e);
+        console.error(e);
         toast.error('Please fill all required fields');
     }
 

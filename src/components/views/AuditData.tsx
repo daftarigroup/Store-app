@@ -472,7 +472,6 @@ export default function PcReportTable() {
     }
 
     try {
-      console.log('🔄 Starting form submission...');
 
       const currentDateTime = new Date().toISOString();
       const stageConfig = STAGES[selectedRow.currentStage];
@@ -502,7 +501,6 @@ export default function PcReportTable() {
 
       await Promise.all(updatePromises);
 
-      console.log('✅ Group update successful');
       toast.success(`Status updated for PO ${selectedRow.poNumber} (${itemsToUpdate.length} items)`);
 
       setOpenDialog(false);
@@ -515,7 +513,7 @@ export default function PcReportTable() {
   }
 
   function onError(errors: any) {
-    console.log(errors);
+    console.error(errors);
     toast.error('Please fill all required fields');
   }
 

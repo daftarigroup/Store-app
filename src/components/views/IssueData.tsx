@@ -405,7 +405,7 @@ export default function IssueData() {
     }
 
     function onError(e: FieldErrors<z.infer<typeof schema>>) {
-        console.log(e);
+        console.error(e);
         toast.error('Please fill all required fields');
     }
 

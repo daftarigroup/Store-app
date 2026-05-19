@@ -117,7 +117,7 @@ export async function createFullkittingEntry(data: {
         // Prevent duplicate entries for the same indent + product + bill_no
         const { data: existing } = await supabase
             .from('fullkitting')
-            .select('*')
+            .select('id')
             .eq('indent_number', data.indent_number)
             .eq('product_name', data.product_name)
             .eq('bill_no', data.bill_no)

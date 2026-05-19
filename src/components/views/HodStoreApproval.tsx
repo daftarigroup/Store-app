@@ -98,7 +98,7 @@ type FormValues = z.infer<typeof schema>;
 
 export default () => {
     const { user } = useAuth();
-    const { updateAll } = useSheets();
+    const { updateTallyEntrySheet, updatePaymentsSheet } = useSheets();
     const [storeInRecords, setStoreInRecords] = useState<StoreInRecord[]>([]);
     const [dataLoading, setDataLoading] = useState(false);
     const [pendingData, setPendingData] = useState<HodPendingData[]>([]);
@@ -262,7 +262,6 @@ export default () => {
 
                 // ✅ Sync with Audit Data (Tally Entry)
                 try {
-                    console.log('📝 Creating Audit Data entry from HOD Approval...');
                     const formattedDateOnly = currentDateTime.split('T')[0];
                     await createTallyEntryRecord({
                         timestamp: currentDateTime,
@@ -290,7 +289,8 @@ export default () => {
             toast.success(`HOD ${values.status} for ${selectedItem.liftNumber}`);
             setOpenDialog(false);
             fetchAllData();
-            updateAll(); // Refresh global sheets data
+            updateTallyEntrySheet(true);
+            updatePaymentsSheet(true);
         } catch (error: any) {
             console.error('Error in onSubmit:', error);
             // Catch trigger-specific errors (like the 42703 column error)

@@ -56,12 +56,11 @@ export default function ApprovedPOs() {
                     .filter(Boolean)
             );
 
-            console.log('PO Master Internal Codes:', Array.from(poMasterInternalCodes));
 
             // Fetch indents where po_required = 'Yes'
             let query = supabase
                 .from('indent')
-                .select('*')
+                .select('indent_number, firm_name, firm_id, product_name, pending_po_qty, quantity, approved_rate, rate1, uom, approved_vendor_name, vendor_name1, approved_payment_term, payment_term1, specifications, po_requred, timestamp, planned5, expected_req_date, delivery_date')
                 .eq('po_requred', 'Yes'); // Note: column name has typo in DB
 
             const userFirms = normalizeFirmAccess(user?.firm_access) || [];
@@ -142,7 +141,6 @@ export default function ApprovedPOs() {
                 })
                 .sort((a, b) => b.rawTimestamp - a.rawTimestamp);
 
-            console.log('Final Approved Table Data:', mappedData);
             setApprovedTableData(mappedData);
         } catch (err) {
             console.error('Error fetching pending POs:', err);

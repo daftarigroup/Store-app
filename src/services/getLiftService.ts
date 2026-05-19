@@ -111,7 +111,7 @@ export async function fetchIndentRecords(permittedFirms?: string[]) {
 
         let query = supabase
             .from('indent')
-            .select('*')
+            .select('indent_number, firm_name, firm_id, approved_vendor_name, po_number, actual4, delivery_date, planned5, actual5, product_name, total_qty, quantity, pending_qty, lifting_status, cancel_qty, approved_rate, tax_value4, with_tax_or_not4, area_of_use, timestamp, expected_req_date, approved_quantity, received_quantity, uom')
             .order('indent_number', { ascending: false });
 
         const filteredQuery = applyFirmAccessFilter(query, permittedFirms);
@@ -120,7 +120,6 @@ export async function fetchIndentRecords(permittedFirms?: string[]) {
         const { data, error } = await filteredQuery;
 
         if (error) throw error;
-        console.log("fetchIndentRecords", data);
         return (data || []).map((r: any) => ({
             indentNumber: r.indent_number || '',
             firmNameMatch: r.firm_name,
@@ -164,7 +163,7 @@ export async function fetchStoreInRecords(permittedFirms?: string[]) {
 
         let query = supabase
             .from('store_in')
-            .select('*')
+            .select('lift_number, indent_no, firm_name, firm_id, vendor_name, product_name, po_number, qty, received_quantity, photo_of_bill, timestamp')
             .order('timestamp', { ascending: false });
 
         const filteredQuery = applyFirmAccessFilter(query, permittedFirms);
@@ -366,7 +365,6 @@ export async function updateActual5Timestamp(indentNumber: string) {
 
         if (error) throw error;
 
-        console.log(`✅ Updated actual5 for indent ${indentNumber}: ${currentDateTime}`);
         return true;
     } catch (error) {
         console.error('Error updating actual5 timestamp:', error);

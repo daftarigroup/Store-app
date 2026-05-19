@@ -1,4 +1,3 @@
-// import { fetchSheet } from '@/lib/fetchers';
 import {
     fetchIndentRecords,
     type IndentRecord
@@ -50,121 +49,138 @@ import type {
 } from '@/types';
 import type { PaymentsSheet } from '@/types/sheets';
 
-import { createContext, useContext, useEffect, useState, useMemo } from 'react';
+import { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 
-interface SheetsState {
-    updateReceivedSheet: () => void;
-    updatePoMasterSheet: () => void;
-    updateIndentSheet: () => void;
-    updateInventorySheet: () => void;
-    updateAll: (silent?: boolean) => void;
-    stockTransferSheet: any[];
-    updateStockTransferSheet: () => void;
+// ============================================================
+// Domain context interfaces — each component subscribes only
+// to the slice it actually needs
+// ============================================================
 
-    updateIssueSheet: () => void;
-    issueSheet: IssueSheet[];
-    issueLoading: boolean;
-    sheets: StoreInSheet[];
-
-
+interface IndentContextType {
     indentSheet: IndentSheet[];
-    storeInSheet: StoreInSheet[];
-    poMasterSheet: PoMasterSheet[];
-    receivedSheet: ReceivedSheet[];
-    inventorySheet: InventorySheet[];
-    pcReportSheet: PcReportSheet[];
-    masterSheet: MasterSheet | undefined;
-
     indentLoading: boolean;
-    poMasterLoading: boolean;
-    receivedLoading: boolean;
-    inventoryLoading: boolean;
-    allLoading: boolean;
-
-    updateStoreInSheet: () => void;
-    storeInLoading: boolean;
-
-    tallyEntrySheet: TallyEntrySheet[];
-    tallyEntryLoading: boolean;
-    updateTallyEntrySheet: () => void;
-
-    updatePcReportSheet: () => void;
-
-    fullkittingSheet: FullkittingSheet[];
-    fullkittingLoading: boolean;
-    updateFullkittingSheet: () => void;
-
-    // ✅ ADD PAYMENT HISTORY HERE
-    paymentHistorySheet: PaymentHistory[];
-    paymentHistoryLoading: boolean;
-    updatePaymentHistorySheet: () => void;
-    paymentsSheet: PaymentsSheet[];
-    paymentsLoading: boolean;
-    updatePaymentsSheet: () => void;
+    updateIndentSheet: (silent?: boolean) => void;
 }
 
-const SheetsContext = createContext<SheetsState | null>(null);
+interface PurchaseContextType {
+    storeInSheet: StoreInSheet[];
+    sheets: StoreInSheet[];
+    storeInLoading: boolean;
+    updateStoreInSheet: (silent?: boolean) => void;
+    poMasterSheet: PoMasterSheet[];
+    poMasterLoading: boolean;
+    updatePoMasterSheet: (silent?: boolean) => void;
+    receivedSheet: ReceivedSheet[];
+    receivedLoading: boolean;
+    updateReceivedSheet: (silent?: boolean) => void;
+    tallyEntrySheet: TallyEntrySheet[];
+    tallyEntryLoading: boolean;
+    updateTallyEntrySheet: (silent?: boolean) => void;
+    fullkittingSheet: FullkittingSheet[];
+    fullkittingLoading: boolean;
+    updateFullkittingSheet: (silent?: boolean) => void;
+}
+
+interface IssueContextType {
+    issueSheet: IssueSheet[];
+    issueLoading: boolean;
+    updateIssueSheet: (silent?: boolean) => void;
+    stockTransferSheet: any[];
+    updateStockTransferSheet: (silent?: boolean) => void;
+}
+
+interface PaymentContextType {
+    paymentsSheet: PaymentsSheet[];
+    paymentsLoading: boolean;
+    updatePaymentsSheet: (silent?: boolean) => void;
+    paymentHistorySheet: PaymentHistory[];
+    paymentHistoryLoading: boolean;
+    updatePaymentHistorySheet: (silent?: boolean) => void;
+}
+
+interface AppContextType {
+    masterSheet: MasterSheet | undefined;
+    updateMasterSheet: () => void;
+    inventorySheet: InventorySheet[];
+    inventoryLoading: boolean;
+    updateInventorySheet: (silent?: boolean) => void;
+    pcReportSheet: PcReportSheet[];
+    updatePcReportSheet: () => void;
+    allLoading: boolean;
+    updateAll: (silent?: boolean) => void;
+}
+
+// Backward-compat composite (kept so useSheets() still compiles)
+interface SheetsState extends
+    IndentContextType,
+    PurchaseContextType,
+    IssueContextType,
+    PaymentContextType,
+    AppContextType {}
+
+// ============================================================
+// Context objects
+// ============================================================
+
+const IndentContext = createContext<IndentContextType | null>(null);
+const PurchaseContext = createContext<PurchaseContextType | null>(null);
+const IssueContext = createContext<IssueContextType | null>(null);
+const PaymentContext = createContext<PaymentContextType | null>(null);
+const AppContext = createContext<AppContextType | null>(null);
+
+// ============================================================
+// Provider
+// ============================================================
 
 export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
     const { user } = useAuth();
+
+    // --- Raw state ---
     const [indentSheet, setIndentSheet] = useState<IndentSheet[]>([]);
     const [storeSheet, setStoreInSheet] = useState<StoreInSheet[]>([]);
     const [receivedSheet, setReceivedSheet] = useState<ReceivedSheet[]>([]);
     const [poMasterSheet, setPoMasterSheet] = useState<PoMasterSheet[]>([]);
     const [inventorySheet, setInventorySheet] = useState<InventorySheet[]>([]);
     const [masterSheet, setMasterSheet] = useState<MasterSheet>();
-
     const [tallyEntrySheet, setTallyEntrySheet] = useState<TallyEntrySheet[]>([]);
     const [fullkittingSheet, setFullkittingSheet] = useState<FullkittingSheet[]>([]);
-    const [fullkittingLoading, setFullkittingLoading] = useState(true);
-
-    const [tallyEntryLoading, setTallyEntryLoading] = useState(true);
-
     const [issueSheet, setIssueSheet] = useState<IssueSheet[]>([]);
     const [stockTransferSheet, setStockTransferSheet] = useState<any[]>([]);
-    const [issueLoading, setIssueLoading] = useState(true);
+    const [paymentsSheet, setPaymentsSheet] = useState<PaymentsSheet[]>([]);
+    const [paymentHistorySheet, setPaymentHistorySheet] = useState<PaymentHistory[]>([]);
 
     const [indentLoading, setIndentLoading] = useState(true);
-    const [poMasterLoading, setPoMasterLoading] = useState(true);
+    const [storeInLoading, setStoreInLoading] = useState(true);
     const [receivedLoading, setReceivedLoading] = useState(true);
+    const [poMasterLoading, setPoMasterLoading] = useState(true);
     const [inventoryLoading, setInventoryLoading] = useState(true);
+    const [tallyEntryLoading, setTallyEntryLoading] = useState(true);
+    const [fullkittingLoading, setFullkittingLoading] = useState(true);
+    const [issueLoading, setIssueLoading] = useState(true);
+    const [paymentsLoading, setPaymentsLoading] = useState(true);
+    const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(true);
     const [allLoading, setAllLoading] = useState(true);
 
-    const [storeInLoading, setStoreInLoading] = useState(true);
-    const [paymentsSheet, setPaymentsSheet] = useState<PaymentsSheet[]>([]);
-    const [paymentsLoading, setPaymentsLoading] = useState(true);
+    // --- Derived state ---
+    const pcReportSheet = useMemo(() => calculatePcReportCounts(
+        indentSheet, storeSheet, issueSheet, fullkittingSheet, tallyEntrySheet, paymentsSheet, poMasterSheet
+    ), [indentSheet, storeSheet, issueSheet, fullkittingSheet, tallyEntrySheet, paymentsSheet, poMasterSheet]);
 
+    // ============================================================
+    // Update functions — useCallback prevents identity churn so
+    // memoized context values stay stable between renders
+    // ============================================================
 
-    // ✅ ADD PAYMENT HISTORY STATE
-    const [paymentHistorySheet, setPaymentHistorySheet] = useState<PaymentHistory[]>([]);
-    const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(true);
-
-    const pcReportSheet = useMemo(() => {
-        return calculatePcReportCounts(
-            indentSheet,
-            storeSheet,
-            issueSheet,
-            fullkittingSheet,
-            tallyEntrySheet,
-            paymentsSheet,
-            poMasterSheet
-        );
-    }, [indentSheet, storeSheet, issueSheet, fullkittingSheet, tallyEntrySheet, paymentsSheet, poMasterSheet]);
-
-    const sheets = storeSheet;
-
-    function updateStoreInSheet(silent = false) {
+    const updateStoreInSheet = useCallback((silent = false) => {
         if (!silent) setStoreInLoading(true);
         const permittedFirms = user?.firm_access || [];
         fetchStoreInRecords(permittedFirms)
             .then((res) => {
-                // Map to StoreInSheet format
                 const mapped = res.map((r: any) => ({
                     ...r,
-                    // Ensure compatibility with naming conventions used in UI
-                    vendorType: r.vendor_type || '', // Some old code might use this
+                    vendorType: r.vendor_type || '',
                     billStatus: r.billStatus || '',
                 }));
                 setStoreInSheet(mapped as unknown as StoreInSheet[]);
@@ -174,9 +190,9 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                 console.error('Error fetching STORE IN from Supabase:', error);
                 setStoreInLoading(false);
             });
-    }
+    }, [user]);
 
-    function updateIssueSheet(silent = false) {
+    const updateIssueSheet = useCallback((silent = false) => {
         if (!silent) setIssueLoading(true);
         const permittedFirms = user?.firm_access || [];
         fetchIssueRecords(permittedFirms)
@@ -215,9 +231,9 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                 console.error('Error fetching ISSUE from Supabase:', error);
                 setIssueLoading(false);
             });
-    }
+    }, [user]);
 
-    function updateIndentSheet(silent = false) {
+    const updateIndentSheet = useCallback((silent = false) => {
         if (!silent) setIndentLoading(true);
         const permittedFirms = user?.firm_access || [];
         fetchIndentRecords(permittedFirms)
@@ -253,7 +269,7 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                     planned5: r.planned5,
                     actual5: r.actual5,
                     status: r.status || r.indent_status || 'Pending',
-                    poRequred: r.po_number ? 'Yes' : (r.actual4 ? 'Yes' : ''), // Helper for notification logic
+                    poRequred: r.po_number ? 'Yes' : (r.actual4 ? 'Yes' : ''),
                     liftingStatus: r.lifting_status || 'Pending',
                     poQty: r.po_qty || 0,
                     pendingPoQty: (r.approved_quantity || 0) - (Number(r.po_qty) || 0),
@@ -266,11 +282,10 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                 console.error('Error fetching INDENT from Supabase:', error);
                 setIndentLoading(false);
             });
-    }
+    }, [user]);
 
-    function updateReceivedSheet(silent = false) {
+    const updateReceivedSheet = useCallback((silent = false) => {
         if (!silent) setReceivedLoading(true);
-        // Using StoreIn service for received items as they are related
         const permittedFirms = user?.firm_access || [];
         fetchStoreInRecords(permittedFirms)
             .then((res) => {
@@ -297,9 +312,9 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                 console.error('Error fetching RECEIVED from Supabase:', error);
                 setReceivedLoading(false);
             });
-    }
+    }, [user]);
 
-    function updatePoMasterSheet(silent = false) {
+    const updatePoMasterSheet = useCallback((silent = false) => {
         if (!silent) setPoMasterLoading(true);
         const permittedFirms = user?.firm_access || [];
         fetchPoMaster(permittedFirms)
@@ -311,9 +326,9 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                 console.error('Error fetching PO MASTER from Supabase:', error);
                 setPoMasterLoading(false);
             });
-    }
+    }, [user]);
 
-    function updateInventorySheet(silent = false) {
+    const updateInventorySheet = useCallback((silent = false) => {
         if (!silent) setInventoryLoading(true);
         const permittedFirms = user?.firm_access || [];
         fetchInventoryRecords(permittedFirms)
@@ -325,9 +340,9 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                 console.error('Error fetching INVENTORY from Supabase:', error);
                 setInventoryLoading(false);
             });
-    }
+    }, [user]);
 
-    function updateMasterSheet() {
+    const updateMasterSheet = useCallback(() => {
         const permittedFirms = user?.firm_access || [];
         fetchMasterOptions(permittedFirms)
             .then((res) => {
@@ -336,16 +351,16 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
             .catch((error) => {
                 console.error('Error fetching MASTER from Supabase:', error);
             });
-    }
+    }, [user]);
 
-    function updateFullkittingSheet(silent = false) {
+    const updateFullkittingSheet = useCallback((silent = false) => {
         if (!silent) setFullkittingLoading(true);
         const permittedFirms = user?.firm_access || [];
         fetchFullkittingRecords(permittedFirms)
             .then((res) => {
                 const mapped = res.map(r => ({
                     ...r,
-                    vehicleNo: r.vehicalNo, // Matching naming variants
+                    vehicleNo: r.vehicalNo,
                 }));
                 setFullkittingSheet(mapped as unknown as FullkittingSheet[]);
                 setFullkittingLoading(false);
@@ -354,9 +369,9 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                 console.error('Error fetching Fullkitting from Supabase:', error);
                 setFullkittingLoading(false);
             });
-    }
+    }, [user]);
 
-    function updatePaymentsSheet(silent = false) {
+    const updatePaymentsSheet = useCallback((silent = false) => {
         if (!silent) setPaymentsLoading(true);
         const permittedFirms = user?.firm_access || [];
         fetchPayments(permittedFirms)
@@ -368,9 +383,9 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                 console.error('Error fetching PAYMENTS from Supabase:', error);
                 setPaymentsLoading(false);
             });
-    }
+    }, [user]);
 
-    function updatePaymentHistorySheet(silent = false) {
+    const updatePaymentHistorySheet = useCallback((silent = false) => {
         if (!silent) setPaymentHistoryLoading(true);
         const permittedFirms = user?.firm_access || [];
         fetchPaymentHistory(permittedFirms)
@@ -382,10 +397,10 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                 console.error('Error fetching PAYMENT HISTORY from Supabase:', error);
                 setPaymentHistoryLoading(false);
             });
-    }
+    }, [user]);
 
-    function updateStockTransferSheet(silent = false) {
-        if (!silent) setIssueLoading(true); // Reuse loading or add new one? I'll reuse for now to avoid too much boilerplate
+    const updateStockTransferSheet = useCallback((silent = false) => {
+        if (!silent) setIssueLoading(true);
         const permittedFirms = user?.firm_access || [];
         fetchStockTransferRecords(permittedFirms)
             .then((res) => {
@@ -396,56 +411,13 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                 console.error(err);
                 setIssueLoading(false);
             });
-    }
+    }, [user]);
 
-    function updateAll(silent = false) {
-        if (!silent) setAllLoading(true);
-        updateMasterSheet();
-        updateReceivedSheet(silent);
-        updateIndentSheet(silent);
-        updatePoMasterSheet(silent);
-        updateInventorySheet(silent);
-
-        updateStoreInSheet(silent);
-        updateIssueSheet(silent);
-        updateTallyEntrySheet(silent);
-        updatePcReportSheet();
-        updateFullkittingSheet(silent);
-
-        updatePaymentHistorySheet(silent);
-        updatePaymentsSheet(silent);
-        updateStockTransferSheet(silent);
-
-        if (!silent) setAllLoading(false);
-    }
-
-    useEffect(() => {
-        if (!user || !user.username) return;
-
-        try {
-            updateAll();
-            // toast.success('Fetched all the data');
-
-            // ✅ AUTO-REFRESH EVERY 30 SECONDS
-            const intervalId = setInterval(() => {
-                console.log('🔄 Auto-refreshing data (silent)...');
-                updateAll(true);
-            }, 30000);
-
-            return () => clearInterval(intervalId);
-        } catch (e) {
-            toast.error('Something went wrong while fetching data');
-        } finally {
-        }
-    }, [user?.username, user?.firm_access]);
-
-    function updateTallyEntrySheet(silent = false) {
+    const updateTallyEntrySheet = useCallback((silent = false) => {
         if (!silent) setTallyEntryLoading(true);
-        console.log('🔄 Fetching Tally Entry records...');
         const permittedFirms = user?.firm_access || [];
         fetchTallyEntryRecords(permittedFirms)
             .then((res) => {
-                console.log(`✅ Received ${res.length} Tally Entry records`);
                 const mapped = res.map(r => ({
                     timestamp: r.timestamp,
                     indentNo: r.indentNumber,
@@ -496,7 +468,6 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                     status5: r.status5,
                     firmNameMatch: r.firmNameMatch,
                     id: r.id,
-                    // Additional fields from join
                     damageOrder: r.damageOrder,
                     quantityAsPerBill: r.quantityAsPerBill,
                     priceAsPerPoCheck: r.priceAsPerPoCheck,
@@ -513,65 +484,201 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                 console.error('Error fetching TALLY ENTRY from Supabase:', error);
                 setTallyEntryLoading(false);
             });
-    }
+    }, [user]);
 
-    function updatePcReportSheet() {
-        // Now calculated dynamically via useMemo
-    }
+    const updatePcReportSheet = useCallback(() => {
+        // Computed automatically via useMemo — no manual refresh needed
+    }, []);
+
+    const updateAll = useCallback((silent = false) => {
+        if (!silent) setAllLoading(true);
+        updateMasterSheet();
+        updateReceivedSheet(silent);
+        updateIndentSheet(silent);
+        updatePoMasterSheet(silent);
+        updateInventorySheet(silent);
+        updateStoreInSheet(silent);
+        updateIssueSheet(silent);
+        updateTallyEntrySheet(silent);
+        updatePcReportSheet();
+        updateFullkittingSheet(silent);
+        updatePaymentHistorySheet(silent);
+        updatePaymentsSheet(silent);
+        updateStockTransferSheet(silent);
+        if (!silent) setAllLoading(false);
+    }, [
+        updateMasterSheet, updateReceivedSheet, updateIndentSheet, updatePoMasterSheet,
+        updateInventorySheet, updateStoreInSheet, updateIssueSheet, updateTallyEntrySheet,
+        updatePcReportSheet, updateFullkittingSheet, updatePaymentHistorySheet,
+        updatePaymentsSheet, updateStockTransferSheet,
+    ]);
+
+    // --- Initial load + visibility-aware auto-refresh ---
+    // Rules:
+    //  1. Interval runs only while this tab is VISIBLE — pausing it on hidden
+    //     tabs eliminates the "5 open tabs all hammering the DB" problem.
+    //  2. When the tab comes back into focus, refresh immediately if the data
+    //     would have gone stale while the tab was in the background.
+    //  3. Interval is 2 minutes — targeted update*Sheet() calls already handle
+    //     immediate consistency after user actions; this is just a safety net
+    //     for changes made by other users.
+    useEffect(() => {
+        if (!user?.username) return;
+
+        const INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
+        let intervalId: ReturnType<typeof setInterval> | null = null;
+        let lastRefreshedAt = 0;
+
+        const silentRefresh = () => {
+            lastRefreshedAt = Date.now();
+            updateAll(true);
+        };
+
+        const startInterval = () => {
+            if (intervalId !== null) return;
+            intervalId = setInterval(silentRefresh, INTERVAL_MS);
+        };
+
+        const stopInterval = () => {
+            if (intervalId !== null) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+        };
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                // Tab regained focus — catch up if interval fired while hidden
+                if (Date.now() - lastRefreshedAt >= INTERVAL_MS) {
+                    silentRefresh();
+                }
+                startInterval();
+            } else {
+                // Tab hidden — pause so background tabs don't hit the DB
+                stopInterval();
+            }
+        };
+
+        // Initial full load
+        try {
+            updateAll();
+            lastRefreshedAt = Date.now();
+        } catch (e) {
+            toast.error('Something went wrong while fetching data');
+        }
+
+        // Only start interval if this tab is currently active
+        if (document.visibilityState === 'visible') {
+            startInterval();
+        }
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            stopInterval();
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [updateAll]);
+
+    // ============================================================
+    // Memoized context values — each value object only changes
+    // when its own slice of state changes, not the whole app
+    // ============================================================
+
+    const indentValue = useMemo<IndentContextType>(() => ({
+        indentSheet,
+        indentLoading,
+        updateIndentSheet,
+    }), [indentSheet, indentLoading, updateIndentSheet]);
+
+    const purchaseValue = useMemo<PurchaseContextType>(() => ({
+        storeInSheet: storeSheet,
+        sheets: storeSheet,
+        storeInLoading,
+        updateStoreInSheet,
+        poMasterSheet,
+        poMasterLoading,
+        updatePoMasterSheet,
+        receivedSheet,
+        receivedLoading,
+        updateReceivedSheet,
+        tallyEntrySheet,
+        tallyEntryLoading,
+        updateTallyEntrySheet,
+        fullkittingSheet,
+        fullkittingLoading,
+        updateFullkittingSheet,
+    }), [
+        storeSheet, storeInLoading, updateStoreInSheet,
+        poMasterSheet, poMasterLoading, updatePoMasterSheet,
+        receivedSheet, receivedLoading, updateReceivedSheet,
+        tallyEntrySheet, tallyEntryLoading, updateTallyEntrySheet,
+        fullkittingSheet, fullkittingLoading, updateFullkittingSheet,
+    ]);
+
+    const issueValue = useMemo<IssueContextType>(() => ({
+        issueSheet,
+        issueLoading,
+        updateIssueSheet,
+        stockTransferSheet,
+        updateStockTransferSheet,
+    }), [issueSheet, issueLoading, updateIssueSheet, stockTransferSheet, updateStockTransferSheet]);
+
+    const paymentValue = useMemo<PaymentContextType>(() => ({
+        paymentsSheet,
+        paymentsLoading,
+        updatePaymentsSheet,
+        paymentHistorySheet,
+        paymentHistoryLoading,
+        updatePaymentHistorySheet,
+    }), [paymentsSheet, paymentsLoading, updatePaymentsSheet, paymentHistorySheet, paymentHistoryLoading, updatePaymentHistorySheet]);
+
+    const appValue = useMemo<AppContextType>(() => ({
+        masterSheet,
+        updateMasterSheet,
+        inventorySheet,
+        inventoryLoading,
+        updateInventorySheet,
+        pcReportSheet,
+        updatePcReportSheet,
+        allLoading,
+        updateAll,
+    }), [masterSheet, updateMasterSheet, inventorySheet, inventoryLoading, updateInventorySheet, pcReportSheet, updatePcReportSheet, allLoading, updateAll]);
 
     return (
-        <SheetsContext.Provider
-            value={{
-                updateIndentSheet,
-                updatePoMasterSheet,
-                updateReceivedSheet,
-                updateInventorySheet,
-                updateAll,
-                indentSheet,
-                sheets,
-                poMasterSheet,
-                inventorySheet,
-                receivedSheet,
-                indentLoading,
-                masterSheet,
-                poMasterLoading,
-                receivedLoading,
-                inventoryLoading,
-                allLoading,
-                storeInSheet: storeSheet,
-
-                updateIssueSheet,
-                issueSheet,
-                issueLoading,
-
-                updateStoreInSheet,
-                storeInLoading,
-
-                tallyEntrySheet,
-                tallyEntryLoading,
-                updateTallyEntrySheet,
-
-                pcReportSheet,
-                updatePcReportSheet,
-
-                fullkittingSheet,
-                fullkittingLoading,
-                updateFullkittingSheet,
-
-                // ✅ ADD PAYMENT HISTORY TO CONTEXT VALUE
-                paymentHistorySheet,
-                paymentHistoryLoading,
-                updatePaymentHistorySheet,
-                paymentsSheet,
-                paymentsLoading,
-                updatePaymentsSheet,
-                stockTransferSheet,
-                updateStockTransferSheet
-            }}
-        >
-            {children}
-        </SheetsContext.Provider>
+        <IndentContext.Provider value={indentValue}>
+            <PurchaseContext.Provider value={purchaseValue}>
+                <IssueContext.Provider value={issueValue}>
+                    <PaymentContext.Provider value={paymentValue}>
+                        <AppContext.Provider value={appValue}>
+                            {children}
+                        </AppContext.Provider>
+                    </PaymentContext.Provider>
+                </IssueContext.Provider>
+            </PurchaseContext.Provider>
+        </IndentContext.Provider>
     );
 };
 
-export const useSheets = () => useContext(SheetsContext)!;
+// ============================================================
+// Fine-grained hooks — prefer these in new/refactored code.
+// Each component subscribes only to its relevant slice.
+// ============================================================
+export const useIndentData = () => useContext(IndentContext)!;
+export const usePurchaseData = () => useContext(PurchaseContext)!;
+export const useIssueData = () => useContext(IssueContext)!;
+export const usePaymentData = () => useContext(PaymentContext)!;
+export const useAppData = () => useContext(AppContext)!;
+
+// ============================================================
+// Backward-compatible hook — existing consumers keep working.
+// Components using this still re-render on any slice change;
+// migrate to fine-grained hooks above for full isolation.
+// ============================================================
+export const useSheets = (): SheetsState => ({
+    ...useContext(IndentContext)!,
+    ...useContext(PurchaseContext)!,
+    ...useContext(IssueContext)!,
+    ...useContext(PaymentContext)!,
+    ...useContext(AppContext)!,
+});

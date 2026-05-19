@@ -44,7 +44,8 @@ export default () => {
         storeInSheet,
         issueSheet: sheetIssues,
         stockTransferSheet,
-        updateAll,
+        updateIssueSheet,
+        updateStockTransferSheet,
     } = useSheets();
 
     const [options, setOptions] = useState<MasterData | null>(null);
@@ -53,7 +54,8 @@ export default () => {
     const fetchData = async () => {
         try {
             setDataLoading(true);
-            await updateAll(true);
+            updateIssueSheet(true);
+            updateStockTransferSheet(true);
             const masterOptions = await fetchMasterOptions();
             setOptions(masterOptions);
         } catch (error) {
@@ -271,7 +273,7 @@ export default () => {
     }
 
     function onError(e: any) {
-        console.log(e);
+        console.error(e);
         toast.error('Please fill all required fields');
     }
 

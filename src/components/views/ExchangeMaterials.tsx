@@ -104,7 +104,6 @@ const ExchangeMaterials = () => {
         try {
             setDataLoading(true);
             const data = await fetchStoreInRecords();
-            console.log("Fetched store-in records:", data.length);
 
             // Filter by Project Name
             const filteredByFirm = data.filter(item =>

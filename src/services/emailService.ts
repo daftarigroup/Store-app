@@ -6,14 +6,13 @@ const RESEND_API_URL = import.meta.env.PROD ? '/api/send-email' : '/api/resend/e
 const API_KEY = import.meta.env.VITE_RESEND_API_KEY;
 
 export interface EmailParams {
-    to: string;
+    to: string | string[];
     subject: string;
     html: string;
 }
 
 /**
  * Send an email using Resend
- * Note: In Resend free/dev mode, you can only send to your verified email.
  */
 export async function sendEmail({ to, subject, html }: EmailParams) {
     // In production, the serverless function handles the API key
@@ -34,7 +33,7 @@ export async function sendEmail({ to, subject, html }: EmailParams) {
             method: 'POST',
             headers,
             body: JSON.stringify({
-                from: 'Store App <onboarding@resend.dev>',
+                from: 'noreply@send.daftarigroup.com',
                 to,
                 subject,
                 html,
@@ -46,7 +45,6 @@ export async function sendEmail({ to, subject, html }: EmailParams) {
             throw new Error(data.message || 'Failed to send email');
         }
 
-        console.log('Email sent successfully:', data);
         return data;
     } catch (error) {
         console.error('Error sending email:', error);

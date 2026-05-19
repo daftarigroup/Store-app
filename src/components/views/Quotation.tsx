@@ -16,13 +16,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "../ui/dialog";
-import type { PoMasterSheet, QuotationHistorySheet, MasterDataRow } from '@/types';
+import type { PoMasterSheet, QuotationHistorySheet } from '@/types';
 
 
 
 import { uploadFile } from '@/lib/fetchers';
 import { fetchQuotationHistory, insertQuotationHistory } from '@/services/quotationService';
-import { fetchMasterOptions, fetchMasterRecords } from '@/services/masterService';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useSheets } from '@/context/SheetsContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -130,10 +129,8 @@ export default function QuotationPage() {
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>([]);
   const [supplierInfos, setSupplierInfos] = useState<SupplierInfo[]>([]);
-  const [masterSuppliers, setMasterSuppliers] = useState<MasterSheetSupplier[]>([]);
   const [latestQuotationNumbers, setLatestQuotationNumbers] = useState<string[]>([]);
   const [allHistory, setAllHistory] = useState<QuotationHistorySheet[]>([]);
-  const [fullMasterData, setFullMasterData] = useState<MasterDataRow[]>([]);
   const [historySearch, setHistorySearch] = useState('');
   const [expandedQuotation, setExpandedQuotation] = useState<string | null>(null);
   const [selectedSupplierBid, setSelectedSupplierBid] = useState<{
@@ -166,7 +163,6 @@ export default function QuotationPage() {
     try {
       const quotationHistory = await fetchQuotationHistory(user?.firm_access);
 
-      console.log('Fetched QUOTATION HISTORY:', quotationHistory);
 
       if (Array.isArray(quotationHistory)) {
         setAllHistory(quotationHistory);
@@ -177,7 +173,6 @@ export default function QuotationPage() {
         ));
 
         setLatestQuotationNumbers(quotationNos);
-        console.log('Latest quotation numbers:', quotationNos);
       }
     } catch (error) {
       console.error('Error fetching quotation numbers:', error);
@@ -189,71 +184,22 @@ export default function QuotationPage() {
   }, []);
 
 
-  // Fetch suppliers from MASTER sheet using existing fetchSheet function
-  useEffect(() => {
-    function hasVendors(data: any): data is { vendors: any[] } {
-      return data && typeof data === 'object' && 'vendors' in data;
-    }
-
-    const fetchMasterSuppliers = async () => {
-      try {
-        console.log('Fetching MASTER data...');
-
-        const masterData = await fetchMasterOptions();
-        const rawMasterForFilter = await fetchMasterRecords();
-
-        console.log('MASTER data:', masterData);
-        console.log('Master Records for filtering:', rawMasterForFilter);
-
-        if (Array.isArray(rawMasterForFilter)) {
-          setFullMasterData(rawMasterForFilter as unknown as MasterDataRow[]);
-        }
-
-        // Use type guard to safely access vendors
-        let vendorsArray: any[] = [];
-
-        if (hasVendors(masterData)) {
-          vendorsArray = masterData.vendors || [];
-        } else if (Array.isArray(masterData)) {
-          vendorsArray = masterData;
-        }
-
-        const suppliers: MasterSheetSupplier[] = vendorsArray
-          .map((vendor: any) => ({
-            supplierName: vendor.vendorName || vendor.supplierName || '',
-            vendorGstin: vendor.gstin || vendor.vendorGstin || '',
-            vendorAddress: vendor.address || vendor.vendorAddress || '',
-            email: vendor.email || ''
-          }))
-          .filter(supplier => {
-            const name = supplier.supplierName;
-            return name && typeof name === 'string' && name.trim() !== '';
-          });
-
-        console.log('Processed suppliers:', suppliers);
-        setMasterSuppliers(suppliers);
-
-        if (suppliers.length === 0) {
-          console.warn('No suppliers found in MASTER sheet');
-          toast.warning('No suppliers found in MASTER sheet');
-        } else {
-          console.log(`Successfully loaded ${suppliers.length} suppliers from MASTER sheet`);
-          toast.success(`Loaded ${suppliers.length} suppliers`);
-        }
-
-      } catch (error) {
-        console.error('Error fetching MASTER sheet suppliers:', error);
-        toast.error('Failed to load suppliers from MASTER sheet');
-      }
-    };
-
-    fetchMasterSuppliers();
+  // Derive suppliers directly from context data — no extra Supabase calls needed
+  const masterSuppliers = useMemo<MasterSheetSupplier[]>(() => {
+    const vendorsArray: any[] = (details as any)?.vendors || [];
+    return vendorsArray
+      .map((vendor: any) => ({
+        supplierName: vendor.vendorName || vendor.supplierName || '',
+        vendorGstin: vendor.gstin || vendor.vendorGstin || '',
+        vendorAddress: vendor.address || vendor.vendorAddress || '',
+        email: vendor.email || '',
+      }))
+      .filter((s: MasterSheetSupplier) => s.supplierName.trim() !== '');
   }, [details]);
 
 
   // Filter eligible items - planned2 NOT NULL and actual2 effectively empty
   const eligibleItems = useMemo(() => {
-    console.log('Total indentSheet items:', indentSheet.length);
 
     const isEmpty = (value: any) => {
       if (value === null || value === undefined) return true;
@@ -285,7 +231,6 @@ export default function QuotationPage() {
       return isApproved && !isAlreadyInNextStage;
     }).reverse();
 
-    console.log('Filtered eligible items:', filtered.length);
     return filtered;
   }, [indentSheet, mode, allHistory]);
 
@@ -313,7 +258,6 @@ export default function QuotationPage() {
       // Use unique numbers from history for next number generation
       const nextNumber = generateNextQuotationNumber(latestQuotationNumbers);
       form.setValue('quotationNumber', nextNumber);
-      console.log('Generated next quotation number:', nextNumber);
     }
   }, [mode, poMasterSheet, latestQuotationNumbers, form]);
 
@@ -344,7 +288,6 @@ export default function QuotationPage() {
       });
       setSupplierInfos(infos);
 
-      console.log('Selected suppliers info:', infos);
 
       return newSuppliers;
     });
@@ -526,15 +469,12 @@ export default function QuotationPage() {
             subject: `Enquiry Request: ${sharedQuotationNumber}`,
             html: emailHtml
           });
-          console.log(`Email sent to ${supplierInfo.name} (${supplierInfo.email})`);
         } catch (emailError) {
           console.error(`Failed to send email to ${supplierInfo.name}:`, emailError);
           toast.error(`Enquiry created, but email failed for ${supplierInfo.name}.`);
         }
       }
 
-      console.log('Submitting to QUOTATION HISTORY:', allQuotationRows);
-      console.log('Total rows:', allQuotationRows.length);
 
       // Post to history - inserting multiple rows
       await insertQuotationHistory(allQuotationRows);
@@ -558,7 +498,7 @@ export default function QuotationPage() {
   }
 
   function onError(e: any) {
-    console.log('Form errors:', e);
+    console.error('Form errors:', e);
     toast.error('Please check the form');
   }
 

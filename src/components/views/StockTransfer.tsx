@@ -41,7 +41,7 @@ const transferSchema = z.object({
 type TransferFormValues = z.infer<typeof transferSchema>;
 
 export default () => {
-    const { masterSheet, inventorySheet, indentSheet, storeInSheet, issueSheet, stockTransferSheet, updateAll } = useSheets();
+    const { masterSheet, inventorySheet, indentSheet, storeInSheet, issueSheet, stockTransferSheet, updateStoreInSheet, updateStockTransferSheet } = useSheets();
     const { user } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [searchTermFrom, setSearchTermFrom] = useState('');
@@ -171,7 +171,8 @@ export default () => {
                 quantity: 0,
                 remark: '',
             });
-            updateAll(true); // Silent update
+            updateStoreInSheet(true);
+            updateStockTransferSheet(true);
         } catch (error: any) {
             console.error('Transfer Error:', error);
             toast.error("Failed to process transfer: " + (error.message || "Unknown error"));

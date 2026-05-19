@@ -338,7 +338,6 @@ export async function updateStoreInReceiving(
         if (error) throw error;
 
         // ✅ TRIGGER HOD CHECK (hod_planned) ALWAYS AFTER STORE CHECK (Stage 6)
-        console.log('📝 Triggering HOD Check stage...');
         const { error: plannedHodError } = await supabase
             .from('store_in')
             .update({
@@ -396,7 +395,6 @@ export async function updateStoreInHodApproval(
 
         // ✅ Trigger Stage 7 if HOD rejects OR if HOD approves a record that has faults
         if (updateData.triggerStage7) {
-            console.log('⚠️ Triggering Stage 7 (Reject for GRN)...');
             const { error: planned7Error } = await supabase
                 .from('store_in')
                 .update({
@@ -655,7 +653,7 @@ export async function createPaymentEntry(storeInData: {
         const { data, error } = await supabase
             .from('payments')
             .insert([paymentEntry])
-            .select('*')
+            .select('id')
             .maybeSingle();
 
         if (error) {
