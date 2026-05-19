@@ -22,32 +22,15 @@ import { formatDate, formatDateTimeFull } from '@/lib/utils';
 import { type ColumnDef } from '@tanstack/react-table';
 import { Pill } from '../ui/pill';
 import { ClipLoader as Loader } from 'react-spinners';
-import { ClipboardList, Trash, Search, PlusCircle } from 'lucide-react';
+import { ClipboardList, Trash, Search, PlusCircle, Download } from 'lucide-react';
 import { useSheets } from '@/context/SheetsContext';
 import Heading from '../element/Heading';
 import { useState, useEffect } from 'react';
 import { supabase, supabaseEnabled } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { calculateRealInventory } from '@/lib/inventoryUtils';
-import type { IndentPdfProps } from '../element/IndentPdf';
-const logo = "/logo.png";
-
-/** Generate an indent PDF on a background thread — never blocks the UI. */
-function generateIndentPdf(props: IndentPdfProps): Promise<Blob> {
-    return new Promise((resolve, reject) => {
-        const worker = new Worker(
-            new URL('../../workers/indentPdf.worker.ts', import.meta.url),
-            { type: 'module' }
-        );
-        worker.onmessage = (e: MessageEvent<{ ok: boolean; blob?: Blob; error?: string }>) => {
-            worker.terminate();
-            if (e.data.ok && e.data.blob) resolve(e.data.blob);
-            else reject(new Error(e.data.error ?? 'PDF generation failed'));
-        };
-        worker.onerror = (err) => { worker.terminate(); reject(err); };
-        worker.postMessage(props);
-    });
-}
+import { pdf } from '@react-pdf/renderer';
+import IndentPdf from '../element/IndentPdf';
 
 export default () => {
     const {
@@ -68,6 +51,7 @@ export default () => {
     const [searchTermFirmName, setSearchTermFirmName] = useState('');
     const [historyData, setHistoryData] = useState<IndentRecord[]>([]);
     const [historyLoading, setHistoryLoading] = useState(false);
+    const [exportingIndentNo, setExportingIndentNo] = useState<string | null>(null);
 
     const [indenterOptions, setIndenterOptions] = useState<string[]>([]);
     const [searchTermIndenter, setSearchTermIndenter] = useState('');
@@ -202,13 +186,24 @@ export default () => {
             ),
         },
         {
-            accessorKey: 'indent_url',
-            header: 'PDF',
-            cell: ({ row }) => row.original.indent_url ? (
-                <a href={row.original.indent_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">
-                    View PDF
-                </a>
-            ) : <span className="text-muted-foreground text-[10px]">N/A</span>
+            id: 'actions',
+            header: 'Action',
+            cell: ({ row }) => {
+                const indentNo = row.original.indent_number;
+                const isLoading = exportingIndentNo === indentNo;
+                return (
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={isLoading}
+                        onClick={() => handleExportIndentPdf(indentNo)}
+                        className="flex items-center gap-1 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 h-7 px-2 text-xs"
+                    >
+                        {isLoading ? <Loader size={11} color="currentColor" /> : <Download size={11} />}
+                        View PDF
+                    </Button>
+                );
+            },
         },
     ];
 
@@ -470,6 +465,57 @@ export default () => {
         }
     };
 
+    async function handleExportIndentPdf(indentNo: string) {
+        setExportingIndentNo(indentNo);
+        try {
+            let logoBase64 = '';
+            try {
+                const r = await fetch('/logo.png');
+                if (r.ok) {
+                    const blob = await r.blob();
+                    logoBase64 = await new Promise<string>((resolve) => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => resolve(reader.result as string);
+                        reader.readAsDataURL(blob);
+                    });
+                }
+            } catch {}
+
+            const rows = historyData.filter(r => r.indent_number === indentNo);
+            if (rows.length === 0) return;
+            const first = rows[0];
+
+            const blob = await pdf(
+                <IndentPdf
+                    indentNumber={indentNo}
+                    indenterName={first.indenter_name}
+                    firmName={first.firm_name}
+                    indentStatus={first.indent_status as 'Critical' | 'Non-Critical'}
+                    date={first.timestamp ? formatDateTimeFull(new Date(first.timestamp)) : formatDateTimeFull(new Date())}
+                    products={rows.map(r => ({
+                        productName: r.product_name,
+                        groupHead: r.group_head ?? '',
+                        quantity: r.quantity,
+                        uom: r.uom,
+                        expectedRequirementDate: r.expected_req_date || '',
+                        specifications: r.specifications || '',
+                        areaOfUse: r.area_of_use || '',
+                    }))}
+                    logo={logoBase64 || '/logo.png'}
+                /> as any
+            ).toBlob();
+
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+            toast.success(`${indentNo} PDF opened`);
+        } catch (err) {
+            console.error(err);
+            toast.error('Failed to generate PDF');
+        } finally {
+            setExportingIndentNo(null);
+        }
+    }
+
     async function onSubmit(data: z.infer<typeof schema>) {
         try {
             if (!supabaseEnabled) {
@@ -516,7 +562,7 @@ export default () => {
                 indent_status: data.indentStatus,
                 expected_req_date: product.expectedRequirementDate,
                 attachment: attachmentUrls[i] || '',
-                indent_url: '', // filled in background after PDF generation
+                indent_url: '',
                 status: 'Pending',
             }));
 
@@ -524,53 +570,14 @@ export default () => {
             if (error) throw error;
 
             // 3. Show success immediately — user is unblocked
-            fetchHistory();
             toast.success(`Indent ${nextIndentNumber} created successfully!`);
+            fetchHistory();
 
             // 4. Increment inventory 'indented' counts in background (non-blocking)
             data.products.forEach(product => {
                 const groupHead = product.groupHead || options?.itemGroupHeadMap?.[product.productName] || '';
                 if (!groupHead || !firmId) return;
                 handleProductSelect(0, product.productName, groupHead).catch(console.error);
-            });
-
-            // 5. Generate PDF in a Web Worker (off main thread) then upload + patch row.
-            //    The worker runs on a separate thread so the UI is never blocked.
-            generateIndentPdf({
-                indentNumber: nextIndentNumber,
-                indenterName: data.indenterName,
-                firmName: data.firmName,
-                indentStatus: data.indentStatus,
-                date: formatDateTimeFull(new Date()),
-                products: data.products,
-                logo,
-            }).then(async (blob) => {
-                try {
-                    const pdfFile = new File([blob], `${nextIndentNumber}_indent.pdf`, { type: 'application/pdf' });
-                    const filePath = `indent-pdfs/${nextIndentNumber}_${Date.now()}.pdf`;
-
-                    const { error: uploadError } = await supabase.storage
-                        .from('indent_attachment')
-                        .upload(filePath, pdfFile);
-
-                    if (uploadError) throw uploadError;
-
-                    const { data: { publicUrl } } = supabase.storage
-                        .from('indent_attachment')
-                        .getPublicUrl(filePath);
-
-                    await supabase
-                        .from('indent')
-                        .update({ indent_url: publicUrl })
-                        .eq('indent_number', nextIndentNumber);
-
-                    // Refresh history now that the PDF URL is stored
-                    fetchHistory();
-                } catch (uploadErr) {
-                    console.error('Background PDF upload failed:', uploadErr);
-                }
-            }).catch((pdfErr) => {
-                console.error('Background PDF generation failed:', pdfErr);
             });
 
             form.reset({
@@ -1281,6 +1288,7 @@ export default () => {
                     />
                 </TabsContent>
             </Tabs>
+
         </div>
     );
 };

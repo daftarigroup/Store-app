@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, FilePlus2, Pencil, Plus, Save, Trash, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Download, FilePlus2, Pencil, Plus, Save, Trash, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -14,13 +14,11 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "../ui/dialog";
 import type { PoMasterSheet, QuotationHistorySheet } from '@/types';
 
 
 
-import { uploadFile } from '@/lib/fetchers';
 import { fetchQuotationHistory, insertQuotationHistory } from '@/services/quotationService';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useSheets } from '@/context/SheetsContext';
@@ -34,7 +32,7 @@ import { Textarea } from '../ui/textarea';
 import { pdf } from '@react-pdf/renderer';
 import POPdf, { type POPdfProps } from '../element/QuotationPdf';
 import { Checkbox } from '../ui/checkbox';
-import { Search as SearchIcon } from 'lucide-react'; 
+import { Search as SearchIcon } from 'lucide-react';
 import Heading from '../element/Heading';
 import { sendEmail, generateBiddingEmailHtml } from '@/services/emailService';
 
@@ -133,6 +131,7 @@ export default function QuotationPage() {
   const [allHistory, setAllHistory] = useState<QuotationHistorySheet[]>([]);
   const [historySearch, setHistorySearch] = useState('');
   const [expandedQuotation, setExpandedQuotation] = useState<string | null>(null);
+  const [exportingKey, setExportingKey] = useState<string | null>(null);
   const [selectedSupplierBid, setSelectedSupplierBid] = useState<{
     supplierName: string;
     quotationNo: string;
@@ -349,99 +348,30 @@ export default function QuotationPage() {
         selectedItems.includes(item.indentNumber)
       );
 
-      let logoBase64 = '';
-      const logoUrl = window.location.origin + '/logo.png';
-      try {
-        const logoResponse = await fetch(logoUrl);
-        if (logoResponse.ok) {
-          const logoBlob = await logoResponse.blob();
-          logoBase64 = await new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.readAsDataURL(logoBlob);
-          });
-        }
-      } catch (error) {
-        console.error('Failed to load logo for PDF:', error);
-      }
-
       const allQuotationRows: QuotationHistorySheet[] = [];
 
-      // Get all existing quotation numbers to generate unique ones - FIXED
       const allNumbers = [...filterUniqueQuotationNumbers(poMasterSheet), ...latestQuotationNumbers];
       let currentMaxNumber = getMaxQuotationNumber(allNumbers);
 
-      const suppliersToProcess = supplierInfos; 
+      const suppliersToProcess = supplierInfos;
 
       if (suppliersToProcess.length === 0) {
         toast.error("Please select at least one supplier.");
         return;
       }
 
-      // Generate ONE shared quotation number for the whole batch
       currentMaxNumber += 1;
       const sharedQuotationNumber = `QT-${String(currentMaxNumber).padStart(3, '0')}`;
 
       for (let i = 0; i < suppliersToProcess.length; i++) {
         const supplierInfo = suppliersToProcess[i];
-        const sessionToken = crypto.randomUUID(); // Unique token for each vendor session
-
-        const pdfProps: POPdfProps = {
-          companyName: details?.companyName || '',
-          companyPhone: details?.companyPhone || '',
-          companyGstin: details?.companyGstin || '',
-          companyPan: details?.companyPan || '',
-          companyAddress: details?.companyAddress || '',
-          billingAddress: billingAddress,
-          destinationAddress: destinationAddress,
-          supplierName: supplierInfo.name,
-          supplierAddress: supplierInfo.address,
-          supplierGstin: supplierInfo.gstin,
-          orderNumber: sharedQuotationNumber,
-          orderDate: formatDate(values.quotationDate || new Date()),
-          quotationNumber: sharedQuotationNumber,
-          quotationDate: formatDate(values.quotationDate || new Date()),
-          enqNo: '',
-          enqDate: '',
-          description: values.description || '',
-          items: selectedItemsData.map(item => ({
-            internalCode: item.indentNumber,
-            project: item.firmNameMatch || 'N/A',
-            product: item.productName,
-            description: item.specifications,
-            quantity: item.quantity,
-            unit: item.uom,
-            rate: 0,
-            gst: 0,
-            discount: 0,
-            amount: 0,
-          })),
-          total: 0,
-          gstAmount: 0,
-          grandTotal: 0,
-          terms: values.terms || [],
-          preparedBy: '',
-          approvedBy: '',
-          logo: logoBase64 || logoUrl,
-        };
-
-        const blob = await pdf(<POPdf {...pdfProps} />).toBlob();
-        const file = new File([blob], `ENQUIRY-${sharedQuotationNumber}-${supplierInfo.name}.pdf`, { type: 'application/pdf' });
+        const sessionToken = crypto.randomUUID();
 
         if (!supplierInfo.email) {
           toast.error(`Email not found for ${supplierInfo.name}!`);
           continue;
         }
 
-        const pdfUrl = await uploadFile({
-          file,
-          folderId: 'indent_attachment',
-          subFolder: 'indent-pdfs',
-          uploadType: 'email',
-          email: supplierInfo.email
-        });
-
-        // Type-safe mapping to QuotationHistorySheet
         const quotationHistoryRows: QuotationHistorySheet[] = selectedItemsData.map(item => ({
           timestamp: (values.quotationDate || new Date()).toISOString(),
           quatationNo: sharedQuotationNumber,
@@ -453,7 +383,7 @@ export default function QuotationPage() {
           description: item.specifications || '',
           qty: String(item.quantity || ''),
           unit: item.uom || '',
-          pdfLink: pdfUrl,
+          pdfLink: '',
           firm: item.firmNameMatch || 'N/A',
           firm_id: (item as any).firmId,
           token: sessionToken,
@@ -502,6 +432,78 @@ export default function QuotationPage() {
     toast.error('Please check the form');
   }
 
+  async function handleExportPdf(enquiryNo: string, supplierName: string) {
+    const key = `${enquiryNo}-${supplierName}`;
+    setExportingKey(key);
+    try {
+      let logoBase64 = '';
+      try {
+        const logoResponse = await fetch(window.location.origin + '/logo.png');
+        if (logoResponse.ok) {
+          const logoBlob = await logoResponse.blob();
+          logoBase64 = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(logoBlob);
+          });
+        }
+      } catch {}
+
+      const supplierItems = allHistory.filter(h => h.quatationNo === enquiryNo && h.supplierName === supplierName);
+      if (supplierItems.length === 0) return;
+      const firstItem = supplierItems[0];
+
+      const pdfProps: POPdfProps = {
+        companyName: details?.companyName || '',
+        companyPhone: details?.companyPhone || '',
+        companyGstin: details?.companyGstin || '',
+        companyPan: details?.companyPan || '',
+        companyAddress: details?.companyAddress || '',
+        billingAddress,
+        destinationAddress,
+        supplierName,
+        supplierAddress: firstItem.adreess || '',
+        supplierGstin: firstItem.gst || '',
+        orderNumber: enquiryNo,
+        orderDate: firstItem.timestamp ? formatDate(new Date(firstItem.timestamp)) : '',
+        quotationNumber: enquiryNo,
+        quotationDate: firstItem.timestamp ? formatDate(new Date(firstItem.timestamp)) : '',
+        enqNo: '',
+        enqDate: '',
+        description: '',
+        items: supplierItems.map(item => ({
+          internalCode: item.indentNo || '',
+          project: item.firm || 'N/A',
+          product: item.product || '',
+          description: item.description || '',
+          quantity: Number(item.qty) || 0,
+          unit: item.unit || '',
+          rate: item.vendor_rate ? Number(item.vendor_rate) : 0,
+          gst: 0,
+          discount: 0,
+          amount: item.vendor_rate ? Number(item.vendor_rate) * (Number(item.qty) || 0) : 0,
+        })),
+        total: 0,
+        gstAmount: 0,
+        grandTotal: 0,
+        terms: [],
+        preparedBy: '',
+        approvedBy: '',
+        logo: logoBase64 || window.location.origin + '/logo.png',
+      };
+
+      const blob = await pdf(<POPdf {...pdfProps} />).toBlob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      toast.success(`PDF opened`);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to generate PDF');
+    } finally {
+      setExportingKey(null);
+    }
+  }
+
   const filteredHistory = useMemo(() => {
     if (!historySearch) return allHistory;
     const search = historySearch.toLowerCase();
@@ -547,7 +549,7 @@ export default function QuotationPage() {
 
   const renderHistoryTable = () => (
     <div className="space-y-4">
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex justify-between items-center mb-4 gap-3">
         <div className="relative w-full max-w-sm">
           <SearchIcon className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
@@ -557,9 +559,9 @@ export default function QuotationPage() {
             onChange={(e) => setHistorySearch(e.target.value)}
           />
         </div>
-        <div className="text-sm text-muted-foreground">
+        <span className="text-sm text-muted-foreground whitespace-nowrap">
           Showing {groupedHistory.length} unique enquiries
-        </div>
+        </span>
       </div>
 
       <div className="border rounded-md bg-white overflow-hidden shadow-sm">
@@ -572,13 +574,12 @@ export default function QuotationPage() {
               <TableHead className="font-bold">Supplier</TableHead>
               <TableHead className="font-bold">Project</TableHead>
               <TableHead className="font-bold">Items Count</TableHead>
-              <TableHead className="font-bold text-right pr-4">Action</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {groupedHistory.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
+                <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
                   No history records found
                 </TableCell>
               </TableRow>
@@ -612,15 +613,6 @@ export default function QuotationPage() {
                       <Badge className="bg-blue-50 text-blue-700 border-blue-200">
                         {group.items.length} Product(s)
                       </Badge>
-                    </TableCell>
-                    <TableCell className="text-right pr-4">
-                      {group.pdfLink && (
-                        <Button variant="ghost" size="sm" asChild onClick={(e) => e.stopPropagation()}>
-                          <a href={group.pdfLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 flex items-center gap-1 justify-end">
-                            View PDF
-                          </a>
-                        </Button>
-                      )}
                     </TableCell>
                   </TableRow>
                   {expandedQuotation === group.quatationNo && (
@@ -666,18 +658,32 @@ export default function QuotationPage() {
                                         )}
                                       </TableCell>
                                       <TableCell className="py-3 text-right pr-4">
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          className="h-7 text-[10px] font-bold border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700"
-                                          onClick={() => setSelectedSupplierBid({
-                                            supplierName,
-                                            quotationNo: group.quatationNo,
-                                            items: supplierItems
-                                          })}
-                                        >
-                                          View Details
-                                        </Button>
+                                        <div className="flex items-center justify-end gap-2">
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            disabled={exportingKey === `${group.quatationNo}-${supplierName}`}
+                                            className="h-7 text-[10px] font-bold text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-1"
+                                            onClick={() => handleExportPdf(group.quatationNo, supplierName)}
+                                          >
+                                            {exportingKey === `${group.quatationNo}-${supplierName}`
+                                              ? <Loader size={10} color="currentColor" />
+                                              : <Download size={10} />}
+                                            View PDF
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-7 text-[10px] font-bold border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700"
+                                            onClick={() => setSelectedSupplierBid({
+                                              supplierName,
+                                              quotationNo: group.quatationNo,
+                                              items: supplierItems
+                                            })}
+                                          >
+                                            View Details
+                                          </Button>
+                                        </div>
                                       </TableCell>
                                     </TableRow>
                                   );

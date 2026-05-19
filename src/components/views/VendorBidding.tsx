@@ -7,8 +7,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { Building2, Package, FileText, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { Building2, Package, FileText, CheckCircle2, AlertCircle, Loader2, Download } from 'lucide-react';
 import { Pill } from '@/components/ui/pill';
+import { pdf } from '@react-pdf/renderer';
+import POPdf, { type POPdfProps } from '@/components/element/QuotationPdf';
+import { formatDate } from '@/lib/utils';
 
 export default function VendorBidding() {
     const { token } = useParams<{ token: string }>();
@@ -20,6 +23,7 @@ export default function VendorBidding() {
     const [rates, setRates] = useState<{ [key: string]: string }>({});
     const [submitted, setSubmitted] = useState(false);
     const [alreadySubmitted, setAlreadySubmitted] = useState(false);
+    const [isDownloading, setIsDownloading] = useState(false);
 
     useEffect(() => {
         const loadQuotation = async () => {
@@ -108,6 +112,76 @@ export default function VendorBidding() {
             toast.error('Failed to submit rates. Please check if the link is still valid.');
         } finally {
             setSubmitting(false);
+        }
+    };
+
+    const handleDownloadPdf = async () => {
+        setIsDownloading(true);
+        try {
+            let logoBase64 = '';
+            try {
+                const logoResponse = await fetch(window.location.origin + '/logo.png');
+                if (logoResponse.ok) {
+                    const logoBlob = await logoResponse.blob();
+                    logoBase64 = await new Promise<string>((resolve) => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => resolve(reader.result as string);
+                        reader.readAsDataURL(logoBlob);
+                    });
+                }
+            } catch {}
+
+            const pdfProps: POPdfProps = {
+                companyName: 'POOJA CONSTRUCTIONS',
+                companyPhone: '8698859888',
+                companyGstin: masterFirm?.company_gstin || '',
+                companyPan: masterFirm?.company_pan || '',
+                companyAddress: '104, 1ST FLOOR, BEHIND DAFTARI ARCADE, DHUNIWALE CHOWK, NAGPUR ROAD, WARDHA',
+                billingAddress: masterVendor?.billing_address || '',
+                destinationAddress: masterVendor?.destination_address || '',
+                supplierName: firstItem.supplierName,
+                supplierAddress: masterVendor?.vendor_address || firstItem.adreess || '',
+                supplierGstin: masterVendor?.vendor_gstin || firstItem.gst || '',
+                orderNumber: firstItem.quatationNo,
+                orderDate: formatDate(new Date(firstItem.timestamp)),
+                quotationNumber: firstItem.quatationNo,
+                quotationDate: formatDate(new Date(firstItem.timestamp)),
+                enqNo: '',
+                enqDate: '',
+                description: firstItem.description || '',
+                items: quotation.map(item => ({
+                    internalCode: item.indentNo || '',
+                    project: item.firm || 'N/A',
+                    product: item.product || '',
+                    description: item.description || '',
+                    quantity: Number(item.qty) || 0,
+                    unit: item.unit || '',
+                    rate: 0,
+                    gst: 0,
+                    discount: 0,
+                    amount: 0,
+                })),
+                total: 0,
+                gstAmount: 0,
+                grandTotal: 0,
+                terms: [],
+                preparedBy: '',
+                approvedBy: '',
+                logo: logoBase64 || window.location.origin + '/logo.png',
+            };
+
+            const blob = await pdf(<POPdf {...pdfProps} /> as any).toBlob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ENQUIRY-${firstItem.quatationNo}-${firstItem.supplierName}.pdf`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error(err);
+            toast.error('Failed to generate PDF');
+        } finally {
+            setIsDownloading(false);
         }
     };
 
@@ -297,21 +371,37 @@ export default function VendorBidding() {
                             <AlertCircle className="w-4 h-4 text-amber-500" />
                             <p>Rates should be exclusive of taxes and duties unless otherwise specified.</p>
                         </div>
-                        <Button 
-                            size="lg" 
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-11 px-8 rounded-sm shadow-md transition-all active:scale-95 disabled:opacity-50"
-                            onClick={handleSubmit}
-                            disabled={submitting}
-                        >
-                            {submitting ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Submitting...
-                                </>
-                            ) : (
-                                'Submit Rates'
-                            )}
-                        </Button>
+                        <div className="flex items-center gap-3">
+                            <Button
+                                size="lg"
+                                variant="outline"
+                                className="h-11 px-6 rounded-sm border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-bold transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2"
+                                onClick={handleDownloadPdf}
+                                disabled={isDownloading}
+                            >
+                                {isDownloading ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                    <Download className="h-4 w-4" />
+                                )}
+                                {isDownloading ? 'Generating...' : 'Download PDF'}
+                            </Button>
+                            <Button
+                                size="lg"
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-11 px-8 rounded-sm shadow-md transition-all active:scale-95 disabled:opacity-50"
+                                onClick={handleSubmit}
+                                disabled={submitting}
+                            >
+                                {submitting ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Submitting...
+                                    </>
+                                ) : (
+                                    'Submit Rates'
+                                )}
+                            </Button>
+                        </div>
                     </div>
                 </div>
                 

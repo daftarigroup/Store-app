@@ -66,6 +66,7 @@ export default function DataTable<TData, TValue>({
         columns,
         getCoreRowModel: getCoreRowModel(),
         getFilteredRowModel: getFilteredRowModel(),
+        enableRowSelection: !!onRowSelectionChange,
         globalFilterFn: (row, _, filterValue) =>
             row?.original ? globalFilterFn(row.original, searchFields || [], filterValue) : false,
         getRowId,
