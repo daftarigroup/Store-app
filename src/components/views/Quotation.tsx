@@ -297,12 +297,12 @@ export default function QuotationPage() {
 
 
   // Handle checkbox selection
-  const handleItemSelection = (indentNumber: string, checked: boolean) => {
+  const handleItemSelection = (rowIndex: string, checked: boolean) => {
     setSelectedItems(prev => {
       if (checked) {
-        return [...prev, indentNumber];
+        return [...prev, rowIndex];
       } else {
-        return prev.filter(item => item !== indentNumber);
+        return prev.filter(item => item !== rowIndex);
       }
     });
   };
@@ -311,8 +311,8 @@ export default function QuotationPage() {
   // Handle select all checkbox
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      const allIndentNumbers = eligibleItems.map(item => item.indentNumber);
-      setSelectedItems(allIndentNumbers);
+      const allRowIndexes = eligibleItems.map(item => item.rowIndex);
+      setSelectedItems(allRowIndexes);
     } else {
       setSelectedItems([]);
     }
@@ -345,7 +345,7 @@ export default function QuotationPage() {
       }
 
       const selectedItemsData = eligibleItems.filter(item =>
-        selectedItems.includes(item.indentNumber)
+        selectedItems.includes(item.rowIndex)
       );
 
       const allQuotationRows: QuotationHistorySheet[] = [];
@@ -885,9 +885,9 @@ export default function QuotationPage() {
                   </TableRow>
                 ) : (
                   eligibleItems.map((item, index) => (
-                    <TableRow key={item.indentNumber}>
+                    <TableRow key={item.rowIndex}>
                       <TableCell>
-                        <Checkbox checked={selectedItems.includes(item.indentNumber)} onCheckedChange={(checked) => handleItemSelection(item.indentNumber, checked as boolean)} />
+                        <Checkbox checked={selectedItems.includes(item.rowIndex)} onCheckedChange={(checked) => handleItemSelection(item.rowIndex, checked as boolean)} />
                       </TableCell>
                       <TableCell>{index + 1}</TableCell>
                       <TableCell>{item.indentNumber}</TableCell>
