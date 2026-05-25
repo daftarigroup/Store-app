@@ -21,7 +21,7 @@ export default async function handler(req: Request) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'Store App <noreply@send.daftarigroup.com>',
+        from: 'Pooja Constructions <noreply@send.daftarigroup.com>',
         to: [to],
         subject: subject,
         html: html,
