@@ -10,19 +10,19 @@ import { createRoot } from 'react-dom/client';
 import { AuthProvider, useAuth } from '@/context/AuthContext.tsx';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
-import Login from './components/views/Login';
-import CreateIndent from './components/views/CreateIndent';
-import Dashboard from './components/views/Dashboard';
 import App from './App';
-import ApproveIndent from '@/components/views/ApproveIndent';
 import { SheetsProvider } from './context/SheetsContext';
-import VendorUpdate from './components/views/VendorUpdate';
-import DepartmentApproval from './components/views/TechnicalApproval';
-import RateApproval from './components/views/RateApproval';
-import StoreOutApproval from './components/views/StoreOutApproval';
-import TrainnigVideo from './components/views/TrainingVideo';
-import Liecense from './components/views/License'
-import MakePayment from './components/views/MakePayment';
+const Login = React.lazy(() => import('./components/views/Login'));
+const CreateIndent = React.lazy(() => import('./components/views/CreateIndent'));
+const Dashboard = React.lazy(() => import('./components/views/Dashboard'));
+const ApproveIndent = React.lazy(() => import('./components/views/ApproveIndent'));
+const VendorUpdate = React.lazy(() => import('./components/views/VendorUpdate'));
+const DepartmentApproval = React.lazy(() => import('./components/views/TechnicalApproval'));
+const RateApproval = React.lazy(() => import('./components/views/RateApproval'));
+const StoreOutApproval = React.lazy(() => import('./components/views/StoreOutApproval'));
+const TrainnigVideo = React.lazy(() => import('./components/views/TrainingVideo'));
+const Liecense = React.lazy(() => import('./components/views/License'));
+const MakePayment = React.lazy(() => import('./components/views/MakePayment'));
 import type { RouteAttributes } from './types';
 import {
     LayoutDashboard,
@@ -59,36 +59,36 @@ import {
     FileSpreadsheet,
 } from 'lucide-react';
 import type { UserPermissions } from './types/sheets';
-import ManageUsers from './components/views/ManageUsers';
 import Loading from './components/views/Loading';
-import CreatePO from './components/views/CreatePO';
-import PendingIndents from './components/views/PendingIndents';
-import Order from './components/views/Order';
-import Inventory from './components/views/Inventory';
-import POMaster from './components/views/POMaster';
-import StoreIssue from './components/views/StoreIssue';
-import StoreIssueReturn from './components/views/StoreIssueReturn';
-import QuantityCheckInReceiveItem from './components/views/QuantityCheckInReceiveItem';
-import ReturnMaterialToParty from './components/views/ReturnMaterialToParty';
-import SendDebitNote from './components/views/SendDebitNote';
-import IssueData from './components/views/IssueData';
-import GetLift from './components/views/GetLift';
-import StoreIn from './components/views/StoreIn';
-import AuditData from './components/views/AuditData';
-import RectifyTheMistake from './components/views/RectifyTheMistake';
-import ReauditData from './components/views/ReauditData';
-import TakeEntryByTally from './components/views/TakeEntryByTally';
-import ExchangeMaterials from './components/views/ExchangeMaterials';
-import DBforPc from './components/views/DBforPC';
-import AgainAuditing from './components/views/AgainAuditing'
-import BillNotReceived from './components/views/BillNotReceived';
-import FullKiting from './components/views/FullKiting';
-import PendingPo from './components/views/PendingPo';
-import PaymentStatus from './components/views/PaymentStatus';
-import HodStoreApproval from './components/views/HodStoreApproval';
-import MasterManagement from './components/views/MasterManagement';
-import QuotationPage from './components/views/Quotation';
-import VendorBidding from './components/views/VendorBidding';
+const ManageUsers = React.lazy(() => import('./components/views/ManageUsers'));
+const CreatePO = React.lazy(() => import('./components/views/CreatePO'));
+const PendingIndents = React.lazy(() => import('./components/views/PendingIndents'));
+const Order = React.lazy(() => import('./components/views/Order'));
+const Inventory = React.lazy(() => import('./components/views/Inventory'));
+const POMaster = React.lazy(() => import('./components/views/POMaster'));
+const StoreIssue = React.lazy(() => import('./components/views/StoreIssue'));
+const StoreIssueReturn = React.lazy(() => import('./components/views/StoreIssueReturn'));
+const QuantityCheckInReceiveItem = React.lazy(() => import('./components/views/QuantityCheckInReceiveItem'));
+const ReturnMaterialToParty = React.lazy(() => import('./components/views/ReturnMaterialToParty'));
+const SendDebitNote = React.lazy(() => import('./components/views/SendDebitNote'));
+const IssueData = React.lazy(() => import('./components/views/IssueData'));
+const GetLift = React.lazy(() => import('./components/views/GetLift'));
+const StoreIn = React.lazy(() => import('./components/views/StoreIn'));
+const AuditData = React.lazy(() => import('./components/views/AuditData'));
+const RectifyTheMistake = React.lazy(() => import('./components/views/RectifyTheMistake'));
+const ReauditData = React.lazy(() => import('./components/views/ReauditData'));
+const TakeEntryByTally = React.lazy(() => import('./components/views/TakeEntryByTally'));
+const ExchangeMaterials = React.lazy(() => import('./components/views/ExchangeMaterials'));
+const DBforPc = React.lazy(() => import('./components/views/DBforPC'));
+const AgainAuditing = React.lazy(() => import('./components/views/AgainAuditing'));
+const BillNotReceived = React.lazy(() => import('./components/views/BillNotReceived'));
+const FullKiting = React.lazy(() => import('./components/views/FullKiting'));
+const PendingPo = React.lazy(() => import('./components/views/PendingPo'));
+const PaymentStatus = React.lazy(() => import('./components/views/PaymentStatus'));
+const HodStoreApproval = React.lazy(() => import('./components/views/HodStoreApproval'));
+const MasterManagement = React.lazy(() => import('./components/views/MasterManagement'));
+const QuotationPage = React.lazy(() => import('./components/views/Quotation'));
+const VendorBidding = React.lazy(() => import('./components/views/VendorBidding'));
 import { isAllowedFirm } from '@/lib/firmAccess';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -918,6 +918,7 @@ if (rootElement) {
         <StrictMode>
             <AuthProvider>
                 <BrowserRouter>
+                    <React.Suspense fallback={<Loading />}>
                     <Routes>
                         <Route path="/login" element={<Login />} />
                         <Route path="/bid/:token" element={<VendorBidding />} />
@@ -945,6 +946,7 @@ if (rootElement) {
                             <Route path="*" element={<Navigate to="/" replace />} />
                         </Route>
                     </Routes>
+                    </React.Suspense>
                 </BrowserRouter>
             </AuthProvider>
         </StrictMode>

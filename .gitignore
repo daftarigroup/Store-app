@@ -33,3 +33,6 @@ dist-ssr
 
 AGENTS.md
 .claude
+
+
+migration.sql

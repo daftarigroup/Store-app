@@ -483,11 +483,11 @@ export default function GetPurchase() {
         typeOfBill: z.string().optional(),
         billAmount: z.coerce.number().optional(),
         photoOfBill: z
-            .instanceof(File)
+            .any()
             .optional()
             .refine((file) => {
-                // Allow both images and PDFs
                 if (!file) return true; // Optional field
+                if (!(file instanceof File)) return true; // Accept other types (like string URL) if not a new file
                 const allowedTypes = [
                     'image/jpeg',
                     'image/jpg',
@@ -518,25 +518,129 @@ export default function GetPurchase() {
             approvedRate: z.union([z.string(), z.number()]),
             taxValue: z.coerce.number(),
             withTax: z.string(),
-            liftQty: z.coerce.number().min(0),
-            cancelQty: z.coerce.number().min(0).optional(),
+            liftQty: z.coerce.number().min(0, 'Lift quantity cannot be negative'),
+            cancelQty: z.coerce.number().min(0, 'Cancel quantity cannot be negative').optional(),
             uom: z.string().optional(),
-        })).superRefine((items, ctx) => {
-            items.forEach((item, index) => {
-                const numericLiftQty = Number(item.liftQty) || 0;
-                const numericCancelQty = Number(item.cancelQty) || 0;
-                const totalChange = numericLiftQty + numericCancelQty;
-                
-                if (totalChange > item.pendingLiftQty) {
+        }))
+    }).superRefine((data, ctx) => {
+        // 1. Validate each item's quantity constraints
+        let totalLiftQty = 0;
+        let totalCancelQty = 0;
+
+        data.items.forEach((item, index) => {
+            const numericLiftQty = Number(item.liftQty) || 0;
+            const numericCancelQty = Number(item.cancelQty) || 0;
+            totalLiftQty += numericLiftQty;
+            totalCancelQty += numericCancelQty;
+
+            const totalChange = numericLiftQty + numericCancelQty;
+
+            if (numericLiftQty > item.pendingLiftQty) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: `Lift quantity (${numericLiftQty}) cannot exceed pending quantity (${item.pendingLiftQty})`,
+                    path: ['items', index, 'liftQty'],
+                });
+            }
+
+            if (numericCancelQty > item.pendingLiftQty) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: `Cancel quantity (${numericCancelQty}) cannot exceed pending quantity (${item.pendingLiftQty})`,
+                    path: ['items', index, 'cancelQty'],
+                });
+            }
+
+            if (totalChange > item.pendingLiftQty && numericLiftQty <= item.pendingLiftQty && numericCancelQty <= item.pendingLiftQty) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: `Total (Lift: ${numericLiftQty} + Cancel: ${numericCancelQty}) cannot exceed Pending: ${item.pendingLiftQty}`,
+                    path: ['items', index, 'liftQty'],
+                });
+            }
+        });
+
+        // 2. Ensure at least one item has some lift or cancel quantity
+        if (totalLiftQty === 0 && totalCancelQty === 0) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: 'At least one item must have a lift or cancel quantity greater than 0',
+                path: ['items'],
+            });
+        }
+
+        // 3. Bill / Challan validations
+        if (data.billStatus) {
+            if (!data.billNo || data.billNo.trim() === '') {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: data.billStatus === 'Bill Received' ? 'Bill number is required' : 'Challan number is required',
+                    path: ['billNo'],
+                });
+            }
+
+            const hasFile = data.photoOfBill && (data.photoOfBill instanceof File);
+
+            if (data.billStatus === 'Bill Received') {
+                if (data.typeOfBill === 'independent' && !hasFile) {
                     ctx.addIssue({
                         code: z.ZodIssueCode.custom,
-                        message: `Total (Lift: ${numericLiftQty} + Cancel: ${numericCancelQty}) cannot exceed Pending: ${item.pendingLiftQty}`,
-                        path: [`${index}`, 'liftQty'],
+                        message: 'Bill attachment (image/PDF) is required',
+                        path: ['photoOfBill'],
                     });
                 }
-            });
-        })
-        // Removed discount/advance refinements
+                if (!data.billAmount || Number(data.billAmount) <= 0) {
+                    ctx.addIssue({
+                        code: z.ZodIssueCode.custom,
+                        message: 'Bill amount must be greater than 0 when bill is received',
+                        path: ['billAmount'],
+                    });
+                }
+            } else if (data.billStatus === 'Bill Not Received') {
+                if (!hasFile) {
+                    ctx.addIssue({
+                        code: z.ZodIssueCode.custom,
+                        message: 'Challan image is required',
+                        path: ['photoOfBill'],
+                    });
+                }
+            }
+        }
+
+        // 4. Logistics validation
+        if (data.typeOfBill === 'independent' && data.transportationInclude === 'Yes') {
+            if (!data.transporterName || data.transporterName.trim() === '') {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: 'Transporter name is required',
+                    path: ['transporterName'],
+                });
+            }
+            if (!data.vehicleNo || data.vehicleNo.trim() === '') {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: 'Vehicle number is required',
+                    path: ['vehicleNo'],
+                });
+            }
+            if (data.amount === undefined || Number(data.amount) < 0) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: 'Freight amount cannot be negative',
+                    path: ['amount'],
+                });
+            }
+            if (data.driverMobileNo && data.driverMobileNo.trim() !== '') {
+                const cleanPhone = data.driverMobileNo.replace(/\D/g, '');
+                if (cleanPhone.length < 10 || cleanPhone.length > 15) {
+                    ctx.addIssue({
+                        code: z.ZodIssueCode.custom,
+                        message: 'Driver mobile number must be between 10 and 15 digits',
+                        path: ['driverMobileNo'],
+                    });
+                }
+            }
+        }
     });
 
     const form = useForm<z.infer<typeof formSchema>>({
@@ -703,11 +807,7 @@ export default function GetPurchase() {
         const values = form.getValues();
         const roundedBillAmount = Number((Number(values.billAmount) || 0).toFixed(2));
         try {
-            // ✅ VALIDATION: Ensure lifting quantity does not exceed pending lift quantity
-            if (Number(values.qty) > (selectedIndent?.pendingLiftQty || 0)) {
-                toast.error(`Lifting quantity (${values.qty}) cannot exceed pending quantity (${selectedIndent?.pendingLiftQty || 0})`);
-                return;
-            }
+            // Form is already validated by Zod at this stage
 
             // Handle cancel pending quantity first (independent of bill status)
             // Cancel quantity is now handled per-item in the loop below
@@ -923,6 +1023,12 @@ export default function GetPurchase() {
                                 </div>
 
                                 {/* Product List Table */}
+                                {(form.formState.errors.items as any)?.message && (
+                                    <div className="bg-destructive/10 text-destructive text-sm font-semibold p-3 rounded-lg border border-destructive/20 mb-2 flex items-center gap-2">
+                                        <Info size={16} />
+                                        <span>{(form.formState.errors.items as any).message}</span>
+                                    </div>
+                                )}
                                 <div className="border rounded-xl overflow-x-auto overflow-y-auto shadow-sm max-h-[400px]">
                                     <table className="w-full text-sm">
                                         <thead className="bg-muted/50 border-b sticky top-0 z-10">
@@ -1001,7 +1107,7 @@ export default function GetPurchase() {
                                                                                     const val = e.target.value === '' ? 0 : Number(e.target.value);
                                                                                     inputField.onChange(val);
                                                                                 }}
-                                                                                className="h-9 text-right"
+                                                                                className={`h-9 text-right ${form.formState.errors.items?.[index]?.cancelQty ? 'border-destructive' : ''}`}
                                                                                 max={field.pendingLiftQty}
                                                                             />
                                                                         </FormControl>
@@ -1068,6 +1174,7 @@ export default function GetPurchase() {
                                                             <SelectItem value="Bill Not Received">Bill Not Received</SelectItem>
                                                         </SelectContent>
                                                     </Select>
+                                                    <FormMessage />
                                                 </FormItem>
                                             )}
                                         />
@@ -1082,6 +1189,7 @@ export default function GetPurchase() {
                                                         <FormControl>
                                                             <Input {...field} className="h-11" placeholder="Enter bill #" />
                                                         </FormControl>
+                                                        <FormMessage />
                                                     </FormItem>
                                                 )}
                                             />
@@ -1098,6 +1206,7 @@ export default function GetPurchase() {
                                                             <FormControl>
                                                                 <Input {...field} className="h-11" placeholder="Enter challan #" />
                                                             </FormControl>
+                                                            <FormMessage />
                                                         </FormItem>
                                                     )}
                                                 />
@@ -1116,6 +1225,7 @@ export default function GetPurchase() {
                                                                     className="h-11 file:bg-primary/10 file:text-primary file:border-0 file:rounded-md cursor-pointer"
                                                                 />
                                                             </FormControl>
+                                                            <FormMessage />
                                                         </FormItem>
                                                     )}
                                                 />
@@ -1151,6 +1261,7 @@ export default function GetPurchase() {
                                                                             <SelectItem value="No">No</SelectItem>
                                                                         </SelectContent>
                                                                     </Select>
+                                                                    <FormMessage />
                                                                 </FormItem>
                                                             )}
                                                         />
@@ -1166,6 +1277,7 @@ export default function GetPurchase() {
                                                                             <FormControl>
                                                                                 <Input {...field} className="h-11" />
                                                                             </FormControl>
+                                                                            <FormMessage />
                                                                         </FormItem>
                                                                     )}
                                                                 />
@@ -1179,6 +1291,7 @@ export default function GetPurchase() {
                                                                             <FormControl>
                                                                                 <Input {...field} className="h-11" />
                                                                             </FormControl>
+                                                                            <FormMessage />
                                                                         </FormItem>
                                                                     )}
                                                                 />
@@ -1192,6 +1305,7 @@ export default function GetPurchase() {
                                                                             <FormControl>
                                                                                 <Input {...field} className="h-11" />
                                                                             </FormControl>
+                                                                            <FormMessage />
                                                                         </FormItem>
                                                                     )}
                                                                 />
@@ -1205,6 +1319,7 @@ export default function GetPurchase() {
                                                                             <FormControl>
                                                                                 <Input {...field} className="h-11" />
                                                                             </FormControl>
+                                                                            <FormMessage />
                                                                         </FormItem>
                                                                     )}
                                                                 />
@@ -1218,6 +1333,7 @@ export default function GetPurchase() {
                                                                             <FormControl>
                                                                                 <Input type="number" {...field} className="h-11" />
                                                                             </FormControl>
+                                                                            <FormMessage />
                                                                         </FormItem>
                                                                     )}
                                                                 />
@@ -1256,6 +1372,7 @@ export default function GetPurchase() {
                                                                             className="h-11 font-semibold"
                                                                         />
                                                                     </FormControl>
+                                                                    <FormMessage />
                                                                 </FormItem>
                                                             )}
                                                         />
@@ -1274,6 +1391,7 @@ export default function GetPurchase() {
                                                                 <FormControl>
                                                                     <Input {...field} className="h-11" placeholder="Add any comments..." />
                                                                 </FormControl>
+                                                                <FormMessage />
                                                             </FormItem>
                                                         )}
                                                     />
@@ -1294,6 +1412,7 @@ export default function GetPurchase() {
                                                                             className="h-11 file:bg-primary/10 file:text-primary file:border-0 file:rounded-md cursor-pointer"
                                                                         />
                                                                     </FormControl>
+                                                                    <FormMessage />
                                                                 </FormItem>
                                                             )}
                                                         />
@@ -1309,7 +1428,7 @@ export default function GetPurchase() {
 
                                     <Button
                                         type="submit"
-                                        disabled={form.formState.isSubmitting}
+                                        disabled={form.formState.isSubmitting || !!form.formState.errors.items}
                                         className="min-w-[120px]"
                                     >
                                         {form.formState.isSubmitting && (

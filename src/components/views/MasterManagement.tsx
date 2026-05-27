@@ -1,4 +1,4 @@
-import { Plus, Building2, Package, FileSpreadsheet, Boxes, LayoutGrid, Building, Trash, Pencil, X, Search, MapPin, UserCog, Mail, Phone, Users, Map } from 'lucide-react';
+import { Plus, Building2, Package, FileSpreadsheet, Boxes, LayoutGrid, Building, Trash, Pencil, X, Search, MapPin, UserCog, Mail, Phone, Users, Map, Loader2 } from 'lucide-react';
 import Heading from '../element/Heading';
 import { useEffect, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -22,7 +22,7 @@ import { ScrollArea } from '../ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '../ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
-import { addItemToInventory } from '@/services/inventoryService';
+import { addItemToInventory, fetchItemInventoryRecord } from '@/services/inventoryService';
 import { useSheets } from '@/context/SheetsContext';
 import {
     Select,
@@ -88,12 +88,12 @@ const siteLocationSchema = z.object({
 const itemSchema = z.object({
     item_name: z.string().min(1, 'Required'),
     group_head: z.string().min(1, 'Required'),
-    uom: z.string().optional(),
+    uom: optionalText(),
     include_in_inventory: z.boolean().default(false),
     inventory_quantity: z.coerce.number().min(0, 'Quantity cannot be negative').default(0),
-    firm_name: z.string().optional(),
-    regular_conditions: z.array(z.object({ value: z.string() })).default([{ value: '' }]),
-    third_party_conditions: z.array(z.object({ value: z.string() })).default([{ value: '' }]),
+    firm_name: optionalText(),
+    regular_conditions: z.any().optional(),
+    third_party_conditions: z.any().optional(),
 }).superRefine((data, ctx) => {
     if (data.include_in_inventory && data.inventory_quantity <= 0) {
         ctx.addIssue({
@@ -116,13 +116,23 @@ const ghSchema = z.object({ group_head: z.string().min(1, 'Required') });
 const uomSchema = z.object({ uom: z.string().min(1, 'Required') });
 const aouSchema = z.object({ area_of_use: z.string().min(1, 'Required') });
 const ghUomSchema = z.object({
-    group_head: z.string().optional(),
-    uom: z.string().optional()
+    group_head: optionalText(),
+    uom: optionalText()
 }).refine(data => data.group_head || data.uom, {
     message: "At least one field is required",
     path: ["group_head"]
 });
-const companySchema = z.object({ company_name: z.string().min(1, 'Required'), company_gstin: z.string().optional(), company_pan: z.string().optional(), company_email: z.string().email().or(z.literal('')), company_phone: z.string().optional(), company_address: z.string().optional(), billing_address: z.string().optional(), destination_address: z.string().optional(), company_contact_person: z.string().optional() });
+const companySchema = z.object({
+    company_name: z.string().min(1, 'Required'),
+    company_gstin: optionalText(),
+    company_pan: optionalText(),
+    company_email: optionalEmail(),
+    company_phone: optionalText(),
+    company_address: optionalText(),
+    billing_address: optionalText(),
+    destination_address: optionalText(),
+    company_contact_person: optionalText()
+});
 const siteEngineerSchema = z.object({ name: z.string().min(1, 'Required'), number: z.string().min(1, 'Required'), email: z.string().email('Invalid email') });
 
 const ConditionsCell = ({ val }: { val: any }) => {
@@ -180,6 +190,9 @@ export default function MasterManagement() {
     const [dataLoading, setDataLoading] = useState(true);
     const [editingRecord, setEditingRecord] = useState<any>(null);
     const [openDialog, setOpenDialog] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [existingInventoryId, setExistingInventoryId] = useState<number | null>(null);
+    const [currentOpeningQty, setCurrentOpeningQty] = useState<number | null>(null);
     const [searchTermDept, setSearchTermDept] = useState('');
     const [isAddingDept, setIsAddingDept] = useState(false);
     const [activeTab, setActiveTab] = useState('vendors');
@@ -204,8 +217,9 @@ export default function MasterManagement() {
     const ghForm = useForm<z.infer<typeof ghSchema>>({ resolver: zodResolver(ghSchema), defaultValues: { group_head: '' } });
     const uomForm = useForm<z.infer<typeof uomSchema>>({ resolver: zodResolver(uomSchema), defaultValues: { uom: '' } });
     const aouForm = useForm<z.infer<typeof aouSchema>>({ resolver: zodResolver(aouSchema), defaultValues: { area_of_use: '' } });
-    const ghUomForm = useForm<z.infer<typeof ghUomSchema>>({ resolver: zodResolver(ghUomSchema), defaultValues: { group_head: '', uom: '' } });
-    const cForm = useForm<z.infer<typeof companySchema>>({ resolver: zodResolver(companySchema), defaultValues: { company_name: '', company_gstin: '', company_pan: '', company_email: '', company_phone: '', company_address: '', billing_address: '', destination_address: '', company_contact_person: '' } });
+    const ghUomForm = useForm<z.infer<typeof ghUomSchema>>({ resolver: zodResolver(ghUomSchema) as any, defaultValues: { group_head: '', uom: '' } });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cForm = useForm<z.infer<typeof companySchema>>({ resolver: zodResolver(companySchema) as any, defaultValues: { company_name: '', company_gstin: '', company_pan: '', company_email: '', company_phone: '', company_address: '', billing_address: '', destination_address: '', company_contact_person: '' } });
     const seForm = useForm<z.infer<typeof siteEngineerSchema>>({ resolver: zodResolver(siteEngineerSchema), defaultValues: { name: '', number: '', email: '' } });
     const conForm = useForm<ContractorFormValues>({ resolver: zodResolver(contractorSchema) as any, defaultValues: { contractor_name: '', contractor_gstin: '', contractor_address: '', contractor_email: '', responsible_person: '', location: '', phone: '' } });
     const slForm = useForm<z.infer<typeof siteLocationSchema>>({ resolver: zodResolver(siteLocationSchema), defaultValues: { location: '' } });
@@ -214,6 +228,34 @@ export default function MasterManagement() {
     const { fields: tpFields, append: tpAppend, remove: tpRemove } = useFieldArray({ control: iForm.control, name: "third_party_conditions" });
 
     const includeInInventory = iForm.watch('include_in_inventory');
+    const watchedFirmName = iForm.watch('firm_name');
+
+    const onInvalid = (errors: any) => {
+        console.error('Validation errors:', errors);
+        const errorMessages = Object.entries(errors)
+            .map(([key, err]: [string, any]) => {
+                const message = err.message || (err.value?.message) || 'Invalid value';
+                return `${key}: ${message}`;
+            });
+        if (errorMessages.length > 0) {
+            toast.error(`Validation failed: ${errorMessages.join(', ')}`);
+        }
+    };
+
+    useEffect(() => {
+        if (!editingRecord || openDialog !== 'item' || !watchedFirmName) {
+            setExistingInventoryId(null);
+            setCurrentOpeningQty(null);
+            return;
+        }
+        const firmObj = masterSheet?.firmObjects?.find((f: any) => f.name === watchedFirmName);
+        fetchItemInventoryRecord(editingRecord.item_name, firmObj?.id, watchedFirmName)
+            .then(({ id, opening }) => {
+                setExistingInventoryId(id);
+                setCurrentOpeningQty(opening);
+                iForm.setValue('inventory_quantity', 0);
+            });
+    }, [watchedFirmName, openDialog]);
 
     useEffect(() => { loadData(); }, []);
     useEffect(() => {
@@ -255,9 +297,18 @@ export default function MasterManagement() {
                 third_party_conditions: parseConds(editingRecord.third_party_conditions),
                 firm_name: editingRecord.firm_name ?? '',
                 company_contact_person: editingRecord.company_contact_person ?? '',
+                group_head: editingRecord.group_head ?? '',
+                uom: editingRecord.uom ?? '',
+                company_gstin: editingRecord.company_gstin ?? '',
+                company_pan: editingRecord.company_pan ?? '',
+                company_email: editingRecord.company_email ?? '',
+                company_phone: editingRecord.company_phone ?? '',
+                company_address: editingRecord.company_address ?? '',
+                billing_address: editingRecord.billing_address ?? '',
+                destination_address: editingRecord.destination_address ?? '',
             };
             if (openDialog === 'vendor') vForm.reset(normalized);
-            if (openDialog === 'item') iForm.reset({ ...normalized, include_in_inventory: false, inventory_quantity: 0, firm_name: '' });
+            if (openDialog === 'item') iForm.reset({ ...normalized, include_in_inventory: false, inventory_quantity: 0 });
             if (openDialog === 'dept') dForm.reset(normalized);
             if (openDialog === 'project') pForm.reset(normalized);
             if (openDialog === 'gh') ghForm.reset(normalized);
@@ -392,6 +443,7 @@ export default function MasterManagement() {
     ];
 
     const itemColumns: ColumnDef<any>[] = [
+        { header: 'Actions', id: 'actions', cell: ({ row }) => getActions(row.original, 'item') },
         { accessorKey: 'item_name', header: 'Product Name', cell: ({ row }) => <div className="flex items-center gap-2 font-medium"><Package size={16} className="text-blue-500" />{row.original.item_name}</div> },
         { accessorKey: 'group_head', header: 'Group Head' },
         { accessorKey: 'uom', header: 'UOM' },
@@ -404,8 +456,7 @@ export default function MasterManagement() {
             accessorKey: 'third_party_conditions',
             header: '3rd Party terms Conditions',
             cell: ({ row }) => <ConditionsCell val={row.original.third_party_conditions} />
-        },
-        { header: 'Actions', id: 'actions', cell: ({ row }) => getActions(row.original, 'item') }
+        }
     ];
 
     const departmentColumns: ColumnDef<any>[] = [
@@ -460,101 +511,104 @@ export default function MasterManagement() {
     ];
 
     const onSubmit = async (values: any, type: string) => {
-        let res;
-        const vendorPayload = type === 'vendor'
-            ? {
-                vendor_name: values.vendor_name,
-                vendor_gstin: values.vendor_gstin || null,
-                vendor_address: values.vendor_address || null,
-                vendor_email: values.vendor_email || null,
-                payment_term: values.payment_term || null,
-                responsible_person: values.responsible_person || null,
-                location: values.location || null,
-                phone: values.phone || null,
-            }
-            : values;
-        const itemPayload = type === 'item'
-            ? {
-                item_name: values.item_name,
-                group_head: values.group_head,
-                uom: values.uom,
-                regular_conditions: values.regular_conditions?.map((c: any) => c.value).filter(Boolean) || [],
-                third_party_conditions: values.third_party_conditions?.map((c: any) => c.value).filter(Boolean) || [],
-            }
-            : vendorPayload;
+        setIsSubmitting(true);
+        try {
+            let res;
+            const vendorPayload = type === 'vendor'
+                ? {
+                    vendor_name: values.vendor_name,
+                    vendor_gstin: values.vendor_gstin || null,
+                    vendor_address: values.vendor_address || null,
+                    vendor_email: values.vendor_email || null,
+                    payment_term: values.payment_term || null,
+                    responsible_person: values.responsible_person || null,
+                    location: values.location || null,
+                    phone: values.phone || null,
+                }
+                : values;
+            const itemPayload = type === 'item'
+                ? {
+                    item_name: values.item_name,
+                    group_head: values.group_head,
+                    uom: values.uom,
+                    regular_conditions: values.regular_conditions?.map((c: any) => c.value).filter(Boolean) || [],
+                    third_party_conditions: values.third_party_conditions?.map((c: any) => c.value).filter(Boolean) || [],
+                }
+                : vendorPayload;
 
-        const contractorPayload = type === 'contractor'
-            ? {
-                ...values,
-                contractor_gstin: values.contractor_gstin || null,
-                contractor_address: values.contractor_address || null,
-                contractor_email: values.contractor_email || null,
-                responsible_person: values.responsible_person || null,
-                location: values.location || null,
-                phone: values.phone || null,
-            }
-            : itemPayload;
-
-        const finalPayload = type === 'project'
-            ? {
-                firm_name: values.firm_name,
-            }
-            : type === 'ghuom'
-                ? { group_head: values.group_head || null, uom: values.uom || null }
+            const contractorPayload = type === 'contractor'
+                ? {
+                    ...values,
+                    contractor_gstin: values.contractor_gstin || null,
+                    contractor_address: values.contractor_address || null,
+                    contractor_email: values.contractor_email || null,
+                    responsible_person: values.responsible_person || null,
+                    location: values.location || null,
+                    phone: values.phone || null,
+                }
                 : itemPayload;
 
-        if (editingRecord) {
-            if (type === 'dept') {
-                const targets = allRecords.filter(r => r.department === editingRecord.department);
-                const updates = targets.map(t => updateMasterData(t.id, { department: values.department }));
-                const results = await Promise.all(updates);
-                res = { success: results.every(r => r.success) };
-            } else if (type === 'project') {
-                const targets = allRecords.filter(r => r.firm_name === editingRecord.firm_name);
-                const updates = targets.map(t => updateMasterData(t.id, { firm_name: values.firm_name }));
-                const results = await Promise.all(updates);
-                res = { success: results.every(r => r.success) };
-            } else if (type === 'gh') {
-                const targets = allRecords.filter(r => r.group_head === editingRecord.group_head);
-                const updates = targets.map(t => updateMasterData(t.id, { group_head: values.group_head }));
-                const results = await Promise.all(updates);
-                res = { success: results.every(r => r.success) };
-            } else if (type === 'uom') {
-                const targets = allRecords.filter(r => r.uom === editingRecord.uom);
-                const updates = targets.map(t => updateMasterData(t.id, { uom: values.uom }));
-                const results = await Promise.all(updates);
-                res = { success: results.every(r => r.success) };
-            } else if (type === 'site_engineer') {
-                res = await updateSiteEngineer(editingRecord.number, values);
-            } else if (type === 'contractor') {
-                res = await updateContractor(editingRecord.id, contractorPayload);
-            } else if (type === 'site_location') {
-                res = await updateSiteLocation(editingRecord.id, values);
-            } else {
-                res = await updateMasterData(editingRecord.id, contractorPayload);
-            }
-        } else {
-            if (type === 'gh') {
-                res = await insertMasterData({ group_head: values.group_head });
-            } else if (type === 'uom') {
-                res = await insertMasterData({ uom: values.uom });
-            } else if (type === 'areaofuse') {
-                res = await insertMasterData({ area_of_use: values.area_of_use });
-            } else if (type === 'site_engineer') {
-                res = await insertSiteEngineer(values);
-            } else if (type === 'contractor') {
-                res = await insertContractor(contractorPayload);
-            } else if (type === 'site_location') {
-                res = await insertSiteLocation(values);
-            } else {
-                res = await insertMasterData(finalPayload);
-            }
+            const finalPayload = type === 'project'
+                ? {
+                    firm_name: values.firm_name,
+                }
+                : type === 'ghuom'
+                    ? { group_head: values.group_head || null, uom: values.uom || null }
+                    : itemPayload;
 
-            if (res.success && ['vendor', 'item', 'project', 'gh', 'uom', 'areaofuse', 'ghuom', 'company'].includes(type)) {
-                const normalizedRes = await insertNormalizedMasterData(type, values);
-                if (!normalizedRes.success) {
-                    toast.error('Saved in master, but normalized table insert failed');
-                    return;
+            if (editingRecord) {
+                if (type === 'dept') {
+                    const targets = allRecords.filter(r => r.department === editingRecord.department);
+                    const updates = targets.map(t => updateMasterData(t.id, { department: values.department }));
+                    const results = await Promise.all(updates);
+                    res = { success: results.every(r => r.success) };
+                } else if (type === 'project') {
+                    const targets = allRecords.filter(r => r.firm_name === editingRecord.firm_name);
+                    const updates = targets.map(t => updateMasterData(t.id, { firm_name: values.firm_name }));
+                    const results = await Promise.all(updates);
+                    res = { success: results.every(r => r.success) };
+                } else if (type === 'gh') {
+                    const targets = allRecords.filter(r => r.group_head === editingRecord.group_head);
+                    const updates = targets.map(t => updateMasterData(t.id, { group_head: values.group_head }));
+                    const results = await Promise.all(updates);
+                    res = { success: results.every(r => r.success) };
+                } else if (type === 'uom') {
+                    const targets = allRecords.filter(r => r.uom === editingRecord.uom);
+                    const updates = targets.map(t => updateMasterData(t.id, { uom: values.uom }));
+                    const results = await Promise.all(updates);
+                    res = { success: results.every(r => r.success) };
+                } else if (type === 'site_engineer') {
+                    res = await updateSiteEngineer(editingRecord.number, values);
+                } else if (type === 'contractor') {
+                    res = await updateContractor(editingRecord.id, contractorPayload);
+                } else if (type === 'site_location') {
+                    res = await updateSiteLocation(editingRecord.id, values);
+                } else {
+                    res = await updateMasterData(editingRecord.id, contractorPayload);
+                }
+            } else {
+                if (type === 'gh') {
+                    res = await insertMasterData({ group_head: values.group_head });
+                } else if (type === 'uom') {
+                    res = await insertMasterData({ uom: values.uom });
+                } else if (type === 'areaofuse') {
+                    res = await insertMasterData({ area_of_use: values.area_of_use });
+                } else if (type === 'site_engineer') {
+                    res = await insertSiteEngineer(values);
+                } else if (type === 'contractor') {
+                    res = await insertContractor(contractorPayload);
+                } else if (type === 'site_location') {
+                    res = await insertSiteLocation(values);
+                } else {
+                    res = await insertMasterData(finalPayload);
+                }
+
+                if (res.success && ['vendor', 'item', 'project', 'gh', 'uom', 'areaofuse', 'ghuom', 'company'].includes(type)) {
+                    const normalizedRes = await insertNormalizedMasterData(type, values);
+                    if (!normalizedRes.success) {
+                        toast.error('Saved in master, but normalized table insert failed');
+                        return;
+                    }
                 }
             }
 
@@ -567,6 +621,7 @@ export default function MasterManagement() {
                     quantity: values.inventory_quantity,
                     firmName: values.firm_name,
                     firmId,
+                    inventoryRecordId: existingInventoryId ?? undefined,
                 });
 
                 if (!inventoryRes.success) {
@@ -576,8 +631,12 @@ export default function MasterManagement() {
 
                 updateInventorySheet();
             }
+
+            if (res.success) { toast.success('Saved'); setOpenDialog(null); setEditingRecord(null); setExistingInventoryId(null); loadData(); updateAll(); }
+            else { toast.error(res?.error?.message || res?.error?.details || 'Save failed. Please try again.'); }
+        } finally {
+            setIsSubmitting(false);
         }
-        if (res.success) { toast.success('Saved'); setOpenDialog(null); setEditingRecord(null); loadData(); updateAll(); }
     };
 
     const vendorsData = allRecords.filter(r => r.vendor_name);
@@ -749,7 +808,7 @@ export default function MasterManagement() {
                             <div className="space-y-4 sm:space-y-6 px-4 sm:px-6 pb-24 sm:pb-24">
                                 {openDialog === 'vendor' && (
                                     <Form {...vForm}>
-                                        <form className="grid gap-4" onSubmit={vForm.handleSubmit(v => onSubmit(v, 'vendor'))}>
+                                        <form className="grid gap-4" onSubmit={vForm.handleSubmit(v => onSubmit(v, 'vendor'), onInvalid)}>
                                             <FormField control={vForm.control} name="vendor_name" render={({ field }) => (
                                                 <FormItem>
                                                     <FormLabel>Vendor Name</FormLabel>
@@ -799,13 +858,13 @@ export default function MasterManagement() {
                                                     <FormControl><Input {...field} placeholder="e.g., Mr. Rajesh Kumar" /></FormControl>
                                                 </FormItem>
                                             )} />
-                                            <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save Vendor</Button>
+                                            <Button type="submit" disabled={isSubmitting} className="w-full bg-indigo-600 hover:bg-indigo-700 text-sm sm:text-base py-2 sm:py-3 mt-2">{isSubmitting ? <><Loader2 size={16} className="animate-spin mr-2" />Saving...</> : 'Save Vendor'}</Button>
                                         </form>
                                     </Form>
                                 )}
                                 {openDialog === 'contractor' && (
                                     <Form {...conForm}>
-                                        <form className="grid gap-4" onSubmit={conForm.handleSubmit(v => onSubmit(v, 'contractor'))}>
+                                        <form className="grid gap-4" onSubmit={conForm.handleSubmit(v => onSubmit(v, 'contractor'), onInvalid)}>
                                             <FormField control={conForm.control} name="contractor_name" render={({ field }) => (
                                                 <FormItem>
                                                     <FormLabel>Contractor Name</FormLabel>
@@ -849,13 +908,13 @@ export default function MasterManagement() {
                                                     <FormControl><Input {...field} placeholder="e.g., Jane Doe" /></FormControl>
                                                 </FormItem>
                                             )} />
-                                            <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save Contractor</Button>
+                                            <Button type="submit" disabled={isSubmitting} className="w-full bg-indigo-600 hover:bg-indigo-700 text-sm sm:text-base py-2 sm:py-3 mt-2">{isSubmitting ? <><Loader2 size={16} className="animate-spin mr-2" />Saving...</> : 'Save Contractor'}</Button>
                                         </form>
                                     </Form>
                                 )}
                                 {openDialog === 'site_location' && (
                                     <Form {...slForm}>
-                                        <form className="grid gap-4" onSubmit={slForm.handleSubmit(v => onSubmit(v, 'site_location'))}>
+                                        <form className="grid gap-4" onSubmit={slForm.handleSubmit(v => onSubmit(v, 'site_location'), onInvalid)}>
                                             <FormField control={slForm.control} name="location" render={({ field }) => (
                                                 <FormItem>
                                                     <FormLabel>Location</FormLabel>
@@ -863,13 +922,13 @@ export default function MasterManagement() {
                                                     <FormMessage />
                                                 </FormItem>
                                             )} />
-                                            <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save Location</Button>
+                                            <Button type="submit" disabled={isSubmitting} className="w-full bg-indigo-600 hover:bg-indigo-700 text-sm sm:text-base py-2 sm:py-3 mt-2">{isSubmitting ? <><Loader2 size={16} className="animate-spin mr-2" />Saving...</> : 'Save Location'}</Button>
                                         </form>
                                     </Form>
                                 )}
                                 {openDialog === 'item' && (
                                     <Form {...iForm}>
-                                        <form className="grid gap-4" onSubmit={iForm.handleSubmit(v => onSubmit(v, 'item'))}>
+                                        <form className="grid gap-4" onSubmit={iForm.handleSubmit(v => onSubmit(v, 'item'), onInvalid)}>
                                             <FormField control={iForm.control} name="item_name" render={({ field }) => (
                                                 <FormItem>
                                                     <FormLabel>Item Name</FormLabel>
@@ -967,13 +1026,6 @@ export default function MasterManagement() {
                                             )} />
                                             {includeInInventory && (
                                                 <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                                                    <FormField control={iForm.control} name="inventory_quantity" render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>Initial Inventory Quantity</FormLabel>
-                                                            <FormControl><Input type="number" min={0} {...field} onChange={(e) => field.onChange(e.target.value)} /></FormControl>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )} />
                                                     <FormField control={iForm.control} name="firm_name" render={({ field }) => (
                                                         <FormItem>
                                                             <FormLabel>Select Project</FormLabel>
@@ -992,15 +1044,27 @@ export default function MasterManagement() {
                                                             <FormMessage />
                                                         </FormItem>
                                                     )} />
+                                                    <FormField control={iForm.control} name="inventory_quantity" render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel>Opening Quantity {currentOpeningQty !== null && `(${currentOpeningQty})`}</FormLabel>
+                                                            <FormControl><Input type="number" min={0} {...field} onChange={(e) => field.onChange(e.target.value)} /></FormControl>
+                                                            {currentOpeningQty !== null && (
+                                                                <p className="text-[11px] text-muted-foreground">
+                                                                    Entered quantity will be added to the current {currentOpeningQty}.
+                                                                </p>
+                                                            )}
+                                                            <FormMessage />
+                                                        </FormItem>
+                                                    )} />
                                                 </div>
                                             )}
-                                            <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save Item</Button>
+                                            <Button type="submit" disabled={isSubmitting} className="w-full bg-blue-600 hover:bg-blue-700 text-sm sm:text-base py-2 sm:py-3 mt-2">{isSubmitting ? <><Loader2 size={16} className="animate-spin mr-2" />Saving...</> : 'Save Item'}</Button>
                                         </form>
                                     </Form>
                                 )}
                                 {openDialog === 'ghuom' && (
                                     <Form {...ghUomForm}>
-                                        <form className="grid gap-4 m-5" onSubmit={ghUomForm.handleSubmit(v => onSubmit(v, 'ghuom'))}>
+                                        <form className="grid gap-4 m-5" onSubmit={ghUomForm.handleSubmit(v => onSubmit(v, 'ghuom'), onInvalid)}>
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                 <FormField control={ghUomForm.control} name="group_head" render={({ field }) => (
                                                     <FormItem>
@@ -1017,7 +1081,7 @@ export default function MasterManagement() {
                                                     </FormItem>
                                                 )} />
                                             </div>
-                                            <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save Record</Button>
+                                            <Button type="submit" disabled={isSubmitting} className="w-full bg-blue-600 hover:bg-blue-700 text-sm sm:text-base py-2 sm:py-3 mt-2">{isSubmitting ? <><Loader2 size={16} className="animate-spin mr-2" />Saving...</> : 'Save Record'}</Button>
                                         </form>
                                     </Form>
                                 )}
@@ -1031,13 +1095,13 @@ export default function MasterManagement() {
                                                     <FormMessage />
                                                 </FormItem>
                                             )} />
-                                            <Button type="submit" className="w-full bg-orange-600 hover:bg-orange-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save Department</Button>
+                                            <Button type="submit" disabled={isSubmitting} className="w-full bg-orange-600 hover:bg-orange-700 text-sm sm:text-base py-2 sm:py-3 mt-2">{isSubmitting ? <><Loader2 size={16} className="animate-spin mr-2" />Saving...</> : 'Save Department'}</Button>
                                         </form>
                                     </Form>
                                 )} */ }
                                 {openDialog === 'project' && (
                                     <Form {...pForm}>
-                                        <form className="grid gap-4 p-5" onSubmit={pForm.handleSubmit(v => onSubmit(v, 'project'))}>
+                                        <form className="grid gap-4 p-5" onSubmit={pForm.handleSubmit(v => onSubmit(v, 'project'), onInvalid)}>
                                             <FormField control={pForm.control} name="firm_name" render={({ field }) => (
                                                 <FormItem>
                                                     <FormLabel>Project Name</FormLabel>
@@ -1045,13 +1109,13 @@ export default function MasterManagement() {
                                                     <FormMessage />
                                                 </FormItem>
                                             )} />
-                                            <Button type="submit" className="w-full bg-purple-600 hover:bg-purple-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save Project</Button>
+                                            <Button type="submit" disabled={isSubmitting} className="w-full bg-purple-600 hover:bg-purple-700 text-sm sm:text-base py-2 sm:py-3 mt-2">{isSubmitting ? <><Loader2 size={16} className="animate-spin mr-2" />Saving...</> : 'Save Project'}</Button>
                                         </form>
                                     </Form>
                                 )}
                                 {openDialog === 'gh' && (
                                     <Form {...ghForm}>
-                                        <form className="grid gap-4 p-5" onSubmit={ghForm.handleSubmit(v => onSubmit(v, 'gh'))}>
+                                        <form className="grid gap-4 p-5" onSubmit={ghForm.handleSubmit(v => onSubmit(v, 'gh'), onInvalid)}>
                                             <FormField control={ghForm.control} name="group_head" render={({ field }) => (
                                                 <FormItem>
                                                     <FormLabel>Group Head</FormLabel>
@@ -1059,13 +1123,13 @@ export default function MasterManagement() {
                                                     <FormMessage />
                                                 </FormItem>
                                             )} />
-                                            <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save Group Head</Button>
+                                            <Button type="submit" disabled={isSubmitting} className="w-full bg-blue-600 hover:bg-blue-700 text-sm sm:text-base py-2 sm:py-3 mt-2">{isSubmitting ? <><Loader2 size={16} className="animate-spin mr-2" />Saving...</> : 'Save Group Head'}</Button>
                                         </form>
                                     </Form>
                                 )}
                                 {openDialog === 'uom' && (
                                     <Form {...uomForm}>
-                                        <form className="grid gap-4 p-5" onSubmit={uomForm.handleSubmit(v => onSubmit(v, 'uom'))}>
+                                        <form className="grid gap-4 p-5" onSubmit={uomForm.handleSubmit(v => onSubmit(v, 'uom'), onInvalid)}>
                                             <FormField control={uomForm.control} name="uom" render={({ field }) => (
                                                 <FormItem>
                                                     <FormLabel>UOM Name</FormLabel>
@@ -1073,13 +1137,13 @@ export default function MasterManagement() {
                                                     <FormMessage />
                                                 </FormItem>
                                             )} />
-                                            <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save UOM</Button>
+                                            <Button type="submit" disabled={isSubmitting} className="w-full bg-emerald-600 hover:bg-emerald-700 text-sm sm:text-base py-2 sm:py-3 mt-2">{isSubmitting ? <><Loader2 size={16} className="animate-spin mr-2" />Saving...</> : 'Save UOM'}</Button>
                                         </form>
                                     </Form>
                                 )}
                                 {openDialog === 'areaofuse' && (
                                     <Form {...aouForm}>
-                                        <form className="grid gap-4 p-5" onSubmit={aouForm.handleSubmit(v => onSubmit(v, 'areaofuse'))}>
+                                        <form className="grid gap-4 p-5" onSubmit={aouForm.handleSubmit(v => onSubmit(v, 'areaofuse'), onInvalid)}>
                                             <FormField control={aouForm.control} name="area_of_use" render={({ field }) => (
                                                 <FormItem>
                                                     <FormLabel>Area of Use</FormLabel>
@@ -1087,13 +1151,13 @@ export default function MasterManagement() {
                                                     <FormMessage />
                                                 </FormItem>
                                             )} />
-                                            <Button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save Area of Use</Button>
+                                            <Button type="submit" disabled={isSubmitting} className="w-full bg-red-600 hover:bg-red-700 text-sm sm:text-base py-2 sm:py-3 mt-2">{isSubmitting ? <><Loader2 size={16} className="animate-spin mr-2" />Saving...</> : 'Save Area of Use'}</Button>
                                         </form>
                                     </Form>
                                 )}
                                 {openDialog === 'company' && (
                                     <Form {...cForm}>
-                                        <form className="grid gap-6" onSubmit={cForm.handleSubmit(v => onSubmit(v, 'company'))}>
+                                        <form className="grid gap-6" onSubmit={cForm.handleSubmit(v => onSubmit(v, 'company'), onInvalid)}>
                                             <FormField control={cForm.control} name="company_name" render={({ field }) => (
                                                 <FormItem>
                                                     <FormLabel>Company Name</FormLabel>
@@ -1151,13 +1215,13 @@ export default function MasterManagement() {
                                                     </FormItem>
                                                 )} />
                                             </div>
-                                            <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save Company</Button>
+                                            <Button type="submit" disabled={isSubmitting} className="w-full bg-emerald-600 hover:bg-emerald-700 text-sm sm:text-base py-2 sm:py-3 mt-2">{isSubmitting ? <><Loader2 size={16} className="animate-spin mr-2" />Saving...</> : 'Save Company'}</Button>
                                         </form>
                                     </Form>
                                 )}
                                 {openDialog === 'site_engineer' && (
                                     <Form {...seForm}>
-                                        <form className="grid gap-4 p-5" onSubmit={seForm.handleSubmit(v => onSubmit(v, 'site_engineer'))}>
+                                        <form className="grid gap-4 p-5" onSubmit={seForm.handleSubmit(v => onSubmit(v, 'site_engineer'), onInvalid)}>
                                             <FormField control={seForm.control} name="name" render={({ field }) => (
                                                 <FormItem>
                                                     <FormLabel>Engineer Name</FormLabel>
@@ -1179,7 +1243,7 @@ export default function MasterManagement() {
                                                     <FormMessage />
                                                 </FormItem>
                                             )} />
-                                            <Button type="submit" className="w-full bg-orange-600 hover:bg-orange-700 text-sm sm:text-base py-2 sm:py-3 mt-2">Save Engineer Details</Button>
+                                            <Button type="submit" disabled={isSubmitting} className="w-full bg-orange-600 hover:bg-orange-700 text-sm sm:text-base py-2 sm:py-3 mt-2">{isSubmitting ? <><Loader2 size={16} className="animate-spin mr-2" />Saving...</> : 'Save Engineer Details'}</Button>
                                         </form>
                                     </Form>
                                 )}

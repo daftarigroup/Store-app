@@ -111,7 +111,7 @@ export async function fetchIndentRecords(permittedFirms?: string[]) {
 
         let query = supabase
             .from('indent')
-            .select('indent_number, firm_name, firm_id, approved_vendor_name, po_number, actual4, delivery_date, planned5, actual5, product_name, total_qty, quantity, pending_qty, lifting_status, cancel_qty, approved_rate, tax_value4, with_tax_or_not4, area_of_use, timestamp, expected_req_date, approved_quantity, received_quantity, uom')
+            .select('indent_number, firm_name, firm_id, approved_vendor_name, po_number, actual4, delivery_date, planned5, actual5, product_name, total_qty, quantity, pending_qty, lifting_status, cancel_qty, approved_rate, tax_value4, with_tax_or_not4, area_of_use, timestamp, expected_req_date, approved_quantity, uom')
             .order('indent_number', { ascending: false });
 
         const filteredQuery = applyFirmAccessFilter(query, permittedFirms);
@@ -144,7 +144,7 @@ export async function fetchIndentRecords(permittedFirms?: string[]) {
             timestamp: r.timestamp || '',
             expectedDate: r.expected_req_date || '',
             approvedQuantity: Number(r.approved_quantity) || 0,
-            receivedQuantity: Number(r.received_quantity) || 0,
+            receivedQuantity: 0,
             uom: r.uom || '',
         }));
     } catch (error) {

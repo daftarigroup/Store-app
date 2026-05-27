@@ -78,7 +78,15 @@ export default () => {
                     minStockQty: z.coerce.number().optional(),
                     uom: z.string().nonempty(),
                     areaOfUse: z.string().nonempty(),
-                    expectedRequirementDate: z.string().nonempty('Date is required'),
+                    expectedRequirementDate: z.string().nonempty('Date is required').refine(val => {
+                        const [year, month, day] = val.split('-').map(Number);
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        const selectDate = new Date(year, month - 1, day);
+                        return selectDate >= today;
+                    }, {
+                        message: "Date cannot be in the past",
+                    }),
                     attachment: z.instanceof(File).optional(),
                     specifications: z.string().optional(),
                 })
@@ -311,6 +319,7 @@ export default () => {
             // Reset product and UOM if group head changed and multiple products exist
             form.setValue(`products.${index}.productName`, '');
             form.setValue(`products.${index}.uom`, '');
+            form.setValue(`products.${index}.minStockQty`, 0);
         }
 
         // Auto-select area of use if possible (e.g., if there's only one used with this group head in history, or from master)
@@ -331,17 +340,20 @@ export default () => {
         if (uomName) form.setValue(`products.${index}.uom`, uomName);
 
         // Update displayed stock qty from context (synchronous, no DB call)
-        if (groupHeadName) {
+        const firmName = form.getValues('firmName');
+        if (firmName && groupHeadName) {
             const realInventory = calculateRealInventory(
-                inventorySheet || [], indentSheet || [], storeInSheet || [], issueSheet || []
+                inventorySheet || [], indentSheet || [], storeInSheet || [], issueSheet || [], [], firmName
             );
             const thisItem = realInventory.find(i => i.itemName === itemName && i.groupHead === groupHeadName);
             form.setValue(`products.${index}.minStockQty`, thisItem?.current ?? 0);
+        } else {
+            form.setValue(`products.${index}.minStockQty`, 0);
         }
     };
 
     // Function to fetch and update inventory when product is clicked/selected
-    const handleProductSelect = async (index: number, productName: string, groupHead: string) => {
+    const handleProductSelect = async (index: number, productName: string, groupHead: string, quantityToAdd: number = 1) => {
         try {
             const firmName = form.getValues('firmName');
             const firmId = form.getValues('firmId') || options?.firmObjects?.find((f: { name: string; id: number }) => f.name === firmName)?.id;
@@ -389,9 +401,9 @@ export default () => {
             }
 
             if (inventoryData) {
-                // Update the indented column by adding 1
+                // Update the indented column by adding quantityToAdd
                 const currentIndented = Number(inventoryData.indented) || 0;
-                const newIndented = currentIndented + 1;
+                const newIndented = currentIndented + quantityToAdd;
 
 
                 const { error: updateError } = await supabase
@@ -407,13 +419,13 @@ export default () => {
                 } else {
                 }
             } else {
-                // If no inventory record exists, create one with indented = 1
+                // If no inventory record exists, create one with indented = quantityToAdd
                 const { error: insertError } = await supabase
                     .from('inventory')
                     .insert({
                         item_name: productName,
                         group_head: groupHead,
-                        indented: 1,
+                        indented: quantityToAdd,
                         firm_name: firmName || '',
                         firm_id: firmId || null,
                         timestamp: new Date().toISOString(),
@@ -529,6 +541,22 @@ export default () => {
                 return;
             }
 
+            // Validate that requested quantity is not greater than the current stock quantity for each product
+            const realInventory = calculateRealInventory(
+                inventorySheet || [], indentSheet || [], storeInSheet || [], issueSheet || [], [], data.firmName
+            );
+
+            for (const product of data.products) {
+                const thisItem = realInventory.find(
+                    i => i.itemName === product.productName && i.groupHead === product.groupHead
+                );
+                const currentStock = thisItem?.current ?? 0;
+                if (product.quantity > currentStock) {
+                    toast.error(`Cannot proceed: Requested quantity (${product.quantity}) for "${product.productName}" exceeds current stock (${currentStock})`);
+                    return;
+                }
+            }
+
             // 1. Indent number from context (synchronous, zero DB round trips)
             //    + attachment uploads in parallel
             const nextIndentNumber = getNextIndentNumber();
@@ -572,12 +600,11 @@ export default () => {
             // 3. Show success immediately — user is unblocked
             toast.success(`Indent ${nextIndentNumber} created successfully!`);
             fetchHistory();
-
-            // 4. Increment inventory 'indented' counts in background (non-blocking)
+                // 4. Increment inventory 'indented' counts in background (non-blocking)
             data.products.forEach(product => {
                 const groupHead = product.groupHead || options?.itemGroupHeadMap?.[product.productName] || '';
                 if (!groupHead || !firmId) return;
-                handleProductSelect(0, product.productName, groupHead).catch(console.error);
+                handleProductSelect(0, product.productName, groupHead, Number(product.quantity) || 1).catch(console.error);
             });
 
             form.reset({
@@ -643,6 +670,22 @@ export default () => {
                                                     const firmObj = options?.firmObjects?.find(f => f.name === val);
                                                     if (firmObj) form.setValue('firmId', firmObj.id);
                                                     handleFirmNameSelect(val);
+
+                                                    // Recalculate stock for all rows
+                                                    const currentProducts = form.getValues('products') || [];
+                                                    currentProducts.forEach((product, idx) => {
+                                                        const pName = product.productName;
+                                                        const gHead = product.groupHead;
+                                                        if (val && pName && gHead) {
+                                                            const realInventory = calculateRealInventory(
+                                                                inventorySheet || [], indentSheet || [], storeInSheet || [], issueSheet || [], [], val
+                                                            );
+                                                            const thisItem = realInventory.find(i => i.itemName === pName && i.groupHead === gHead);
+                                                            form.setValue(`products.${idx}.minStockQty`, thisItem?.current ?? 0);
+                                                        } else {
+                                                            form.setValue(`products.${idx}.minStockQty`, 0);
+                                                        }
+                                                    });
                                                 }}
                                                 value={field.value}
                                             >

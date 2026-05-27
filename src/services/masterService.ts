@@ -475,6 +475,18 @@ async function upsertNormalizedMasterRecord(values: Record<string, any>, id?: nu
     }
 
     if ('item_name' in values) {
+        let oldName: string | null = null;
+        if (id) {
+            const { data: oldItem } = await supabase
+                .from('item')
+                .select('item_name')
+                .eq('id', id)
+                .maybeSingle();
+            if (oldItem) {
+                oldName = oldItem.item_name;
+            }
+        }
+
         const groupHeadId = await findOrCreateLookupId('group_head', values.group_head);
         const uomId = await findOrCreateLookupId('uom', values.uom);
         const normalizeConditions = (conditions: any) => Array.isArray(conditions)
@@ -487,7 +499,22 @@ async function upsertNormalizedMasterRecord(values: Record<string, any>, id?: nu
             regular_pay_condition: normalizeConditions(values.regular_conditions),
             third_party_pay_condition: normalizeConditions(values.third_party_conditions),
         };
-        return id ? supabase.from('item').update(payload).eq('id', id) : supabase.from('item').insert(payload);
+        
+        const updateResult = id ? await supabase.from('item').update(payload).eq('id', id) : await supabase.from('item').insert(payload);
+
+        if (id && oldName && oldName !== values.item_name && !updateResult.error) {
+            const newName = values.item_name;
+            await Promise.all([
+                supabase.from('inventory').update({ item_name: newName }).eq('item_name', oldName),
+                supabase.from('indent').update({ product_name: newName }).eq('product_name', oldName),
+                supabase.from('store_in').update({ product_name: newName }).eq('product_name', oldName),
+                supabase.from('store_in_direct').update({ product_name: newName }).eq('product_name', oldName),
+                supabase.from('issue').update({ product_name: newName }).eq('product_name', oldName),
+                supabase.from('stock_transfers').update({ product_name: newName }).eq('product_name', oldName),
+            ]);
+        }
+
+        return updateResult;
     }
 
     if ('group_head' in values || 'uom' in values) {

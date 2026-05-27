@@ -587,11 +587,12 @@ export default () => {
                                     <SelectTrigger><SelectValue placeholder={transferDialog.fromProject ? "Select Item" : "Select Source First"} /></SelectTrigger>
                                     <SelectContent>
                                         {(() => {
+                                            const fromFirmId = masterSheet?.firmObjects?.find((f) => f.name === transferDialog.fromProject)?.id;
                                             const sourceInv = calculateRealInventory(
                                                 inventorySheet || [],
-                                                (indentSheet || []).filter((i: any) => i.firmName === transferDialog.fromProject),
-                                                (storeInSheet || []).filter((s: any) => s.firmNameMatch === transferDialog.fromProject),
-                                                (issueSheet || []).filter((is: any) => is.projectName === transferDialog.fromProject),
+                                                (indentSheet || []).filter((i: any) => Number(i.firm_id || i.firmId) === fromFirmId),
+                                                (storeInSheet || []).filter((s: any) => Number(s.firm_id || s.firmId) === fromFirmId),
+                                                (issueSheet || []).filter((is: any) => Number(is.firm_id || is.firmId) === fromFirmId),
                                                 (stockTransferSheet || []).filter((t: any) => t.toProject === transferDialog.fromProject || t.fromProject === transferDialog.fromProject),
                                                 transferDialog.fromProject
                                             );
@@ -620,11 +621,13 @@ export default () => {
                                         onClick={async () => {
                                             setIsSubmitting(true);
                                             try {
+                                                const fromFirmId = masterSheet?.firmObjects?.find((f) => f.name === transferDialog.fromProject)?.id;
+                                                const toFirmId = masterSheet?.firmObjects?.find((f) => f.name === transferDialog.toProject)?.id;
                                                 const sourceInv = calculateRealInventory(
                                                     inventorySheet || [],
-                                                    (indentSheet || []).filter((i: any) => i.firmName === transferDialog.fromProject),
-                                                    (storeInSheet || []).filter((s: any) => s.firmNameMatch === transferDialog.fromProject),
-                                                    (issueSheet || []).filter((is: any) => is.projectName === transferDialog.fromProject),
+                                                    (indentSheet || []).filter((i: any) => Number(i.firm_id || i.firmId) === fromFirmId),
+                                                    (storeInSheet || []).filter((s: any) => Number(s.firm_id || s.firmId) === fromFirmId),
+                                                    (issueSheet || []).filter((is: any) => Number(is.firm_id || is.firmId) === fromFirmId),
                                                     (stockTransferSheet || []).filter((t: any) => t.toProject === transferDialog.fromProject || t.fromProject === transferDialog.fromProject),
                                                     transferDialog.fromProject
                                                 );
@@ -636,8 +639,6 @@ export default () => {
 
                                                 const timestamp = new Date().toISOString();
                                                 const ref = `TRF-${Date.now()}`;
-                                                const fromFirmId = masterSheet?.firmObjects?.find((f) => f.name === transferDialog.fromProject)?.id;
-                                                const toFirmId = masterSheet?.firmObjects?.find((f) => f.name === transferDialog.toProject)?.id;
 
                                                 if (!fromFirmId || !toFirmId) {
                                                     toast.error("Project ID is missing for this transfer.");

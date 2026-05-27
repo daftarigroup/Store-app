@@ -41,6 +41,7 @@ export interface InventoryItemInput {
     quantity: number;
     firmName?: string;
     firmId?: number;
+    inventoryRecordId?: number;
 }
 
 function toNumber(value: unknown): number {
@@ -123,6 +124,23 @@ export async function fetchInventoryRecords(permittedFirms?: string[]): Promise<
     }
 }
 
+export async function fetchItemInventoryRecord(itemName: string, firmId?: number, firmName?: string): Promise<{ id: number | null; opening: number }> {
+    try {
+        const base = supabase.from('inventory').select('id, opening').eq('item_name', itemName);
+        const query = firmId
+            ? base.eq('firm_id', firmId)
+            : firmName
+                ? base.eq('firm_name', firmName)
+                : base;
+
+        const { data, error } = await query.maybeSingle();
+        if (error) return { id: null, opening: 0 };
+        return { id: data?.id ?? null, opening: data ? Number(data.opening) || 0 : 0 };
+    } catch {
+        return { id: null, opening: 0 };
+    }
+}
+
 export async function addItemToInventory(input: InventoryItemInput): Promise<{ success: boolean; error?: any }> {
     try {
         const quantityToAdd = toNumber(input.quantity);
@@ -131,38 +149,50 @@ export async function addItemToInventory(input: InventoryItemInput): Promise<{ s
             return { success: false, error: new Error('Quantity must be greater than 0') };
         }
 
-        if (!input.firmId) {
+        if (!input.firmId && !input.inventoryRecordId) {
             return { success: false, error: new Error('Project ID is required for inventory') };
         }
 
-        const { data: existingRecord, error: fetchError } = await supabase
-            .from('inventory')
-            .select('opening, current, individual_rate, group_head, uom, firm_name, firm_id')
-            .eq('item_name', input.itemName)
-            .eq('firm_id', input.firmId)
-            .maybeSingle();
+        let resolvedRecord: any = null;
 
-        if (fetchError) throw fetchError;
+        if (input.inventoryRecordId) {
+            const { data, error: fetchError } = await supabase
+                .from('inventory')
+                .select('id, opening, current, individual_rate, group_head, uom, firm_name, firm_id')
+                .eq('id', input.inventoryRecordId)
+                .single();
+            if (fetchError) throw fetchError;
+            resolvedRecord = data;
+        } else {
+            const { data: existingRecord, error: fetchError } = await supabase
+                .from('inventory')
+                .select('id, opening, current, individual_rate, group_head, uom, firm_name, firm_id')
+                .eq('item_name', input.itemName)
+                .eq('firm_id', input.firmId!)
+                .maybeSingle();
+            if (fetchError) throw fetchError;
+            resolvedRecord = existingRecord;
+        }
 
-        if (existingRecord) {
-            const nextOpening = toNumber(existingRecord.opening) + quantityToAdd;
-            const nextCurrent = toNumber(existingRecord.current) + quantityToAdd;
-            const rate = toNumber(existingRecord.individual_rate);
-
+        if (resolvedRecord) {
+            const rate = toNumber(resolvedRecord.individual_rate);
+            const existingOpening = toNumber(resolvedRecord.opening);
+            const existingCurrent = toNumber(resolvedRecord.current);
+            const newOpening = existingOpening + quantityToAdd;
+            const newCurrent = existingCurrent + quantityToAdd;
             const { error: updateError } = await supabase
                 .from('inventory')
                 .update({
-                    group_head: existingRecord.group_head || input.groupHead,
-                    uom: existingRecord.uom || input.uom || '',
-                    opening: toTextNumber(nextOpening),
-                    current: toTextNumber(nextCurrent),
-                    total_price: toTextNumber(nextCurrent * rate),
-                    color_code: getInventoryStatus(nextCurrent),
-                    firm_name: existingRecord.firm_name || input.firmName || '',
-                    firm_id: existingRecord.firm_id || input.firmId || null,
+                    group_head: input.groupHead || resolvedRecord.group_head,
+                    uom: input.uom || resolvedRecord.uom || '',
+                    opening: toTextNumber(newOpening),
+                    current: toTextNumber(newCurrent),
+                    total_price: toTextNumber(newOpening * rate),
+                    color_code: getInventoryStatus(newCurrent),
+                    firm_name: input.firmName || resolvedRecord.firm_name || '',
+                    firm_id: input.firmId || resolvedRecord.firm_id || null,
                 })
-                .eq('item_name', input.itemName)
-                .eq('firm_id', input.firmId);
+                .eq('id', resolvedRecord.id);
 
             if (updateError) throw updateError;
         } else {
