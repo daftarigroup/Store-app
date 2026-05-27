@@ -541,22 +541,6 @@ export default () => {
                 return;
             }
 
-            // Validate that requested quantity is not greater than the current stock quantity for each product
-            const realInventory = calculateRealInventory(
-                inventorySheet || [], indentSheet || [], storeInSheet || [], issueSheet || [], [], data.firmName
-            );
-
-            for (const product of data.products) {
-                const thisItem = realInventory.find(
-                    i => i.itemName === product.productName && i.groupHead === product.groupHead
-                );
-                const currentStock = thisItem?.current ?? 0;
-                if (product.quantity > currentStock) {
-                    toast.error(`Cannot proceed: Requested quantity (${product.quantity}) for "${product.productName}" exceeds current stock (${currentStock})`);
-                    return;
-                }
-            }
-
             // 1. Indent number from context (synchronous, zero DB round trips)
             //    + attachment uploads in parallel
             const nextIndentNumber = getNextIndentNumber();
