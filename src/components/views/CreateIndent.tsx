@@ -53,8 +53,6 @@ export default () => {
     const [historyLoading, setHistoryLoading] = useState(false);
     const [exportingIndentNo, setExportingIndentNo] = useState<string | null>(null);
 
-    const [indenterOptions, setIndenterOptions] = useState<string[]>([]);
-    const [searchTermIndenter, setSearchTermIndenter] = useState('');
     const [isAddingProject, setIsAddingProject] = useState(false);
     const [isAddingDept, setIsAddingDept] = useState(false);
     const [isAddingAreaOfUse, setIsAddingAreaOfUse] = useState(false);
@@ -215,13 +213,8 @@ export default () => {
         },
     ];
 
-    // Resolve contact person from already-loaded context — zero DB round trips
-    const handleFirmNameSelect = (val: string) => {
+    const handleFirmNameSelect = (_val: string) => {
         form.setValue('indenterName', '');
-        const contactPerson = options?.firmCompanyMap?.[val]?.companyContactPerson || '';
-        const unique = contactPerson ? [contactPerson] : [];
-        setIndenterOptions(unique);
-        if (unique.length === 1) form.setValue('indenterName', unique[0]);
     };
 
     const handleAddProject = async () => {
@@ -608,7 +601,6 @@ export default () => {
                     groupHead: '',
                 }],
             });
-            setIndenterOptions([]);
         } catch (error) {
             console.error('Error in onSubmit:', error);
             toast.error('Error while creating indent! Please try again');
@@ -740,46 +732,12 @@ export default () => {
                                                 Indenter Name
                                                 <span className="text-destructive">*</span>
                                             </FormLabel>
-                                            {indenterOptions.length > 1 ? (
-                                                // Multiple indenters → show dropdown
-                                                <Select onValueChange={field.onChange} value={field.value}>
-                                                    <FormControl>
-                                                        <SelectTrigger className="w-full">
-                                                            <SelectValue placeholder="Select Indenter Name" />
-                                                        </SelectTrigger>
-                                                    </FormControl>
-                                                    <SelectContent>
-                                                        <div className="flex items-center border-b px-3 pb-3">
-                                                            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                                                            <input
-                                                                placeholder="Search indenter..."
-                                                                value={searchTermIndenter}
-                                                                onChange={(e) => setSearchTermIndenter(e.target.value)}
-                                                                onKeyDown={(e) => e.stopPropagation()}
-                                                                className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
-                                                            />
-                                                        </div>
-                                                        {indenterOptions
-                                                            .filter((name) =>
-                                                                name.toLowerCase().includes(searchTermIndenter.toLowerCase())
-                                                            )
-                                                            .map((name, i) => (
-                                                                <SelectItem key={i} value={name}>
-                                                                    {name}
-                                                                </SelectItem>
-                                                            ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            ) : (
-                                                // Single or no indenter → auto-filled read-only input
-                                                <FormControl>
-                                                    <Input
-                                                        placeholder={indenterOptions.length === 0 ? 'Select a Project Name first' : 'Indenter name (auto-filled)'}
-                                                        readOnly={indenterOptions.length === 1}
-                                                        {...field}
-                                                    />
-                                                </FormControl>
-                                            )}
+                                            <FormControl>
+                                                <Input
+                                                    placeholder="Enter indenter name"
+                                                    {...field}
+                                                />
+                                            </FormControl>
                                         </FormItem>
                                     )}
                                 />
