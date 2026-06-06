@@ -14,6 +14,7 @@ export interface MasterData {
         email: string;
         paymentTerm: string;
         personName: string;
+        phone: string;
     }[];
     vendorNames: string[];
     paymentTerms: string[];
@@ -227,6 +228,7 @@ export async function fetchMasterOptions(permittedFirms?: string[]): Promise<Mas
             email: v.email || '',
             paymentTerm: v.payment_term || '',
             personName: v.person_name || '',
+            phone: v.phone || '',
         }));
         const vendorNames = vendors.map(v => v.vendorName);
 
@@ -825,6 +827,53 @@ export async function deleteSiteLocation(id: number): Promise<{ success: boolean
         return { success: true };
     } catch (error) {
         console.error('Error deleting site location:', error);
+        return { success: false, error };
+    }
+}
+
+export async function fetchTermsAndConditions() {
+    try {
+        const { data, error } = await supabase
+            .from('terms_and_condition')
+            .select('id, title, name, created_at')
+            .order('created_at', { ascending: true });
+        if (error) throw error;
+        return data || [];
+    } catch (error) {
+        console.error('Error fetching terms and conditions:', error);
+        throw error;
+    }
+}
+
+export async function insertTermsAndCondition(data: { title: string; name: string }): Promise<{ success: boolean; error?: any }> {
+    try {
+        const { error } = await supabase.from('terms_and_condition').insert(data);
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        console.error('Error inserting terms and condition:', error);
+        return { success: false, error };
+    }
+}
+
+export async function updateTermsAndCondition(id: number, data: { title: string; name: string }): Promise<{ success: boolean; error?: any }> {
+    try {
+        const { error } = await supabase.from('terms_and_condition').update(data).eq('id', id);
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        console.error('Error updating terms and condition:', error);
+        return { success: false, error };
+    }
+}
+
+export async function deleteTermsAndCondition(id: number): Promise<{ success: boolean; error?: any }> {
+    try {
+        const { error } = await supabase.from('terms_and_condition').delete().eq('id', id);
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        console.error('Error deleting terms and condition:', error);
         return { success: false, error };
     }
 }

@@ -148,7 +148,7 @@ export const calculatePcReportCounts = (
                 item.pendingPoQty > 0 &&
                 item.approvedVendorName &&
                 item.approvedVendorName.toString().trim() !== '',
-            (item) => !item.poRequred || item.poRequred !== 'Yes' || (item.pendingPoQty || 0) <= 0,
+            (item) => item.poRequred && item.poRequred.toString().trim() === 'Yes' && (item.pendingPoQty || 0) <= 0,
             'Pending PO'
         ),
         countStage(

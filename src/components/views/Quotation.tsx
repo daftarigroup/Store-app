@@ -158,6 +158,7 @@ export default function QuotationPage() {
   }, [details]);
 
 
+
   const fetchLatestQuotationNumbers = async () => {
     try {
       const quotationHistory = await fetchQuotationHistory(user?.firm_access);
@@ -907,10 +908,10 @@ export default function QuotationPage() {
           <div className="space-y-4 px-4 py-2">
             <div className="flex items-center justify-between">
               <FormLabel className="text-base font-bold text-slate-800">TERMS & CONDITIONS</FormLabel>
-              <Button 
-                type="button" 
-                variant="outline" 
-                size="sm" 
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
                 onClick={() => termsArray.append('')}
                 className="h-8 flex items-center gap-1 text-blue-600 border-blue-200 hover:bg-blue-50"
               >
@@ -918,7 +919,7 @@ export default function QuotationPage() {
                 Add Term
               </Button>
             </div>
-            
+
             <div className="space-y-3">
               {termsArray.fields.map((field, index) => (
                 <div key={field.id} className="flex items-start gap-2 group">
@@ -930,9 +931,9 @@ export default function QuotationPage() {
                       render={({ field }) => (
                         <FormItem>
                           <FormControl>
-                            <Input 
-                              {...field} 
-                              placeholder={`Term ${index + 1}`} 
+                            <Input
+                              {...field}
+                              placeholder={`Term ${index + 1}`}
                               className="h-9 focus:ring-1 focus:ring-blue-400"
                             />
                           </FormControl>

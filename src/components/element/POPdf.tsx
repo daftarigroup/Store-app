@@ -1,4 +1,6 @@
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
+import sealImg from '@/assets/IMG-20260606-WA0002.jpg';
+import signatureImg from '@/assets/IMG-20260606-WA0003.jpg';
 
 const styles = StyleSheet.create({
     page: {
@@ -245,6 +247,22 @@ const styles = StyleSheet.create({
         width: 150,
         borderTop: '1 solid #000000',
         marginTop: 4,
+    },
+    authImagesRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        marginBottom: 4,
+    },
+    authSignatureImg: {
+        width: 90,
+        height: 45,
+        objectFit: 'contain',
+    },
+    authSealImg: {
+        width: 60,
+        height: 60,
+        objectFit: 'contain',
     },
 });
 
@@ -498,6 +516,10 @@ export default function PoojaPOFormat(props: POPdfProps) {
                     <View style={styles.signatureContainer}>
                         <View style={styles.signatureLeft}>
                             <Text style={styles.forText}>For, Pooja Constructions</Text>
+                            <View style={styles.authImagesRow}>
+                                <Image src={signatureImg} style={[styles.authSignatureImg, { marginRight: 6 }]} />
+                                <Image src={sealImg} style={styles.authSealImg} />
+                            </View>
                             <View style={styles.lineContainer}>
                                 <View style={styles.signLine} />
                                 <Text style={styles.stampText}>{authorizedSignatory}</Text>

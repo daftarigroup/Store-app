@@ -1,4 +1,4 @@
-import { Plus, Building2, Package, FileSpreadsheet, Boxes, LayoutGrid, Building, Trash, Pencil, X, Search, MapPin, UserCog, Mail, Phone, Users, Map, Loader2 } from 'lucide-react';
+import { Plus, Building2, Package, FileSpreadsheet, Boxes, LayoutGrid, Building, Trash, Pencil, X, Search, MapPin, UserCog, Mail, Phone, Users, Map, Loader2, FileText } from 'lucide-react';
 import Heading from '../element/Heading';
 import { useEffect, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -16,7 +16,7 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Input } from '../ui/input';
 import { toast } from 'sonner';
-import { fetchMasterRecords, insertMasterData, insertNormalizedMasterData, updateMasterData, deleteMasterData, fetchSiteEngineers, insertSiteEngineer, updateSiteEngineer, deleteSiteEngineer, fetchContractors, insertContractor, updateContractor, deleteContractor, fetchSiteLocations, insertSiteLocation, updateSiteLocation, deleteSiteLocation } from '@/services/masterService';
+import { fetchMasterRecords, insertMasterData, insertNormalizedMasterData, updateMasterData, deleteMasterData, fetchSiteEngineers, insertSiteEngineer, updateSiteEngineer, deleteSiteEngineer, fetchContractors, insertContractor, updateContractor, deleteContractor, fetchSiteLocations, insertSiteLocation, updateSiteLocation, deleteSiteLocation, fetchTermsAndConditions, insertTermsAndCondition, updateTermsAndCondition, deleteTermsAndCondition } from '@/services/masterService';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { ScrollArea } from '../ui/scroll-area';
 import { cn } from '@/lib/utils';
@@ -134,6 +134,10 @@ const companySchema = z.object({
     company_contact_person: optionalText()
 });
 const siteEngineerSchema = z.object({ name: z.string().min(1, 'Required'), number: z.string().min(1, 'Required'), email: z.string().email('Invalid email') });
+const termsSchema = z.object({
+    title: z.string().min(1, 'Heading is required'),
+    name: z.string().min(1, 'Condition text is required'),
+});
 
 const ConditionsCell = ({ val }: { val: any }) => {
     if (!val) return <span className="text-muted-foreground italic text-xs">--</span>;
@@ -187,6 +191,7 @@ export default function MasterManagement() {
     const [siteEngineers, setSiteEngineers] = useState<any[]>([]);
     const [contractors, setContractors] = useState<any[]>([]);
     const [siteLocations, setSiteLocations] = useState<any[]>([]);
+    const [termsAndConditions, setTermsAndConditions] = useState<any[]>([]);
     const [dataLoading, setDataLoading] = useState(true);
     const [editingRecord, setEditingRecord] = useState<any>(null);
     const [openDialog, setOpenDialog] = useState<string | null>(null);
@@ -223,6 +228,7 @@ export default function MasterManagement() {
     const seForm = useForm<z.infer<typeof siteEngineerSchema>>({ resolver: zodResolver(siteEngineerSchema), defaultValues: { name: '', number: '', email: '' } });
     const conForm = useForm<ContractorFormValues>({ resolver: zodResolver(contractorSchema) as any, defaultValues: { contractor_name: '', contractor_gstin: '', contractor_address: '', contractor_email: '', responsible_person: '', location: '', phone: '' } });
     const slForm = useForm<z.infer<typeof siteLocationSchema>>({ resolver: zodResolver(siteLocationSchema), defaultValues: { location: '' } });
+    const tcForm = useForm<z.infer<typeof termsSchema>>({ resolver: zodResolver(termsSchema), defaultValues: { title: '', name: '' } });
 
     const { fields: regFields, append: regAppend, remove: regRemove } = useFieldArray({ control: iForm.control, name: "regular_conditions" });
     const { fields: tpFields, append: tpAppend, remove: tpRemove } = useFieldArray({ control: iForm.control, name: "third_party_conditions" });
@@ -319,6 +325,7 @@ export default function MasterManagement() {
             if (openDialog === 'site_engineer') seForm.reset(normalized);
             if (openDialog === 'contractor') conForm.reset(normalized);
             if (openDialog === 'site_location') slForm.reset(normalized);
+            if (openDialog === 'terms_condition') tcForm.reset({ title: editingRecord.title ?? '', name: editingRecord.name ?? '' });
         } else if (openDialog) {
             if (openDialog === 'vendor') vForm.reset({ vendor_name: '', vendor_gstin: '', vendor_address: '', vendor_email: '', payment_term: '', responsible_person: '', location: '', phone: '' });
             if (openDialog === 'item') iForm.reset({ item_name: '', group_head: '', uom: '', include_in_inventory: false, inventory_quantity: 0, firm_name: '', regular_conditions: [{ value: '' }], third_party_conditions: [{ value: '' }] });
@@ -332,22 +339,25 @@ export default function MasterManagement() {
             if (openDialog === 'site_engineer') seForm.reset({ name: '', number: '', email: '' });
             if (openDialog === 'contractor') conForm.reset({ contractor_name: '', contractor_gstin: '', contractor_address: '', contractor_email: '', responsible_person: '', location: '', phone: '' });
             if (openDialog === 'site_location') slForm.reset({ location: '' });
+            if (openDialog === 'terms_condition') tcForm.reset({ title: '', name: '' });
         }
     }, [editingRecord, openDialog]);
 
     async function loadData() {
         setDataLoading(true);
         try {
-            const [master, engineers, contractorList, locationList] = await Promise.all([
+            const [master, engineers, contractorList, locationList, termsList] = await Promise.all([
                 fetchMasterRecords(),
                 fetchSiteEngineers(),
                 fetchContractors(),
-                fetchSiteLocations()
+                fetchSiteLocations(),
+                fetchTermsAndConditions()
             ]);
             setAllRecords(master);
             setSiteEngineers(engineers);
             setContractors(contractorList);
             setSiteLocations(locationList);
+            setTermsAndConditions(termsList);
         } finally {
             setDataLoading(false);
         }
@@ -375,6 +385,7 @@ export default function MasterManagement() {
             if (type === 'site_engineer') res = await deleteSiteEngineer(record.number);
             else if (type === 'contractor') res = await deleteContractor(record.id);
             else if (type === 'site_location') res = await deleteSiteLocation(record.id);
+            else if (type === 'terms_condition') res = await deleteTermsAndCondition(record.id);
             else res = await deleteMasterData(record.id, type || record.__table);
 
             if (res.success) { toast.success('Deleted'); loadData(); updateAll(); } else toast.error('Delete failed');
@@ -510,6 +521,12 @@ export default function MasterManagement() {
         { id: 'actions', cell: ({ row }) => getActions(row.original, 'site_location') }
     ];
 
+    const termsColumns: ColumnDef<any>[] = [
+        { accessorKey: 'title', header: 'Heading', cell: ({ row }) => <div className="flex items-center gap-2 font-medium"><FileText size={16} className="text-teal-500 shrink-0" />{row.original.title}</div> },
+        { accessorKey: 'name', header: 'Condition' },
+        { id: 'actions', cell: ({ row }) => getActions(row.original, 'terms_condition') }
+    ];
+
     const onSubmit = async (values: any, type: string) => {
         setIsSubmitting(true);
         try {
@@ -583,6 +600,8 @@ export default function MasterManagement() {
                     res = await updateContractor(editingRecord.id, contractorPayload);
                 } else if (type === 'site_location') {
                     res = await updateSiteLocation(editingRecord.id, values);
+                } else if (type === 'terms_condition') {
+                    res = await updateTermsAndCondition(editingRecord.id, { title: values.title, name: values.name });
                 } else {
                     res = await updateMasterData(editingRecord.id, contractorPayload);
                 }
@@ -599,6 +618,8 @@ export default function MasterManagement() {
                     res = await insertContractor(contractorPayload);
                 } else if (type === 'site_location') {
                     res = await insertSiteLocation(values);
+                } else if (type === 'terms_condition') {
+                    res = await insertTermsAndCondition({ title: values.title, name: values.name });
                 } else {
                     res = await insertMasterData(finalPayload);
                 }
@@ -683,6 +704,7 @@ export default function MasterManagement() {
                             <SelectItem value="site_locations" className="cursor-pointer"><div className="flex items-center gap-2"><Map size={16} className="text-rose-500" /> Site Locations</div></SelectItem>
                             <SelectItem value="projects" className="cursor-pointer"><div className="flex items-center gap-2"><Building size={16} className="text-purple-500" /> Projects</div></SelectItem>
                             <SelectItem value="site_engineers" className="cursor-pointer"><div className="flex items-center gap-2"><UserCog size={16} className="text-amber-500" /> Site Engineers</div></SelectItem>
+                            <SelectItem value="terms_conditions" className="cursor-pointer"><div className="flex items-center gap-2"><FileText size={16} className="text-teal-500" /> Terms &amp; Conditions</div></SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
@@ -785,6 +807,7 @@ export default function MasterManagement() {
                 <TabsContent value="contractors" className="flex-1 outline-none"><DataTable data={contractors} columns={contractorColumns} searchFields={['contractor_name']} dataLoading={dataLoading} extraActions={<Button className="bg-indigo-600" onClick={() => { conForm.reset(); setEditingRecord(null); setOpenDialog('contractor'); }}><Plus size={18} /> Add Contractor</Button>} /></TabsContent>
                 <TabsContent value="site_locations" className="flex-1 outline-none"><DataTable data={siteLocations} columns={siteLocationColumns} searchFields={['location']} dataLoading={dataLoading} extraActions={<Button className="bg-indigo-600" onClick={() => { slForm.reset(); setEditingRecord(null); setOpenDialog('site_location'); }}><Plus size={18} /> Add Location</Button>} /></TabsContent>
                 <TabsContent value="site_engineers" className="flex-1 outline-none"><DataTable data={siteEngineers} columns={siteEngineerColumns} searchFields={['name', 'email']} dataLoading={dataLoading} extraActions={<Button className="bg-orange-600" onClick={() => { seForm.reset(); setEditingRecord(null); setOpenDialog('site_engineer'); }}><Plus size={18} /> Add Engineer</Button>} /></TabsContent>
+                <TabsContent value="terms_conditions" className="flex-1 outline-none"><DataTable data={termsAndConditions} columns={termsColumns} searchFields={['title', 'name']} dataLoading={dataLoading} extraActions={<Button className="bg-teal-600" onClick={() => { tcForm.reset(); setEditingRecord(null); setOpenDialog('terms_condition'); }}><Plus size={18} /> Add Condition</Button>} /></TabsContent>
             </Tabs>
 
             <Dialog open={!!openDialog} onOpenChange={(o) => {
@@ -795,7 +818,7 @@ export default function MasterManagement() {
                     conForm.reset();
                     slForm.reset();
                     pForm.reset();
-                    cForm.reset();
+                    tcForm.reset();
                 }
             }}>
                 <DialogContent className={cn("z-50 w-screen h-[100dvh] max-h-[100dvh] max-w-none p-0 overflow-hidden rounded-none flex flex-col sm:w-[95vw] sm:h-auto sm:max-h-[90vh] sm:rounded-3xl sm:max-w-xl md:max-w-2xl lg:max-w-3xl [&>button]:z-30", openDialog === 'company' && "md:max-w-4xl")}>
@@ -1216,6 +1239,27 @@ export default function MasterManagement() {
                                                 )} />
                                             </div>
                                             <Button type="submit" disabled={isSubmitting} className="w-full bg-emerald-600 hover:bg-emerald-700 text-sm sm:text-base py-2 sm:py-3 mt-2">{isSubmitting ? <><Loader2 size={16} className="animate-spin mr-2" />Saving...</> : 'Save Company'}</Button>
+                                        </form>
+                                    </Form>
+                                )}
+                                {openDialog === 'terms_condition' && (
+                                    <Form {...tcForm}>
+                                        <form className="grid gap-4 p-5" onSubmit={tcForm.handleSubmit(v => onSubmit(v, 'terms_condition'), onInvalid)}>
+                                            <FormField control={tcForm.control} name="title" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Heading</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="e.g., Payment Terms" /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )} />
+                                            <FormField control={tcForm.control} name="name" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Condition Text</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="e.g., Payment within 30 days of invoice" /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )} />
+                                            <Button type="submit" disabled={isSubmitting} className="w-full bg-teal-600 hover:bg-teal-700 text-sm sm:text-base py-2 sm:py-3 mt-2">{isSubmitting ? <><Loader2 size={16} className="animate-spin mr-2" />Saving...</> : 'Save Condition'}</Button>
                                         </form>
                                     </Form>
                                 )}

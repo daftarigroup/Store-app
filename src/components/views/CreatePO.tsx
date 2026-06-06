@@ -30,11 +30,11 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '../ui/textarea';
 import { pdf } from '@react-pdf/renderer';
 import POPdf, { type POPdfProps } from '../element/POPdf';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
 import { PDFViewer } from '@react-pdf/renderer';
 import { supabase, supabaseEnabled } from '@/lib/supabase';
 import { fetchIndents, fetchPoMaster, fetchMasterData, insertPoRecords, updateIndentsAfterPoCreation } from '@/services/poService';
-import { upsertSiteEngineer } from '@/services/masterService';
+import { upsertSiteEngineer, fetchTermsAndConditions } from '@/services/masterService';
 
 function getFinancialYear(): string {
     const now = new Date();
@@ -183,6 +183,7 @@ interface MasterDetails {
         vendorEmail: string;
         personName?: string;
         email?: string;
+        phone?: string;
     }[];
     items: {
         itemName: string;
@@ -268,6 +269,11 @@ const CreatePO = () => {
     const [currentProjectName, setCurrentProjectName] = useState('Project Name');
     const [showPreview, setShowPreview] = useState(false);
     const [previewData, setPreviewData] = useState<POPdfProps | null>(null);
+    const [masterTerms, setMasterTerms] = useState<{ id: number; title: string; name: string }[]>([]);
+    const [localTerms, setLocalTerms] = useState<{ id: number; title: string; name: string }[]>([]);
+    const [editingTerm, setEditingTerm] = useState<{ id: number; title: string; name: string } | null>(null);
+    const [showAddTerm, setShowAddTerm] = useState(false);
+    const [newTerm, setNewTerm] = useState({ title: '', name: '' });
 
     // Fetch all data from Supabase on mount
     const loadData = useCallback(async () => {
@@ -317,6 +323,13 @@ const CreatePO = () => {
     useEffect(() => {
         loadData();
     }, [loadData]);
+
+    useEffect(() => {
+        fetchTermsAndConditions().then(data => {
+            setMasterTerms(data);
+            setLocalTerms(data);
+        }).catch(() => {});
+    }, []);
 
     const handleEngineerSave = async () => {
         const name = form.getValues('siteEngineerName');
@@ -726,10 +739,16 @@ const CreatePO = () => {
         const projectName = currentProjectName;
 
         // Parse terms from form values
-        const parsedTerms = values.terms.map((text, index) => ({
-            num: (index + 1).toString(),
-            text: text
-        }));
+        const parsedTerms = [
+            ...values.terms.map((text, index) => ({
+                num: (index + 1).toString(),
+                text: text
+            })),
+            ...localTerms.map((t, index) => ({
+                num: (values.terms.length + index + 1).toString(),
+                text: `${t.title}: ${t.name}`
+            }))
+        ];
 
         return {
             companyName: firmCompanyName,
@@ -743,7 +762,7 @@ const CreatePO = () => {
             supplierAddress: values.supplierAddress,
             supplierGstin: values.gstin,
             supplierContactPerson: selectedVendor?.personName || '',
-            supplierPhone: '', // Not in master table yet
+            supplierPhone: selectedVendor?.phone || '',
             supplierEmail: values.companyEmail || '',
             poNumber: mode === 'create' ? values.poNumber : incrementPoRevision(values.poNumber, poMasterSheet),
             poDate: formatDate(values.poDate),
@@ -813,10 +832,16 @@ const CreatePO = () => {
             const projectName = currentProjectName;
 
             // Parse terms from form values
-            const parsedTerms = values.terms.map((text, index) => ({
-                num: (index + 1).toString(),
-                text: text
-            }));
+            const parsedTerms = [
+                ...values.terms.map((text, index) => ({
+                    num: (index + 1).toString(),
+                    text: text
+                })),
+                ...localTerms.map((t, index) => ({
+                    num: (values.terms.length + index + 1).toString(),
+                    text: `${t.title}: ${t.name}`
+                }))
+            ];
 
             const pdfProps: POPdfProps = {
                 companyName: firmCompanyName,
@@ -830,7 +855,7 @@ const CreatePO = () => {
                 supplierAddress: values.supplierAddress,
                 supplierGstin: values.gstin,
                 supplierContactPerson: selectedVendor?.personName || '',
-                supplierPhone: '',
+                supplierPhone: selectedVendor?.phone || '',
                 supplierEmail: values.companyEmail || '',
                 poNumber: poNumber,
                 poDate: formatDate(values.poDate),
@@ -957,10 +982,13 @@ const CreatePO = () => {
                     firm_id: indent?.firm_id,
                     advancePercent: (v.paymentTerm?.toLowerCase().includes('partly') && (v.paymentTerm?.toLowerCase().includes('advance') || v.paymentTerm?.toLowerCase().includes('pi'))) ? (v.numberOfDays || 0) : 0,
                     advanceAmount: (v.paymentTerm?.toLowerCase().includes('partly') && (v.paymentTerm?.toLowerCase().includes('advance') || v.paymentTerm?.toLowerCase().includes('pi'))) ? (calculateTotal(v.rate || 0, v.gst, v.discount || 0, v.quantity || 0) * (v.numberOfDays || 0)) / 100 : 0,
-                    termsObject: values.terms.reduce((acc, term, idx) => {
-                        acc[`term${idx + 1}`] = term;
-                        return acc;
-                    }, {} as Record<string, string>),
+                    termsObject: {
+                        ...values.terms.reduce((acc, term, idx) => {
+                            acc[`term${idx + 1}`] = term;
+                            return acc;
+                        }, {} as Record<string, string>),
+                        localTerms: localTerms.map(t => ({ title: t.title, name: t.name }))
+                    },
                     destinationAddress: destinationAddress,
                     supplierAddress: values.supplierAddress,
                     supplierGstin: values.gstin,
@@ -1587,22 +1615,32 @@ const CreatePO = () => {
                                     })}
                                 </div>
 
-                                <div className="w-full flex justify-end p-3">
+                                <div className="w-full flex flex-col gap-2 p-3">
+                                    {localTerms.length > 0 && (
+                                        <div className="space-y-1 mb-1">
+                                            {localTerms.map((t, i) => (
+                                                <div key={t.id} className="flex items-center gap-2 text-sm">
+                                                    <span className="text-muted-foreground shrink-0 w-5 text-right">{i + 1}.</span>
+                                                    <span className="flex-1"><span className="font-medium">{t.title}: </span>{t.name}</span>
+                                                    <Button variant="ghost" size="icon" type="button"
+                                                        className="h-6 w-6 text-muted-foreground hover:text-foreground shrink-0"
+                                                        onClick={() => setEditingTerm({ ...t })}>
+                                                        <Pencil size={13} />
+                                                    </Button>
+                                                    <Button variant="ghost" size="icon" type="button"
+                                                        className="h-6 w-6 text-muted-foreground hover:text-red-500 shrink-0"
+                                                        onClick={() => setLocalTerms(prev => prev.filter(x => x.id !== t.id))}>
+                                                        <X size={13} />
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                     <Button className="w-48" variant="outline" type="button" onClick={(e) => {
                                         e.preventDefault();
-                                        if (termsArray.fields.length < 21) {
-                                            if (readOnly === -1) {
-                                                termsArray.append('');
-                                                setReadOnly(termsArray.fields.length);
-                                            } else {
-                                                toast.error(`Please save term ${readOnly + 1} before creating`);
-                                            }
-                                        } else {
-                                            toast.error('Only 20 terms are allowed');
-                                        }
-
+                                        setNewTerm({ title: '', name: '' });
+                                        setShowAddTerm(true);
                                     }}>
-
                                         Add Term
                                     </Button>
                                 </div>
@@ -1634,6 +1672,84 @@ const CreatePO = () => {
                                 Save And Send PO
                             </Button>
                         </div>
+
+                        {/* Edit Term Dialog */}
+                        <Dialog open={!!editingTerm} onOpenChange={open => { if (!open) setEditingTerm(null); }}>
+                            <DialogContent className="sm:max-w-lg">
+                                <DialogHeader>
+                                    <DialogTitle>Edit Term</DialogTitle>
+                                </DialogHeader>
+                                <div className="grid gap-4 py-2">
+                                    <div className="grid gap-1.5">
+                                        <label className="text-sm font-medium">Heading</label>
+                                        <Input
+                                            value={editingTerm?.title ?? ''}
+                                            onChange={e => setEditingTerm(prev => prev ? { ...prev, title: e.target.value } : prev)}
+                                            placeholder="e.g. Payment Terms"
+                                        />
+                                    </div>
+                                    <div className="grid gap-1.5">
+                                        <label className="text-sm font-medium">Condition</label>
+                                        <Textarea
+                                            value={editingTerm?.name ?? ''}
+                                            onChange={e => setEditingTerm(prev => prev ? { ...prev, name: e.target.value } : prev)}
+                                            placeholder="e.g. Payment within 30 days of invoice"
+                                            rows={6}
+                                            className="resize-y"
+                                        />
+                                    </div>
+                                </div>
+                                <DialogFooter className="gap-2">
+                                    <Button variant="outline" type="button" onClick={() => setEditingTerm(null)}>Cancel</Button>
+                                    <Button type="button" onClick={() => {
+                                        if (editingTerm) {
+                                            setLocalTerms(prev => prev.map(x => x.id === editingTerm.id ? editingTerm : x));
+                                            setEditingTerm(null);
+                                        }
+                                    }}>Save</Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
+
+                        {/* Add Term Dialog */}
+                        <Dialog open={showAddTerm} onOpenChange={setShowAddTerm}>
+                            <DialogContent className="sm:max-w-md">
+                                <DialogHeader>
+                                    <DialogTitle>Add Term</DialogTitle>
+                                </DialogHeader>
+                                <div className="grid gap-4 py-2">
+                                    <div className="grid gap-1.5">
+                                        <label className="text-sm font-medium">Heading</label>
+                                        <input
+                                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                                            value={newTerm.title}
+                                            onChange={e => setNewTerm(prev => ({ ...prev, title: e.target.value }))}
+                                            placeholder="e.g. Payment Terms"
+                                        />
+                                    </div>
+                                    <div className="grid gap-1.5">
+                                        <label className="text-sm font-medium">Condition</label>
+                                        <input
+                                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                                            value={newTerm.name}
+                                            onChange={e => setNewTerm(prev => ({ ...prev, name: e.target.value }))}
+                                            placeholder="e.g. Payment within 30 days of invoice"
+                                        />
+                                    </div>
+                                </div>
+                                <DialogFooter className="gap-2">
+                                    <Button variant="outline" type="button" onClick={() => setShowAddTerm(false)}>Cancel</Button>
+                                    <Button type="button" onClick={() => {
+                                        if (!newTerm.title.trim() || !newTerm.name.trim()) {
+                                            toast.error('Please fill in both heading and condition');
+                                            return;
+                                        }
+                                        setLocalTerms(prev => [...prev, { id: Date.now(), title: newTerm.title.trim(), name: newTerm.name.trim() }]);
+                                        setShowAddTerm(false);
+                                    }}>Add</Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
 
                         {/* Preview Dialog */}
                         <Dialog open={showPreview} onOpenChange={setShowPreview}>

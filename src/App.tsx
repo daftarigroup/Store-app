@@ -11,7 +11,7 @@ export default ({ routes }: { routes: RouteAttributes[] }) => {
                     <Sidebar items={routes} />
                     <SidebarInset>
                         
-                        <main className="flex-1 overflow-y-auto rounded-md">
+                        <main className="flex-1 overflow-y-auto overflow-x-hidden rounded-md min-w-0">
                             <div className="h-full">
                                 <ViewOnlyGuard>
                                     <Outlet />
