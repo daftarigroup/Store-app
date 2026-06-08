@@ -232,7 +232,7 @@ export type PoMasterSheet = {
     numberOfDays?: number;
     advancePercent?: number;
     advanceAmount?: number;
-    termsObject?: Record<string, string>;
+    termsObject?: Record<string, any>;
     supplierAddress?: string;
     supplierGstin?: string;
     companyEmail?: string;

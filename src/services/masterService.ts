@@ -121,7 +121,7 @@ export async function fetchMasterOptions(permittedFirms?: string[]): Promise<Mas
         // 6. Fetch Vendors
         const { data: vendorData, error: vendorError } = await supabase
             .from('vendors')
-            .select('vendor_name, gstin, address, email, payment_term, person_name')
+            .select('vendor_name, gstin, address, email, payment_term, person_name, phone')
             .order('vendor_name');
 
         if (vendorError) throw vendorError;
