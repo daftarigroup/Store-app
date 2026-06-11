@@ -354,15 +354,19 @@ export async function insertStoreInRecord(storeInData: StoreInInsertData) {
  * Called when purchase details form is updated
  * @param indentNumber - Indent number to update
  */
-export async function updateActual5Timestamp(indentNumber: string, productName: string) {
+export async function updateActual5Timestamp(indentNumber: string, productName: string, firmId?: number | null) {
     try {
         const currentDateTime = new Date().toISOString();
 
-        const { error } = await supabase
+        let query = supabase
             .from('indent')
             .update({ actual5: currentDateTime })
             .eq('indent_number', indentNumber)
             .eq('product_name', productName);
+        // Scope by firm so same-numbered indents in other firms are untouched
+        if (firmId != null) query = query.eq('firm_id', firmId);
+
+        const { error } = await query;
 
         if (error) throw error;
 
@@ -378,13 +382,17 @@ export async function updateActual5Timestamp(indentNumber: string, productName: 
  * @param indentNumber - Indent number to update
  * @param cancelQty - Quantity to cancel
  */
-export async function updateCancelQuantity(indentNumber: string, productName: string, cancelQty: number) {
+export async function updateCancelQuantity(indentNumber: string, productName: string, cancelQty: number, firmId?: number | null) {
     try {
-        const { error } = await supabase
+        let query = supabase
             .from('indent')
             .update({ cancel_qty: cancelQty })
             .eq('indent_number', indentNumber)
             .eq('product_name', productName);
+        // Scope by firm so same-numbered indents in other firms are untouched
+        if (firmId != null) query = query.eq('firm_id', firmId);
+
+        const { error } = await query;
 
         if (error) throw error;
 
@@ -395,13 +403,17 @@ export async function updateCancelQuantity(indentNumber: string, productName: st
     }
 }
 
-export async function updateLiftingStatus(indentNumber: string, productName: string, status: string) {
+export async function updateLiftingStatus(indentNumber: string, productName: string, status: string, firmId?: number | null) {
     try {
-        const { error } = await supabase
+        let query = supabase
             .from('indent')
             .update({ lifting_status: status })
             .eq('indent_number', indentNumber)
             .eq('product_name', productName);
+        // Scope by firm so same-numbered indents in other firms are untouched
+        if (firmId != null) query = query.eq('firm_id', firmId);
+
+        const { error } = await query;
 
         if (error) throw error;
 
@@ -417,13 +429,17 @@ export async function updateLiftingStatus(indentNumber: string, productName: str
  * @param indentNumber - Indent number to update
  * @param liftQty - Quantity currently being lifted
  */
-export async function updatePendingLiftQty(indentNumber: string, productName: string, liftQty: number) {
+export async function updatePendingLiftQty(indentNumber: string, productName: string, liftQty: number, firmId?: number | null) {
     try {
-        const { error } = await supabase
+        let query = supabase
             .from('indent')
             .update({ pending_lift_qty: liftQty.toString() })
             .eq('indent_number', indentNumber)
             .eq('product_name', productName);
+        // Scope by firm so same-numbered indents in other firms are untouched
+        if (firmId != null) query = query.eq('firm_id', firmId);
+
+        const { error } = await query;
 
         if (error) throw error;
 

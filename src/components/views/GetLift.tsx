@@ -82,6 +82,7 @@ interface HistoryData {
     pendingLiftQty?: number;
     receivedQty?: number;
     pendingPoQty?: number;
+    cancelQty?: number;
     timestamp?: string;
     // department?: string;
     areaOfUse?: string;
@@ -166,17 +167,14 @@ export default function GetPurchase() {
                 return { ...sheet, pendingPoQty, receivedQty, receivedQuantity: sheet.receivedQuantity };
             })
             .filter((item) => {
-                // Show only Pending items with planned date but no actual date
+                // Lifting stage starts once the PO planned date exists
                 const hasPlanned5 = item.planned5 && item.planned5.toString().trim() !== '';
-                const hasActual5 = item.actual5 && item.actual5.toString().trim() !== '';
-                const liftingStatus = (item.liftingStatus || '').toLowerCase();
-                const isPending = liftingStatus === 'pending' || 
-                                 liftingStatus === 'active' || 
-                                 liftingStatus === '' || 
-                                 item.liftingStatus === null;
 
-                // ✅ Hide if no quantity left to lift
-                return isPending && hasPlanned5 && !hasActual5 && item.pendingPoQty > 0;
+                // ✅ Quantity is the single source of truth: keep showing while
+                // anything remains to lift. lifting_status/actual5 are derived
+                // flags and can drift (stale snapshot, refresh race, bad write) —
+                // relying on them made rows vanish while qty was still pending.
+                return hasPlanned5 && item.pendingPoQty > 0;
             });
 
         // Group by PO Number
@@ -271,9 +269,11 @@ export default function GetPurchase() {
             cumulativeTotals.set(key, currentTotal);
             
             // Initial received quantity as a starting point if available
-            const initialReceived = Number(indentMatch?.receivedQuantity) || 0; 
+            const initialReceived = Number(indentMatch?.receivedQuantity) || 0;
             const runningReceived = initialReceived + currentTotal;
-            const pendingAfterThisLift = Math.max(0, approvedQty - runningReceived);
+            // Subtract cancelled qty so History matches the Pending tab math
+            const cancelQtySafe = Number(indentMatch?.cancelQty) || 0;
+            const pendingAfterThisLift = Math.max(0, approvedQty - runningReceived - cancelQtySafe);
 
             return {
                 indentNo: store.indentNo || '',
@@ -289,6 +289,7 @@ export default function GetPurchase() {
                 pendingLiftQty: pendingAfterThisLift, // NEW: Remaining at that time
                 receivedQty: runningReceived,
                 pendingPoQty: pendingAfterThisLift,
+                cancelQty: cancelQtySafe,
                 photoOfBill: store.photoOfBill || '',
                 timestamp: store.timestamp || '',
                 // department: indentMatch?.department || '-',
@@ -461,9 +462,24 @@ export default function GetPurchase() {
             cell: ({ getValue }) => <div>{(getValue() as string) || '-'}</div>,
         },
         {
+            accessorKey: 'product',
+            header: 'Product',
+            cell: ({ getValue }) => <div>{(getValue() as string) || '-'}</div>,
+        },
+        {
+            accessorKey: 'quantity',
+            header: 'Approved Qty',
+            cell: ({ getValue }) => <div>{(getValue() as number) || 0}</div>,
+        },
+        {
             accessorKey: 'liftedQty',
             header: 'Lifting Qty',
             cell: ({ getValue }) => <div className="font-semibold text-primary">{(getValue() as number) || 0}</div>,
+        },
+        {
+            accessorKey: 'cancelQty',
+            header: 'Cancelled Qty',
+            cell: ({ getValue }) => <div className="font-medium text-destructive">{(getValue() as number) || 0}</div>,
         },
         {
             accessorKey: 'pendingLiftQty',
@@ -508,6 +524,7 @@ export default function GetPurchase() {
             indentNo: z.string(),
             product: z.string(),
             poNumber: z.string(),
+            firm_id: z.number().nullable().optional(),
             quantity: z.coerce.number(),
             pendingLiftQty: z.coerce.number(),
             receivedQty: z.coerce.number(),
@@ -696,6 +713,7 @@ export default function GetPurchase() {
                     indentNo: item.indentNumber?.toString() || '',
                     product: item.productName || '',
                     poNumber: item.poNumber || '',
+                    firm_id: item.firm_id ?? null,
                     quantity: Number(item.approvedQuantity) || 0,
                     pendingLiftQty: Number(item.pendingPoQty) || 0,
                     receivedQty: Number(item.receivedQty) || 0,
@@ -776,9 +794,11 @@ export default function GetPurchase() {
                     const liftQty = Number(item.liftQty) || 0;
                     const cancelQty = Number(item.cancelQty) || 0;
 
+                    const itemFirmId = item.firm_id ?? selectedIndent?.firm_id ?? null;
+
                     if (cancelQty > 0) {
                         const existingCancelQty = Number(item.existingCancelQty) || 0;
-                        await updateCancelQuantity(item.indentNo, item.product, existingCancelQty + cancelQty);
+                        await updateCancelQuantity(item.indentNo, item.product, existingCancelQty + cancelQty, itemFirmId);
                     }
 
                     if (liftQty > 0 && values.billStatus) {
@@ -824,14 +844,16 @@ export default function GetPurchase() {
                         };
 
                         await insertStoreInRecord(newStoreInRecord);
-                        await updatePendingLiftQty(item.indentNo, item.product, liftQty);
+                        await updatePendingLiftQty(item.indentNo, item.product, liftQty, itemFirmId);
                     }
 
-                    // Mark complete only when nothing remains to lift or cancel
+                    // Mark complete only when nothing remains to lift or cancel.
+                    // Note: these flags are informational only — the Pending tab
+                    // derives visibility from quantities, never from these flags.
                     const remaining = (item.pendingLiftQty) - (liftQty + cancelQty);
                     if (remaining <= 0 && (liftQty > 0 || cancelQty > 0)) {
-                        await updateLiftingStatus(item.indentNo, item.product, 'Complete');
-                        await updateActual5Timestamp(item.indentNo, item.product);
+                        await updateLiftingStatus(item.indentNo, item.product, 'Complete', itemFirmId);
+                        await updateActual5Timestamp(item.indentNo, item.product, itemFirmId);
                     }
                 }
 
