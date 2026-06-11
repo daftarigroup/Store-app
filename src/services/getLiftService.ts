@@ -354,14 +354,15 @@ export async function insertStoreInRecord(storeInData: StoreInInsertData) {
  * Called when purchase details form is updated
  * @param indentNumber - Indent number to update
  */
-export async function updateActual5Timestamp(indentNumber: string) {
+export async function updateActual5Timestamp(indentNumber: string, productName: string) {
     try {
         const currentDateTime = new Date().toISOString();
 
         const { error } = await supabase
             .from('indent')
             .update({ actual5: currentDateTime })
-            .eq('indent_number', indentNumber);
+            .eq('indent_number', indentNumber)
+            .eq('product_name', productName);
 
         if (error) throw error;
 
@@ -377,12 +378,13 @@ export async function updateActual5Timestamp(indentNumber: string) {
  * @param indentNumber - Indent number to update
  * @param cancelQty - Quantity to cancel
  */
-export async function updateCancelQuantity(indentNumber: string, cancelQty: number) {
+export async function updateCancelQuantity(indentNumber: string, productName: string, cancelQty: number) {
     try {
         const { error } = await supabase
             .from('indent')
             .update({ cancel_qty: cancelQty })
-            .eq('indent_number', indentNumber);
+            .eq('indent_number', indentNumber)
+            .eq('product_name', productName);
 
         if (error) throw error;
 
@@ -393,12 +395,13 @@ export async function updateCancelQuantity(indentNumber: string, cancelQty: numb
     }
 }
 
-export async function updateLiftingStatus(indentNumber: string, status: string) {
+export async function updateLiftingStatus(indentNumber: string, productName: string, status: string) {
     try {
         const { error } = await supabase
             .from('indent')
             .update({ lifting_status: status })
-            .eq('indent_number', indentNumber);
+            .eq('indent_number', indentNumber)
+            .eq('product_name', productName);
 
         if (error) throw error;
 
@@ -414,12 +417,13 @@ export async function updateLiftingStatus(indentNumber: string, status: string) 
  * @param indentNumber - Indent number to update
  * @param liftQty - Quantity currently being lifted
  */
-export async function updatePendingLiftQty(indentNumber: string, liftQty: number) {
+export async function updatePendingLiftQty(indentNumber: string, productName: string, liftQty: number) {
     try {
         const { error } = await supabase
             .from('indent')
             .update({ pending_lift_qty: liftQty.toString() })
-            .eq('indent_number', indentNumber);
+            .eq('indent_number', indentNumber)
+            .eq('product_name', productName);
 
         if (error) throw error;
 

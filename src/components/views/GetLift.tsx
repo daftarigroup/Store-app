@@ -107,8 +107,6 @@ export default function GetPurchase() {
     const [openDialog, setOpenDialog] = useState(false);
     const [vendorOptions, setVendorOptions] = useState<string[]>([]);
     const [vendorSearch, setVendorSearch] = useState('');
-    const [showCancelQty, setShowCancelQty] = useState(false);
-    const [cancelQtyValue, setCancelQtyValue] = useState('');
     const [loading, setLoading] = useState(false);
     const [indentRecords, setIndentRecords] = useState<GetLiftIndentRecord[]>([]);
     const [storeInRecords, setStoreInRecords] = useState<GetLiftStoreInRecord[]>([]);
@@ -152,7 +150,8 @@ export default function GetPurchase() {
                     .filter(
                         (store) =>
                             store.indentNo === sheet.indentNumber?.toString() &&
-                            store.firmNameMatch === sheet.firmNameMatch
+                            store.firmNameMatch === sheet.firmNameMatch &&
+                            store.productName === sheet.productName
                     )
                     .reduce(
                         (sum, store) =>
@@ -160,10 +159,9 @@ export default function GetPurchase() {
                         0
                     );
 
-                // Priority: Use approved_quantity if set (>0), otherwise original quantity.
-                // Subtract receivedQty to determine what's left to lift.
                 const approvedQtySafe = Number(sheet.approvedQuantity) || Number(sheet.quantity) || 0;
-                const pendingPoQty = (approvedQtySafe - receivedQty);
+                const cancelQtySafe = Number(sheet.cancelQty) || 0;
+                const pendingPoQty = approvedQtySafe - receivedQty - cancelQtySafe;
 
                 return { ...sheet, pendingPoQty, receivedQty, receivedQuantity: sheet.receivedQuantity };
             })
@@ -220,6 +218,9 @@ export default function GetPurchase() {
             }
 
             const group = groupedMap.get(key);
+            if (!group.poDate && item.actual4) {
+                group.poDate = formatDate(parseCustomDate(item.actual4));
+            }
             group.quantity += Number(item.approvedQuantity) || 0;
             group.pendingLiftQty += item.pendingPoQty;
             group.receivedQty += item.receivedQty;
@@ -247,7 +248,7 @@ export default function GetPurchase() {
 
         const indentMap = new Map(
             firmIndents.map((sheet) => [
-                `${sheet.indentNumber?.toString() || ''}_${sheet.firmNameMatch || ''}`,
+                `${sheet.indentNumber?.toString() || ''}_${sheet.firmNameMatch || ''}_${sheet.productName || ''}`,
                 sheet
             ])
         );
@@ -262,9 +263,9 @@ export default function GetPurchase() {
         const cumulativeTotals = new Map<string, number>();
 
         const processedHistory = firmStoreIn.map((store) => {
-            const key = `${store.indentNo || ''}_${store.firmNameMatch || ''}`;
+            const key = `${store.indentNo || ''}_${store.firmNameMatch || ''}_${store.productName || ''}`;
             const indentMatch = indentMap.get(key);
-            
+
             const approvedQty = Number(indentMatch?.approvedQuantity) || Number(indentMatch?.quantity) || 0;
             const currentTotal = (cumulativeTotals.get(key) || 0) + (Number(store.qty) || 0);
             cumulativeTotals.set(key, currentTotal);
@@ -314,11 +315,7 @@ export default function GetPurchase() {
                                 <DialogTrigger asChild>
                                     <Button
                                         variant="outline"
-                                        onClick={() => {
-                                            setSelectedIndent(indent);
-                                            setShowCancelQty(false);
-                                            setCancelQtyValue('');
-                                        }}
+                                        onClick={() => setSelectedIndent(indent)}
                                     >
                                         Update
                                     </Button>
@@ -520,6 +517,7 @@ export default function GetPurchase() {
             withTax: z.string(),
             liftQty: z.coerce.number().min(0, 'Lift quantity cannot be negative'),
             cancelQty: z.coerce.number().min(0, 'Cancel quantity cannot be negative').optional(),
+            existingCancelQty: z.coerce.number(),
             uom: z.string().optional(),
         }))
     }).superRefine((data, ctx) => {
@@ -673,52 +671,6 @@ export default function GetPurchase() {
     const billStatus = form.watch('billStatus');
     const typeOfBill = form.watch('typeOfBill');
 
-    // Handle cancel quantity only submission
-    // Handle cancel quantity only submission
-    // Handle cancel quantity only submission
-    // Handle cancel quantity only submission
-    // Handle cancel quantity only submission
-    const handleCancelQtySubmit = async () => {
-        if (!cancelQtyValue || Number(cancelQtyValue) <= 0) {
-            toast.error('Please enter a valid quantity to cancel');
-            return;
-        }
-
-        const cancelQty = Number(cancelQtyValue);
-        if (cancelQty > (selectedIndent?.pendingPoQty || 0)) {
-            toast.error(
-                `Cancel quantity cannot exceed pending PO quantity: ${selectedIndent?.pendingPoQty || 0}`
-            );
-            return;
-        }
-
-        try {
-
-            if (!selectedIndent?.indentNo) {
-                toast.error('Could not find the indent record to update');
-                return;
-            }
-
-            await updateCancelQuantity(selectedIndent.indentNo, cancelQty);
-
-            toast.success(`Cancelled ${cancelQty} quantity for ${selectedIndent?.indentNo}`);
-            setShowCancelQty(false);
-            setCancelQtyValue('');
-
-            // Refresh data
-            setTimeout(async () => {
-                const [indents, storeIns] = await Promise.all([
-                    fetchIndentRecords(),
-                    fetchStoreInRecords(),
-                ]);
-                setIndentRecords(indents);
-                setStoreInRecords(storeIns);
-            }, 1500);
-        } catch (error) {
-            console.error('❌ Error in cancel quantity:', error);
-            toast.error('Failed to cancel quantity. Please try again.');
-        }
-    };
     // Add this useEffect to set form values when selectedIndent changes
     useEffect(() => {
         if (selectedIndent) {
@@ -751,22 +703,12 @@ export default function GetPurchase() {
                     approvedRate: item.approvedRate || '0',
                     taxValue: Number(item.taxValue) || 0,
                     withTax: item.withTax || 'No',
-                    liftQty: Number(item.pendingPoQty) || 0,
+                    liftQty: 0,
                     cancelQty: 0,
+                    existingCancelQty: Number(item.cancelQty) || 0,
                     uom: item.uom || '',
                 })),
             });
-
-            // Immediately calculate and set initial bill amount
-            const initialTotal = allIndividualItems.reduce((sum, item) => {
-                const rate = parseFloat(String(item.approvedRate).replace(/[^0-9.-]/g, '')) || 0;
-                const tax = item.taxValue || 0;
-                const withTax = item.withTax || 'No';
-                const effectiveRate = withTax === 'No' ? rate * (1 + tax / 100) : rate;
-                const qty = item.pendingPoQty || 0;
-                return sum + (effectiveRate * qty);
-            }, 0);
-            form.setValue('billAmount', Number(initialTotal.toFixed(2)));
 
             setVendorSearch('');
         }
@@ -796,8 +738,6 @@ export default function GetPurchase() {
         setOpenDialog(open);
         if (!open) {
             setSelectedIndent(null);
-            setShowCancelQty(false);
-            setCancelQtyValue('');
             form.reset();
         }
     };
@@ -837,8 +777,8 @@ export default function GetPurchase() {
                     const cancelQty = Number(item.cancelQty) || 0;
 
                     if (cancelQty > 0) {
-                        await updateCancelQuantity(item.indentNo, cancelQty);
-                        await updateActual5Timestamp(item.indentNo);
+                        const existingCancelQty = Number(item.existingCancelQty) || 0;
+                        await updateCancelQuantity(item.indentNo, item.product, existingCancelQty + cancelQty);
                     }
 
                     if (liftQty > 0 && values.billStatus) {
@@ -884,13 +824,14 @@ export default function GetPurchase() {
                         };
 
                         await insertStoreInRecord(newStoreInRecord);
-                        await updatePendingLiftQty(item.indentNo, liftQty);
+                        await updatePendingLiftQty(item.indentNo, item.product, liftQty);
                     }
 
-                    // Auto-complete status check
+                    // Mark complete only when nothing remains to lift or cancel
                     const remaining = (item.pendingLiftQty) - (liftQty + cancelQty);
                     if (remaining <= 0 && (liftQty > 0 || cancelQty > 0)) {
-                        await updateLiftingStatus(item.indentNo, 'Complete');
+                        await updateLiftingStatus(item.indentNo, item.product, 'Complete');
+                        await updateActual5Timestamp(item.indentNo, item.product);
                     }
                 }
 
@@ -923,8 +864,6 @@ export default function GetPurchase() {
 
             setOpenDialog(false);
             form.reset();
-            setShowCancelQty(false);
-            setCancelQtyValue('');
 
             setTimeout(async () => {
                 const firms = user?.firm_access;
@@ -1427,7 +1366,7 @@ export default function GetPurchase() {
 
                                     <Button
                                         type="submit"
-                                        disabled={form.formState.isSubmitting || !!form.formState.errors.items}
+                                        disabled={form.formState.isSubmitting}
                                         className="min-w-[120px]"
                                     >
                                         {form.formState.isSubmitting && (

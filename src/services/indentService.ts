@@ -64,6 +64,10 @@ export interface IndentRecord {
     po_qty?: number;
     received_quantity?: number;
     pending_qty?: number;
+    approved_vendor_name?: string;
+    pending_po_qty?: number | null;
+    pending_lift_qty?: number | null;
+    po_requred?: string;
     vendor1_rank?: string;
     vendor2_rank?: string;
     vendor3_rank?: string;
@@ -153,8 +157,13 @@ export async function fetchIndentRecords(permittedFirms?: string[]): Promise<Ind
             status: r.status || '',
             lifting_status: r.lifting_status || '',
             po_qty: Number(r.po_qty) || 0,
-            received_quantity: Number(r.received_quantity) || 0,
+            // DB column is received_qty (received_quantity does not exist on indent)
+            received_quantity: Number(r.received_qty) || 0,
             pending_qty: Number(r.pending_qty) || 0,
+            approved_vendor_name: r.approved_vendor_name || '',
+            pending_po_qty: r.pending_po_qty != null && r.pending_po_qty !== '' ? Number(r.pending_po_qty) : null,
+            pending_lift_qty: r.pending_lift_qty != null && r.pending_lift_qty !== '' ? Number(r.pending_lift_qty) : null,
+            po_requred: r.po_requred || '',
             vendor1_rank: r.vendor1_rank || '',
             vendor2_rank: r.vendor2_rank || '',
             vendor3_rank: r.vendor3_rank || '',

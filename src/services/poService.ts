@@ -60,6 +60,9 @@ export interface PoMasterRecord {
     emailSendStatus: string;
     preparedBy: string;
     firm_id?: number;
+    status?: string;
+    totalPaidAmount?: number;
+    outstandingAmount?: number;
 }
 
 export async function fetchIndents(permittedFirms?: string[]) {
@@ -205,6 +208,9 @@ export async function fetchPoMaster(permittedFirms?: string[]) {
             deliveryType: r.delivery_type || '',
             firmNameMatch: r.firm_name || '',
             firm_id: r.firm_id,
+            status: r.status || '',
+            totalPaidAmount: Number(r.total_paid_amount) || 0,
+            outstandingAmount: Number(r.outstanding_amount) || 0,
             emailSendStatus: r.email_send_status || '',
             preparedBy: r.prepared_by || '',
             approvedBy: r.approved_by || '',
