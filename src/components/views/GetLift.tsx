@@ -282,7 +282,7 @@ export default function GetPurchase() {
                 vendorName: store.vendorName || indentMatch?.approvedVendorName || '-',
                 poNumber: store.poNumber || indentMatch?.poNumber || '-',
                 poDate: indentMatch?.actual4 ? formatDate(parseCustomDate(indentMatch.actual4)) : '-',
-                deliveryDate: indentMatch?.deliveryDate ? formatDate(parseCustomDate(indentMatch.deliveryDate)) : '-',
+                deliveryDate: store.materialDate ? formatDate(parseCustomDate(store.materialDate)) : (indentMatch?.deliveryDate ? formatDate(parseCustomDate(indentMatch.deliveryDate)) : '-'),
                 product: store.productName || indentMatch?.productName || '-',
                 quantity: approvedQty,
                 liftedQty: Number(store.qty) || 0, // NEW: Specific lift quantity
@@ -491,6 +491,7 @@ export default function GetPurchase() {
     // Creating form schema
     const formSchema = z.object({
         billStatus: z.string().min(1, 'Bill status is required'),
+        deliveryDate: z.string().min(1, 'Delivery date is required'),
         billNo: z.string().optional(),
         qty: z.coerce.number().optional(),
         typeOfBill: z.string().optional(),
@@ -676,6 +677,7 @@ export default function GetPurchase() {
             driverMobileNo: '',
             amount: 0,
             cancelPendingQty: 0,
+            deliveryDate: '',
             items: [],
         },
     });
@@ -696,6 +698,7 @@ export default function GetPurchase() {
 
             form.reset({
                 billStatus: '',
+                deliveryDate: '',
                 billNo: '',
                 qty: selectedIndent.pendingLiftQty || 0,
                 typeOfBill: 'independent',
@@ -841,6 +844,7 @@ export default function GetPurchase() {
                             notBillReceivedNo: values.billStatus === 'Bill Not Received' ? values.billNo : '',
                             challanNo: values.billStatus === 'Bill Not Received' ? values.billNo : '',
                             challanImage: values.billStatus === 'Bill Not Received' ? photoUrl : '',
+                            materialDate: values.deliveryDate || null,
                         };
 
                         await insertStoreInRecord(newStoreInRecord);
@@ -1134,6 +1138,20 @@ export default function GetPurchase() {
                                                             <SelectItem value="Bill Not Received">Bill Not Received</SelectItem>
                                                         </SelectContent>
                                                     </Select>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+
+                                        <FormField
+                                            control={form.control}
+                                            name="deliveryDate"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Delivery Date *</FormLabel>
+                                                    <FormControl>
+                                                        <Input type="date" {...field} className="h-11" />
+                                                    </FormControl>
                                                     <FormMessage />
                                                 </FormItem>
                                             )}

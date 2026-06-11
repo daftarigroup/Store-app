@@ -49,6 +49,7 @@ export interface GetLiftStoreInRecord {
     qty: number;
     photoOfBill: string;
     timestamp: string;
+    materialDate?: string | null;
 }
 
 export interface VendorOption {
@@ -97,6 +98,7 @@ export interface StoreInInsertData {
     challanNo?: string;
     challanImage?: string;
     uom?: string;
+    materialDate?: string | null;
 }
 
 // ==================== FETCH FUNCTIONS ====================
@@ -163,7 +165,7 @@ export async function fetchStoreInRecords(permittedFirms?: string[]) {
 
         let query = supabase
             .from('store_in')
-            .select('lift_number, indent_no, firm_name, firm_id, vendor_name, product_name, po_number, qty, received_quantity, photo_of_bill, timestamp')
+            .select('lift_number, indent_no, firm_name, firm_id, vendor_name, product_name, po_number, qty, received_quantity, photo_of_bill, timestamp, material_date')
             .order('timestamp', { ascending: false });
 
         const filteredQuery = applyFirmAccessFilter(query, permittedFirms);
@@ -185,6 +187,7 @@ export async function fetchStoreInRecords(permittedFirms?: string[]) {
             receivedQuantity: Number(r.received_quantity) || 0,
             photoOfBill: r.photo_of_bill || '',
             timestamp: r.timestamp || '',
+            materialDate: r.material_date || null,
         }));
     } catch (error) {
         console.error('Error fetching store-in records:', error);
@@ -307,7 +310,7 @@ export async function insertStoreInRecord(storeInData: StoreInInsertData) {
             indent_date: storeInData.indentNo ? now : null,
             indent_qty: String(storeInData.qty || '0'),
             purchase_date: now,
-            material_date: null,
+            material_date: storeInData.materialDate || null,
             party_name: storeInData.vendorName || null,
             location: null,
             area: storeInData.areaOfUse || null,
