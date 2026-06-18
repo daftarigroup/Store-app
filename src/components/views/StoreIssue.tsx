@@ -93,6 +93,7 @@ export default () => {
         siteLocation: z.string().nonempty('Site Location is required'),
         projectName: z.string().nonempty('Project Name is required'),
         firmId: z.coerce.number().optional(),
+        issueDate: z.string().nonempty('Issue Date is required'),
         remarks: z.string().optional(),
 
         issuePersonName: z.string().optional(),
@@ -121,6 +122,7 @@ export default () => {
             siteLocation: '',
             projectName: '',
             firmId: undefined,
+            issueDate: new Date().toLocaleDateString('en-CA'),
             remarks: '',
 
             issuePersonName: '',
@@ -262,7 +264,7 @@ export default () => {
 
                 const row: Partial<IssueRecord> = {
                     timestamp: new Date().toISOString(),
-                    planned1: new Date().toISOString(),
+                    planned1: new Date(`${data.issueDate}T00:00:00`).toISOString(),
                     issue_no: nextIssueNumber,
                     issue_to: data.remarks || '',
                     uom: product.uom,
@@ -314,6 +316,7 @@ export default () => {
                 siteLocation: '',
                 projectName: '',
                 firmId: undefined,
+                issueDate: new Date().toLocaleDateString('en-CA'),
                 remarks: '',
 
                 issuePersonName: '',
@@ -347,6 +350,7 @@ export default () => {
             form.setValue('constructorName', selected.constructorName || '');
             form.setValue('siteLocation', selected.siteLocation || '');
             form.setValue('projectName', selected.projectName || '');
+            form.setValue('issueDate', selected.planned1 ? selected.planned1.slice(0, 10) : new Date().toLocaleDateString('en-CA'));
             form.setValue('remarks', selected.issueTo || '');
             form.setValue('issuePersonName', selected.issuePersonName || '');
 
@@ -458,6 +462,18 @@ export default () => {
                                                         ))}
                                                     </SelectContent>
                                                 </Select>
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name="issueDate"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-slate-600 font-semibold">Issue Date <span className="text-destructive">*</span></FormLabel>
+                                                <FormControl>
+                                                    <Input type="date" className="h-11 bg-white border-slate-200 focus:ring-primary/20" {...field} />
+                                                </FormControl>
                                             </FormItem>
                                         )}
                                     />
