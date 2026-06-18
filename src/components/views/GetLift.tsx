@@ -189,7 +189,7 @@ export default function GetPurchase() {
                     firm_id: item.firm_id,
                     vendorName: item.approvedVendorName || '',
                     poNumber: item.poNumber || '',
-                    poDate: item.actual4 ? formatDate(parseCustomDate(item.actual4)) : '',
+                    poDate: item.poDate ? formatDate(parseCustomDate(item.poDate)) : '',
                     deliveryDate: item.deliveryDate
                         ? formatDate(parseCustomDate(item.deliveryDate))
                         : '',
@@ -216,8 +216,8 @@ export default function GetPurchase() {
             }
 
             const group = groupedMap.get(key);
-            if (!group.poDate && item.actual4) {
-                group.poDate = formatDate(parseCustomDate(item.actual4));
+            if (!group.poDate && item.poDate) {
+                group.poDate = formatDate(parseCustomDate(item.poDate));
             }
             group.quantity += Number(item.approvedQuantity) || 0;
             group.pendingLiftQty += item.pendingPoQty;
@@ -281,7 +281,7 @@ export default function GetPurchase() {
                 firm_id: store.firm_id,
                 vendorName: store.vendorName || indentMatch?.approvedVendorName || '-',
                 poNumber: store.poNumber || indentMatch?.poNumber || '-',
-                poDate: indentMatch?.actual4 ? formatDate(parseCustomDate(indentMatch.actual4)) : '-',
+                poDate: indentMatch?.poDate ? formatDate(parseCustomDate(indentMatch.poDate)) : '-',
                 deliveryDate: store.materialDate ? formatDate(parseCustomDate(store.materialDate)) : (indentMatch?.deliveryDate ? formatDate(parseCustomDate(indentMatch.deliveryDate)) : '-'),
                 product: store.productName || indentMatch?.productName || '-',
                 quantity: approvedQty,

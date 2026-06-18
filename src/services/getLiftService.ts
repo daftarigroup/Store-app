@@ -16,6 +16,7 @@ export interface GetLiftIndentRecord {
     approvedVendorName: string;
     poNumber: string;
     actual4: string;
+    poDate: string;
     deliveryDate: string;
     planned5: string;
     actual5: string;
@@ -129,6 +130,7 @@ export async function fetchIndentRecords(permittedFirms?: string[]) {
             approvedVendorName: r.approved_vendor_name || '',
             poNumber: r.po_number || '',
             actual4: r.actual4 || '',
+            poDate: r.actual4 || '',
             deliveryDate: r.delivery_date || '',
             planned5: r.planned5 || '',
             actual5: r.actual5 || '',
