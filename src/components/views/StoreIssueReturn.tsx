@@ -24,6 +24,29 @@ import { pdf } from '@react-pdf/renderer';
 import IssuePdf from '../element/IssuePdf';
 const logo = "/logo.png";
 
+// Cache the base64 logo for the session so it's fetched + encoded only once.
+let logoBase64Promise: Promise<string> | null = null;
+const getLogoBase64 = (url: string): Promise<string> => {
+    if (!logoBase64Promise) {
+        logoBase64Promise = (async () => {
+            try {
+                const response = await fetch(url);
+                const blob = await response.blob();
+                return await new Promise<string>((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result as string);
+                    reader.readAsDataURL(blob);
+                });
+            } catch (error) {
+                console.error('Error fetching logo:', error);
+                logoBase64Promise = null; // allow retry on next attempt
+                return '';
+            }
+        })();
+    }
+    return logoBase64Promise;
+};
+
 import { supabase } from '@/lib/supabase';
 import Heading from '../element/Heading';
 import { useEffect, useState, useMemo } from 'react';
@@ -136,24 +159,9 @@ export default () => {
         );
     }, [inventorySheet, indentSheet, storeInSheet, sheetIssues, stockTransferSheet, selectedProject]);
 
-    const fetchLogoAsBase64 = async (url: string): Promise<string> => {
-        try {
-            const response = await fetch(url);
-            const blob = await response.blob();
-            return new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result as string);
-                reader.readAsDataURL(blob);
-            });
-        } catch (error) {
-            console.error('Error fetching logo:', error);
-            return '';
-        }
-    };
-
     const processPdfSlip = async (type: 'return', issueNumber: string, data: any) => {
         try {
-            const logoBase64 = await fetchLogoAsBase64(logo);
+            const logoBase64 = await getLogoBase64(logo);
 
             const blob = await pdf(
                 <IssuePdf

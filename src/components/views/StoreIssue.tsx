@@ -27,6 +27,29 @@ import { isAllowedFirm } from '@/lib/firmAccess';
 
 const logo = "/logo.png";
 
+// Cache the base64 logo for the session so it's fetched + encoded only once.
+let logoBase64Promise: Promise<string> | null = null;
+const getLogoBase64 = (url: string): Promise<string> => {
+    if (!logoBase64Promise) {
+        logoBase64Promise = (async () => {
+            try {
+                const response = await fetch(url);
+                const blob = await response.blob();
+                return await new Promise<string>((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result as string);
+                    reader.readAsDataURL(blob);
+                });
+            } catch (error) {
+                console.error('Error fetching logo:', error);
+                logoBase64Promise = null; // allow retry on next attempt
+                return '';
+            }
+        })();
+    }
+    return logoBase64Promise;
+};
+
 import {
     Tabs,
     TabsContent,
@@ -161,25 +184,10 @@ export default () => {
         );
     }, [inventorySheet, indentSheet, storeInSheet, sheetIssues, stockTransferSheet, selectedProject]);
 
-    const fetchLogoAsBase64 = async (url: string): Promise<string> => {
-        try {
-            const response = await fetch(url);
-            const blob = await response.blob();
-            return new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result as string);
-                reader.readAsDataURL(blob);
-            });
-        } catch (error) {
-            console.error('Error fetching logo:', error);
-            return '';
-        }
-    };
-
     const processPdfSlip = async (type: 'issue' | 'return', issueNumber: string, data: any) => {
         try {
-            // Pre-fetch logo as base64 to avoid Buffer errors in browser
-            const logoBase64 = await fetchLogoAsBase64(logo);
+            // Pre-fetch logo as base64 to avoid Buffer errors in browser (cached per session)
+            const logoBase64 = await getLogoBase64(logo);
 
             const blob = await pdf(
                 <IssuePdf
