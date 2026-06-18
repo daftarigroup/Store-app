@@ -22,7 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { toast } from 'sonner';
 import { PuffLoader as Loader } from 'react-spinners';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { ClipboardCheck } from 'lucide-react';
+import { ClipboardCheck, Pencil, Check, X } from 'lucide-react';
 import Heading from '../element/Heading';
 import { Input } from '../ui/input';
 import { formatDate } from '@/lib/utils';
@@ -34,9 +34,92 @@ const logo = "/logo.png";
 import {
     fetchIssueRecords,
     updateIssueApproval,
+    updateIssuePlannedDate,
+    updateIssueRecordById,
     type IssueRecord
 } from '@/services/issueService';
 import { filterByFirmAccess } from '@/lib/firmAccess';
+
+// TEMP: inline planned-date editor so users can correct existing dates. Remove later.
+const toInputDate = (s?: string) => {
+    if (!s) return '';
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return '';
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
+function EditablePlannedDate({
+    record,
+    onSave,
+}: {
+    record: IssueRecord;
+    onSave: (id: number, plannedDate: string) => Promise<void>;
+}) {
+    const [editing, setEditing] = useState(false);
+    const [value, setValue] = useState('');
+    const [saving, setSaving] = useState(false);
+
+    if (!editing) {
+        return (
+            <div className="flex items-center gap-2">
+                <span>{record.planned1 ? formatDate(new Date(record.planned1)) : '-'}</span>
+                {record.id != null && (
+                    <button
+                        type="button"
+                        title="Edit planned date"
+                        className="text-primary hover:text-primary/70"
+                        onClick={() => {
+                            setValue(toInputDate(record.planned1));
+                            setEditing(true);
+                        }}
+                    >
+                        <Pencil size={14} />
+                    </button>
+                )}
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex items-center gap-1">
+            <Input
+                type="date"
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                className="h-8 w-36"
+            />
+            <button
+                type="button"
+                title="Save"
+                disabled={saving || !value}
+                className="text-green-600 hover:text-green-700 disabled:opacity-40"
+                onClick={async () => {
+                    setSaving(true);
+                    try {
+                        await onSave(record.id!, value);
+                        toast.success('Planned date updated');
+                        setEditing(false);
+                    } catch {
+                        toast.error('Failed to update planned date');
+                    } finally {
+                        setSaving(false);
+                    }
+                }}
+            >
+                <Check size={16} />
+            </button>
+            <button
+                type="button"
+                title="Cancel"
+                className="text-destructive hover:text-destructive/70"
+                onClick={() => setEditing(false)}
+            >
+                <X size={16} />
+            </button>
+        </div>
+    );
+}
 
 export default function IssueData() {
     const { user } = useAuth();
@@ -80,7 +163,8 @@ export default function IssueData() {
                     })}
                     constructorName={data.constructorName}
                     siteLocation={data.siteLocation}
-                    projectName={data.firm_name}
+                    projectName={data.projectName}
+                    plannedDate={data.plannedDate}
                     remarks={data.remarks}
                     issuePersonName={data.issuePersonName}
                     returnPersonName={data.returnPersonName}
@@ -198,6 +282,57 @@ export default function IssueData() {
         document.body.removeChild(link);
     };
 
+    // TEMP: persist a corrected planned date, regenerate the slip PDF(s) so the
+    // corrected date is painted into them, and update the row in place. Remove later.
+    const handleSavePlannedDate = async (id: number, plannedDate: string) => {
+        // 1. Save the corrected date
+        await updateIssuePlannedDate(id, plannedDate);
+
+        // 2. Rebuild the slip PDF(s) for this record with the corrected date
+        const record = allData.find((r) => r.id === id);
+        const urlUpdate: Partial<IssueRecord> = {};
+        if (record) {
+            const issuedQty =
+                Number(record.given_qty) > 0 ? Number(record.given_qty) : Number(record.quantity) || 0;
+            const pdfData = {
+                constructorName: record.constructor_name || '',
+                siteLocation: record.site_location || '',
+                projectName: record.firm_name || '',
+                plannedDate: plannedDate ? formatDate(new Date(plannedDate)) : '',
+                remarks: record.issue_to || '',
+                issuePersonName: record.issue_person_name || '',
+                returnPersonName: record.return_person_name || '',
+                damageRemark: record.damage_remark || '',
+                rejectedDamageQty: record.rejected_damage_qty ? Number(record.rejected_damage_qty) : 0,
+                products: [
+                    {
+                        productName: record.product_name,
+                        groupHead: record.group_head,
+                        quantity: issuedQty,
+                        uom: record.uom,
+                    },
+                ],
+            };
+
+            if (record.issue_slip) {
+                const newIssueUrl = await processPdfSlip('issue', record.issue_no, pdfData);
+                if (newIssueUrl) urlUpdate.issue_slip = newIssueUrl;
+            }
+            if (record.return_slip) {
+                const newReturnUrl = await processPdfSlip('return', record.issue_no, pdfData);
+                if (newReturnUrl) urlUpdate.return_slip = newReturnUrl;
+            }
+            if (Object.keys(urlUpdate).length) {
+                await updateIssueRecordById(id, urlUpdate);
+            }
+        }
+
+        // 3. Update the row in place (date + any new slip URLs)
+        setAllData((prev) =>
+            prev.map((r) => (r.id === id ? { ...r, planned1: plannedDate, ...urlUpdate } : r))
+        );
+    };
+
     const columns: ColumnDef<IssueRecord>[] = [
         ...(user.issueData
             ? [
@@ -236,7 +371,7 @@ export default function IssueData() {
         {
             accessorKey: 'planned1',
             header: 'Planned Date',
-            cell: ({ row }) => row.original.planned1 ? formatDate(new Date(row.original.planned1)) : '-',
+            cell: ({ row }) => <EditablePlannedDate record={row.original} onSave={handleSavePlannedDate} />,
         },
         {
             accessorKey: 'issue_slip',
@@ -265,7 +400,7 @@ export default function IssueData() {
         {
             accessorKey: 'planned1',
             header: 'Planned Date',
-            cell: ({ row }) => row.original.planned1 ? formatDate(new Date(row.original.planned1)) : '-',
+            cell: ({ row }) => <EditablePlannedDate record={row.original} onSave={handleSavePlannedDate} />,
         },
         {
             accessorKey: 'actual1',
@@ -369,6 +504,7 @@ export default function IssueData() {
                 constructorName: selectedIssue.constructor_name || '',
                 siteLocation: selectedIssue.site_location || '',
                 projectName: selectedIssue.firm_name || '',
+                plannedDate: selectedIssue.planned1 ? formatDate(new Date(selectedIssue.planned1)) : '',
                 remarks: selectedIssue.issue_to || '',
                 issuePersonName: selectedIssue.issue_person_name || '',
                 returnPersonName: selectedIssue.return_person_name || '',

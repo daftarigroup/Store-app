@@ -141,6 +141,7 @@ export interface IssuePdfProps {
     type: 'issue' | 'return';
     issueNumber: string;
     date: string;
+    plannedDate?: string;
     constructorName: string;
     siteLocation: string;
     projectName: string;
@@ -157,6 +158,7 @@ const IssuePdf = ({
     type,
     issueNumber,
     date,
+    plannedDate,
     constructorName,
     siteLocation,
     projectName,
@@ -178,11 +180,11 @@ const IssuePdf = ({
                     <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#94a3b8' }}>ORIGINAL COPY</Text>
                 </View>
 
-                {logo && (
+                {logo ? (
                     <View style={styles.logoContainer}>
                         <Image src={logo} style={styles.logo} />
                     </View>
-                )}
+                ) : null}
 
                 <View style={styles.header}>
                     <Text style={styles.title}>{isReturn ? 'STORE RETURN SLIP' : 'STORE ISSUE SLIP'}</Text>
@@ -199,28 +201,32 @@ const IssuePdf = ({
                         <Text style={styles.value}>{date}</Text>
                     </View>
                     <View style={styles.infoItem}>
+                        <Text style={styles.label}>PLANNED DATE</Text>
+                        <Text style={styles.value}>{plannedDate || '-'}</Text>
+                    </View>
+                    <View style={styles.infoItem}>
                         <Text style={styles.label}>PROJECT NAME</Text>
-                        <Text style={styles.value}>{projectName}</Text>
+                        <Text style={styles.value}>{projectName || '-'}</Text>
                     </View>
                     <View style={styles.infoItem}>
                         <Text style={styles.label}>SITE LOCATION</Text>
-                        <Text style={styles.value}>{siteLocation}</Text>
+                        <Text style={styles.value}>{siteLocation || '-'}</Text>
                     </View>
                     <View style={styles.infoItem}>
                         <Text style={styles.label}>CONTRACTOR NAME</Text>
-                        <Text style={styles.value}>{constructorName}</Text>
+                        <Text style={styles.value}>{constructorName || '-'}</Text>
                     </View>
                     <View style={styles.infoItem}>
                         <Text style={styles.label}>{isReturn ? 'RETURN PERSON' : 'ISSUE PERSON'}</Text>
                         <Text style={styles.value}>{isReturn ? returnPersonName : issuePersonName || '-'}</Text>
                     </View>
-                    
-                    {remarks && (
+
+                    {remarks ? (
                         <View style={[styles.infoItem, { width: '100%', marginTop: 5 }]}>
                             <Text style={styles.label}>ISSUE REMARKS</Text>
                             <Text style={styles.value}>{remarks}</Text>
                         </View>
-                    )}
+                    ) : null}
 
                     {isReturn && (
                         <>
@@ -287,11 +293,11 @@ const IssuePdf = ({
                     <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#94a3b8' }}>DUPLICATE COPY</Text>
                 </View>
 
-                {logo && (
+                {logo ? (
                     <View style={styles.logoContainer}>
                         <Image src={logo} style={styles.logo} />
                     </View>
-                )}
+                ) : null}
 
                 <View style={styles.header}>
                     <Text style={styles.title}>{isReturn ? 'STORE RETURN SLIP' : 'STORE ISSUE SLIP'}</Text>
@@ -308,28 +314,32 @@ const IssuePdf = ({
                         <Text style={styles.value}>{date}</Text>
                     </View>
                     <View style={styles.infoItem}>
+                        <Text style={styles.label}>PLANNED DATE</Text>
+                        <Text style={styles.value}>{plannedDate || '-'}</Text>
+                    </View>
+                    <View style={styles.infoItem}>
                         <Text style={styles.label}>PROJECT NAME</Text>
-                        <Text style={styles.value}>{projectName}</Text>
+                        <Text style={styles.value}>{projectName || '-'}</Text>
                     </View>
                     <View style={styles.infoItem}>
                         <Text style={styles.label}>SITE LOCATION</Text>
-                        <Text style={styles.value}>{siteLocation}</Text>
+                        <Text style={styles.value}>{siteLocation || '-'}</Text>
                     </View>
                     <View style={styles.infoItem}>
                         <Text style={styles.label}>CONTRACTOR NAME</Text>
-                        <Text style={styles.value}>{constructorName}</Text>
+                        <Text style={styles.value}>{constructorName || '-'}</Text>
                     </View>
                     <View style={styles.infoItem}>
                         <Text style={styles.label}>{isReturn ? 'RETURN PERSON' : 'ISSUE PERSON'}</Text>
                         <Text style={styles.value}>{isReturn ? returnPersonName : issuePersonName || '-'}</Text>
                     </View>
                     
-                    {remarks && (
+                    {remarks ? (
                         <View style={[styles.infoItem, { width: '100%', marginTop: 5 }]}>
                             <Text style={styles.label}>ISSUE REMARKS</Text>
                             <Text style={styles.value}>{remarks}</Text>
                         </View>
-                    )}
+                    ) : null}
 
                     {isReturn && (
                         <>

@@ -137,6 +137,26 @@ export async function updateIssueApproval(
 }
 
 /**
+ * TEMP: update only the planned (issue) date of a record.
+ * Stores the plain YYYY-MM-DD string so no timezone shift occurs.
+ * Remove this once users have corrected their planned dates.
+ */
+export async function updateIssuePlannedDate(id: number, plannedDate: string) {
+    try {
+        const { error } = await supabase
+            .from('issue')
+            .update({ planned1: plannedDate })
+            .eq('id', id);
+
+        if (error) throw error;
+        return true;
+    } catch (error) {
+        console.error(`Error updating planned date for issue ID ${id}:`, error);
+        throw error;
+    }
+}
+
+/**
  * Update a specific issue record by ID
  * @param id - The primary ID of the record
  * @param data - The data to update

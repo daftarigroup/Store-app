@@ -197,6 +197,7 @@ export default () => {
                     constructorName={data.constructorName}
                     siteLocation={data.siteLocation}
                     projectName={data.projectName}
+                    plannedDate={data.issueDate ? new Date(`${data.issueDate}T00:00:00`).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''}
                     remarks={data.remarks}
                     issuePersonName={data.issuePersonName}
                     returnPersonName={data.returnPersonName}
@@ -264,7 +265,7 @@ export default () => {
 
                 const row: Partial<IssueRecord> = {
                     timestamp: new Date().toISOString(),
-                    planned1: new Date(`${data.issueDate}T00:00:00`).toISOString(),
+                    planned1: data.issueDate,
                     issue_no: nextIssueNumber,
                     issue_to: data.remarks || '',
                     uom: product.uom,
