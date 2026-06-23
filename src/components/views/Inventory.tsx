@@ -1,7 +1,7 @@
 import Heading from '../element/Heading';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Pill } from '../ui/pill';
-import { Store, Settings2, ArrowRightLeft, Send, Package, Building2, Info, AlertCircle } from 'lucide-react';
+import { Store, Settings2, ArrowRightLeft, Send, Package, Building2, Info, AlertCircle, Search } from 'lucide-react';
 import DataTable from '../element/DataTable';
 import { useSheets } from '@/context/SheetsContext';
 import { useAuth } from '@/context/AuthContext';
@@ -40,6 +40,7 @@ interface DetailRow {
     quantity: number;
     party: string;
     projectName: string;
+    siteLocation?: string;
 }
 
 export default () => {
@@ -135,6 +136,7 @@ export default () => {
         party: true,
         quantity: true,
         projectName: true,
+        siteLocation: true,
     });
 
     const [detailDialog, setDetailDialog] = useState<{
@@ -142,6 +144,8 @@ export default () => {
         title: string;
         rows: DetailRow[];
     }>({ open: false, title: '', rows: [] });
+
+    const [dialogSearch, setDialogSearch] = useState('');
 
     const [transferDialog, setTransferDialog] = useState({
         open: false,
@@ -188,11 +192,12 @@ export default () => {
                 rows = filteredStoreIns
                     .filter((s: any) => s.productName === itemName && Number(s.receivedQuantity || 0) > 0)
                     .map((s: any) => ({
-                        date: s.timestamp,
+                        date: s.planned6 || s.timestamp,
                         refNo: s.billNo || s.liftNumber,
                         quantity: Number(s.receivedQuantity || 0),
                         party: s.vendorName || 'N/A',
-                        projectName: s.firmNameMatch || 'N/A'
+                        projectName: s.firmNameMatch || 'N/A',
+                        siteLocation: s.location || 'N/A'
                     }));
                 break;
             case 'In Transit':
@@ -203,18 +208,20 @@ export default () => {
                         refNo: s.billNo || s.liftNumber,
                         quantity: Number(s.qty || 0) - Number(s.receivedQuantity || 0),
                         party: s.vendorName || 'N/A',
-                        projectName: s.firmNameMatch || 'N/A'
+                        projectName: s.firmNameMatch || 'N/A',
+                        siteLocation: s.location || 'N/A'
                     }));
                 break;
             case 'Issued':
                 rows = filteredIssues
                     .filter((is: any) => is.productName === itemName && Number(is.givenQty || 0) > 0)
                     .map((is: any) => ({
-                        date: is.timestamp,
+                        date: is.planned1 || is.timestamp,
                         refNo: is.issueNo,
                         quantity: Number(is.givenQty || 0),
                         party: is.issueTo || 'N/A',
-                        projectName: is.projectName || is.firm_name || 'N/A'
+                        projectName: is.projectName || is.firm_name || 'N/A',
+                        siteLocation: is.location || 'N/A'
                     }));
                 break;
             case 'Issue Return':
@@ -225,7 +232,8 @@ export default () => {
                         refNo: is.issueNo,
                         quantity: Number(is.rejected_damage_qty || 0),
                         party: is.returnPersonName || is.return_person_name || 'N/A',
-                        projectName: is.projectName || is.firm_name || 'N/A'
+                        projectName: is.projectName || is.firm_name || 'N/A',
+                        siteLocation: is.location || 'N/A'
                     }));
                 break;
             case 'Purchase Return':
@@ -236,7 +244,8 @@ export default () => {
                         refNo: s.billNo || s.liftNumber,
                         quantity: Number(s.returnQuantity || 0),
                         party: s.vendorName || 'N/A',
-                        projectName: s.firmNameMatch || 'N/A'
+                        projectName: s.firmNameMatch || 'N/A',
+                        siteLocation: s.location || 'N/A'
                     }));
                 break;
             case 'Stock Transfer Receiving':
@@ -248,7 +257,8 @@ export default () => {
                         refNo: s.billNo || s.liftNumber,
                         quantity: Number(s.receivedQuantity || 0),
                         party: s.vendorName || 'N/A',
-                        projectName: s.firmNameMatch || 'N/A'
+                        projectName: s.firmNameMatch || 'N/A',
+                        siteLocation: s.location || 'N/A'
                     }));
 
                 const newTransfersReceiving = filteredTransfers
@@ -438,10 +448,21 @@ export default () => {
                 className="h-[80dvh]"
             />
 
-            <Dialog open={detailDialog.open} onOpenChange={(open) => setDetailDialog(prev => ({ ...prev, open }))}>
+            <Dialog open={detailDialog.open} onOpenChange={(open) => { setDetailDialog(prev => ({ ...prev, open })); if (!open) setDialogSearch(''); }}>
                 <DialogContent className="max-w-[95vw] lg:max-w-[90vw] xl:max-w-[1400px] max-h-[90dvh] flex flex-col">
                     <DialogHeader className="flex flex-row items-center justify-between space-x-4">
-                        <DialogTitle>{detailDialog.title}</DialogTitle>
+                        <DialogTitle className="shrink-0">{detailDialog.title}</DialogTitle>
+                        {detailDialog.title.includes('Lifting Quantity') && (
+                            <div className="relative flex-1 max-w-xs">
+                                <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search by ref, party, project..."
+                                    value={dialogSearch}
+                                    onChange={e => setDialogSearch(e.target.value)}
+                                    className="h-8 pl-7 text-sm"
+                                />
+                            </div>
+                        )}
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button variant="outline" size="sm" className="ml-auto flex h-8 items-center gap-1 px-2 text-xs">
@@ -483,49 +504,77 @@ export default () => {
                                 >
                                     Project Name
                                 </DropdownMenuCheckboxItem>
+                                <DropdownMenuCheckboxItem
+                                    checked={visibleCols.siteLocation}
+                                    onCheckedChange={(checked) => setVisibleCols(v => ({ ...v, siteLocation: !!checked }))}
+                                >
+                                    Site Location
+                                </DropdownMenuCheckboxItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </DialogHeader>
-                    <div className="flex-1 overflow-auto mt-4 border rounded-lg">
-                        <Table className="min-w-[900px]">
-                            <TableHeader>
-                                <TableRow>
-                                    {visibleCols.date && <TableHead>Date</TableHead>}
-                                    {visibleCols.refNo && <TableHead>Reference</TableHead>}
-                                    {visibleCols.party && (
-                                        <TableHead>{detailDialog.title.includes('Stock Transfer') ? 'From' : 'Party/Person'}</TableHead>
-                                    )}
-                                    {visibleCols.projectName && (
-                                        <TableHead>{detailDialog.title.includes('Stock Transfer') ? 'To' : 'Project'}</TableHead>
-                                    )}
-                                    {visibleCols.quantity && <TableHead className="text-right">Qty</TableHead>}
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {detailDialog.rows.length > 0 ? (
-                                    detailDialog.rows.map((row, idx) => (
-                                        <TableRow key={idx}>
-                                            {visibleCols.date && (
-                                                <TableCell className="whitespace-nowrap italic">
-                                                    {row.date ? format(new Date(row.date), 'dd/MM/yyyy HH:mm') : 'N/A'}
-                                                </TableCell>
+                    {(() => {
+                        const q = dialogSearch.toLowerCase();
+                        const visibleRows = detailDialog.title.includes('Lifting Quantity') && q
+                            ? detailDialog.rows.filter(row =>
+                                row.refNo?.toLowerCase().includes(q) ||
+                                row.party?.toLowerCase().includes(q) ||
+                                row.projectName?.toLowerCase().includes(q) ||
+                                row.siteLocation?.toLowerCase().includes(q)
+                            )
+                            : detailDialog.rows;
+                        const totalQty = visibleRows.reduce((sum, r) => sum + (r.quantity || 0), 0);
+                        return (
+                            <>
+                                <div className="flex-1 overflow-auto mt-4 border rounded-lg">
+                                    <Table className="min-w-[900px]">
+                                        <TableHeader>
+                                            <TableRow>
+                                                {visibleCols.date && <TableHead>Date</TableHead>}
+                                                {visibleCols.refNo && <TableHead>Reference</TableHead>}
+                                                {visibleCols.party && (
+                                                    <TableHead>{detailDialog.title.includes('Stock Transfer') ? 'From' : 'Party/Person'}</TableHead>
+                                                )}
+                                                {visibleCols.projectName && (
+                                                    <TableHead>{detailDialog.title.includes('Stock Transfer') ? 'To' : 'Project'}</TableHead>
+                                                )}
+                                                {visibleCols.siteLocation && <TableHead>Site Location</TableHead>}
+                                                {visibleCols.quantity && <TableHead className="text-right">Qty</TableHead>}
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {visibleRows.length > 0 ? (
+                                                visibleRows.map((row, idx) => (
+                                                    <TableRow key={idx}>
+                                                        {visibleCols.date && (
+                                                            <TableCell className="whitespace-nowrap italic">
+                                                                {row.date ? format(new Date(row.date), 'dd/MM/yyyy HH:mm') : 'N/A'}
+                                                            </TableCell>
+                                                        )}
+                                                        {visibleCols.refNo && <TableCell className="font-mono text-sm whitespace-nowrap">{row.refNo}</TableCell>}
+                                                        {visibleCols.party && <TableCell className="whitespace-nowrap">{row.party}</TableCell>}
+                                                        {visibleCols.projectName && <TableCell className="whitespace-nowrap">{row.projectName}</TableCell>}
+                                                        {visibleCols.siteLocation && <TableCell className="whitespace-nowrap">{row.siteLocation || 'N/A'}</TableCell>}
+                                                        {visibleCols.quantity && <TableCell className="text-right font-bold">{row.quantity}</TableCell>}
+                                                    </TableRow>
+                                                ))
+                                            ) : (
+                                                <TableRow>
+                                                    <TableCell colSpan={6} className="text-center py-10 text-muted-foreground italic">
+                                                        No transactions found
+                                                    </TableCell>
+                                                </TableRow>
                                             )}
-                                            {visibleCols.refNo && <TableCell className="font-mono text-sm whitespace-nowrap">{row.refNo}</TableCell>}
-                                            {visibleCols.party && <TableCell className="whitespace-nowrap">{row.party}</TableCell>}
-                                            {visibleCols.projectName && <TableCell className="whitespace-nowrap">{row.projectName}</TableCell>}
-                                            {visibleCols.quantity && <TableCell className="text-right font-bold">{row.quantity}</TableCell>}
-                                        </TableRow>
-                                    ))
-                                ) : (
-                                    <TableRow>
-                                        <TableCell colSpan={6} className="text-center py-10 text-muted-foreground italic">
-                                            No transactions found
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                                <div className="flex justify-end items-center gap-2 pt-2 text-sm border-t mt-2">
+                                    <span className="text-muted-foreground">Total Qty:</span>
+                                    <span className="font-bold text-base">{totalQty}</span>
+                                </div>
+                            </>
+                        );
+                    })()}
                 </DialogContent>
             </Dialog>
 

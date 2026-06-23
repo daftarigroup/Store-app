@@ -107,14 +107,16 @@ export function calculateRealInventory(
             individualRate = Number(first?.individualRate) || 0;
             
             // Try Master -> Indents -> StoreIns -> Issues -> StockTransfers
-            groupHead = first?.groupHead || 
-                        indents.find(i => i.productName === itemName)?.groupHead || 
-                        issues.find(is => is.productName === itemName)?.groupHead || '';
-            
-            uom = first?.uom || 
-                  indents.find(i => i.productName === itemName)?.uom || 
-                  storeIns.find(s => s.productName === itemName)?.uom || 
-                  issues.find(is => is.productName === itemName)?.uom || '';
+            groupHead = first?.groupHead ||
+                        indents.find(i => i.productName === itemName)?.groupHead ||
+                        issues.find(is => is.productName === itemName)?.groupHead ||
+                        transfers.find(t => t.productName === itemName)?.groupHead || '';
+
+            uom = first?.uom ||
+                  indents.find(i => i.productName === itemName)?.uom ||
+                  storeIns.find(s => s.productName === itemName)?.uom ||
+                  issues.find(is => is.productName === itemName)?.uom ||
+                  transfers.find(t => t.productName === itemName)?.uom || '';
         } else {
             const specific = relevantMasterRecords.find(r => r.firmName === currentProject);
             opening = Number(specific?.opening) || 0;
@@ -123,15 +125,17 @@ export function calculateRealInventory(
             const meta = specific || relevantMasterRecords[0];
             individualRate = Number(meta?.individualRate) || 0;
             
-            // Try Master -> Indents -> StoreIns -> Issues
-            groupHead = meta?.groupHead || 
-                        indents.find(i => i.productName === itemName)?.groupHead || 
-                        issues.find(is => is.productName === itemName)?.groupHead || '';
-            
-            uom = meta?.uom || 
-                  indents.find(i => i.productName === itemName)?.uom || 
-                  storeIns.find(s => s.productName === itemName)?.uom || 
-                  issues.find(is => is.productName === itemName)?.uom || '';
+            // Try Master -> Indents -> StoreIns -> Issues -> StockTransfers
+            groupHead = meta?.groupHead ||
+                        indents.find(i => i.productName === itemName)?.groupHead ||
+                        issues.find(is => is.productName === itemName)?.groupHead ||
+                        transfers.find(t => t.productName === itemName)?.groupHead || '';
+
+            uom = meta?.uom ||
+                  indents.find(i => i.productName === itemName)?.uom ||
+                  storeIns.find(s => s.productName === itemName)?.uom ||
+                  issues.find(is => is.productName === itemName)?.uom ||
+                  transfers.find(t => t.productName === itemName)?.uom || '';
         }
 
         const item = {
