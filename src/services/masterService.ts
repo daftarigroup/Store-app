@@ -477,6 +477,12 @@ async function upsertNormalizedMasterRecord(values: Record<string, any>, id?: nu
     }
 
     if ('item_name' in values) {
+        // Normalize at the source: strip leading/trailing spaces and collapse
+        // internal runs of whitespace to a single space. Product/item names are
+        // matched by exact string across tables, so stray spaces silently split
+        // a single item into several. The DB also enforces this via trigger.
+        values.item_name = String(values.item_name ?? '').replace(/\s+/g, ' ').trim();
+
         let oldName: string | null = null;
         if (id) {
             const { data: oldItem } = await supabase

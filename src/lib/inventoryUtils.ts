@@ -90,6 +90,10 @@ export function calculateRealInventory(
 
     return Array.from(allItemNames).map(itemName => {
         const key = itemName;
+        // Match against the trimmed product name: stored names can carry stray
+        // leading/trailing/double spaces, and itemName here is already trimmed.
+        // Comparing the raw name would miss those rows and blank out uom/groupHead.
+        const nameMatches = (n?: string) => (n || '').trim() === itemName;
         const relevantMasterRecords = inventoryMaster.filter(i => (i.itemName || '').trim() === itemName);
         
         let opening = 0;
@@ -108,15 +112,15 @@ export function calculateRealInventory(
             
             // Try Master -> Indents -> StoreIns -> Issues -> StockTransfers
             groupHead = first?.groupHead ||
-                        indents.find(i => i.productName === itemName)?.groupHead ||
-                        issues.find(is => is.productName === itemName)?.groupHead ||
-                        transfers.find(t => t.productName === itemName)?.groupHead || '';
+                        indents.find(i => nameMatches(i.productName))?.groupHead ||
+                        issues.find(is => nameMatches(is.productName))?.groupHead ||
+                        transfers.find(t => nameMatches(t.productName))?.groupHead || '';
 
             uom = first?.uom ||
-                  indents.find(i => i.productName === itemName)?.uom ||
-                  storeIns.find(s => s.productName === itemName)?.uom ||
-                  issues.find(is => is.productName === itemName)?.uom ||
-                  transfers.find(t => t.productName === itemName)?.uom || '';
+                  indents.find(i => nameMatches(i.productName))?.uom ||
+                  storeIns.find(s => nameMatches(s.productName))?.uom ||
+                  issues.find(is => nameMatches(is.productName))?.uom ||
+                  transfers.find(t => nameMatches(t.productName))?.uom || '';
         } else {
             const specific = relevantMasterRecords.find(r => r.firmName === currentProject);
             opening = Number(specific?.opening) || 0;
@@ -127,15 +131,15 @@ export function calculateRealInventory(
             
             // Try Master -> Indents -> StoreIns -> Issues -> StockTransfers
             groupHead = meta?.groupHead ||
-                        indents.find(i => i.productName === itemName)?.groupHead ||
-                        issues.find(is => is.productName === itemName)?.groupHead ||
-                        transfers.find(t => t.productName === itemName)?.groupHead || '';
+                        indents.find(i => nameMatches(i.productName))?.groupHead ||
+                        issues.find(is => nameMatches(is.productName))?.groupHead ||
+                        transfers.find(t => nameMatches(t.productName))?.groupHead || '';
 
             uom = meta?.uom ||
-                  indents.find(i => i.productName === itemName)?.uom ||
-                  storeIns.find(s => s.productName === itemName)?.uom ||
-                  issues.find(is => is.productName === itemName)?.uom ||
-                  transfers.find(t => t.productName === itemName)?.uom || '';
+                  indents.find(i => nameMatches(i.productName))?.uom ||
+                  storeIns.find(s => nameMatches(s.productName))?.uom ||
+                  issues.find(is => nameMatches(is.productName))?.uom ||
+                  transfers.find(t => nameMatches(t.productName))?.uom || '';
         }
 
         const item = {

@@ -243,6 +243,7 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                     indenterName: r.indenter_name,
                     // department: r.department,
                     productName: r.product_name,
+                    groupHead: r.group_head || '',
                     quantity: r.quantity,
                     uom: r.uom,
                     attachment: r.attachment,

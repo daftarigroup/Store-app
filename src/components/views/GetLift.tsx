@@ -108,9 +108,11 @@ interface AuthUser {
 function InlineDeliveryDate({
     row,
     onSave,
+    canEdit,
 }: {
     row: HistoryData;
     onSave: (liftNumber: string, date: string) => Promise<void>;
+    canEdit: boolean;
 }) {
     const [editing, setEditing] = useState(false);
     const [value, setValue] = useState('');
@@ -120,7 +122,7 @@ function InlineDeliveryDate({
         return (
             <div className="flex items-center gap-1.5">
                 <span>{row.deliveryDate || '-'}</span>
-                {row.liftNumber && (
+                {canEdit && row.liftNumber && (
                     <button
                         type="button"
                         className="text-muted-foreground hover:text-primary"
@@ -552,8 +554,11 @@ export default function GetPurchase() {
                             <span className="text-muted-foreground text-xs">-</span>
                         )}
                         {user?.administrate && (
-                            <label className={`cursor-pointer inline-flex items-center justify-center h-7 w-7 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
-                                {isUploading ? <Loader size={12} color="currentColor" /> : <Upload size={12} />}
+                            <label
+                                title={photoUrl ? 'Replace bill' : 'Upload bill'}
+                                className={`cursor-pointer inline-flex items-center justify-center h-7 w-7 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}
+                            >
+                                {isUploading ? <Loader size={12} color="currentColor" /> : (photoUrl ? <Pencil size={12} /> : <Upload size={12} />)}
                                 <input
                                     type="file"
                                     className="sr-only"
@@ -580,7 +585,7 @@ export default function GetPurchase() {
         {
             accessorKey: 'deliveryDate',
             header: 'Delivery Date',
-            cell: ({ row }) => <InlineDeliveryDate row={row.original} onSave={handleSaveDeliveryDate} />,
+            cell: ({ row }) => <InlineDeliveryDate row={row.original} onSave={handleSaveDeliveryDate} canEdit={!!user?.administrate} />,
         },
         {
             accessorKey: 'product',
