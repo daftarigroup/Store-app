@@ -1,5 +1,5 @@
 import type { ColumnDef, Row } from '@tanstack/react-table';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import DataTable from '../element/DataTable';
 import { Button } from '../ui/button';
 import {
@@ -40,6 +40,7 @@ import {
     type GetLiftStoreInRecord,
 } from '@/services/getLiftService';
 import { createFullkittingEntry } from '@/services/fullkittingService';
+import { supabase } from '@/lib/supabase';
 
 interface GetPurchaseData {
     indentNo: string;
@@ -77,6 +78,7 @@ interface HistoryData {
     deliveryDate: string;
     product?: string;
     photoOfBill?: string;
+    liftNumber?: string;
     quantity?: number;
     liftedQty?: number;
     pendingLiftQty?: number;
@@ -98,6 +100,7 @@ interface AuthUser {
     firmNameMatch?: string;
     firm_access?: string[];
     receiveItemAction?: boolean;
+    administrate?: boolean;
 }
 
 export default function GetPurchase() {
@@ -111,6 +114,7 @@ export default function GetPurchase() {
     const [loading, setLoading] = useState(false);
     const [indentRecords, setIndentRecords] = useState<GetLiftIndentRecord[]>([]);
     const [storeInRecords, setStoreInRecords] = useState<GetLiftStoreInRecord[]>([]);
+    const [uploadingLiftNo, setUploadingLiftNo] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchAllData = async () => {
@@ -291,6 +295,7 @@ export default function GetPurchase() {
                 pendingPoQty: pendingAfterThisLift,
                 cancelQty: cancelQtySafe,
                 photoOfBill: store.photoOfBill || '',
+                liftNumber: store.liftNumber || '',
                 timestamp: store.timestamp || '',
                 // department: indentMatch?.department || '-',
                 areaOfUse: indentMatch?.areaOfUse || '-',
@@ -429,19 +434,49 @@ export default function GetPurchase() {
         {
             accessorKey: 'photoOfBill',
             header: 'Photo Of Bill',
-            cell: ({ getValue }) => {
-                const photoUrl = getValue() as string;
-                if (!photoUrl) return <div className="text-muted-foreground">-</div>;
+            cell: ({ row }) => {
+                const photoUrl = row.original.photoOfBill;
+                const liftNo = row.original.liftNumber;
+                const isUploading = uploadingLiftNo === liftNo;
+
+                const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+                    const file = e.target.files?.[0];
+                    if (!file || !liftNo) return;
+                    setUploadingLiftNo(liftNo);
+                    try {
+                        const newUrl = await uploadBillPhoto(file, liftNo);
+                        await supabase.from('store_in').update({ photo_of_bill: newUrl }).eq('lift_number', liftNo);
+                        setHistoryData(prev => prev.map(r => r.liftNumber === liftNo ? { ...r, photoOfBill: newUrl } : r));
+                        toast.success('Photo of bill updated');
+                    } catch {
+                        toast.error('Failed to upload photo');
+                    } finally {
+                        setUploadingLiftNo(null);
+                        e.target.value = '';
+                    }
+                };
 
                 return (
-                    <div>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => window.open(photoUrl, '_blank')}
-                        >
-                            View Bill
-                        </Button>
+                    <div className="flex items-center gap-1">
+                        {photoUrl ? (
+                            <Button variant="outline" size="sm" onClick={() => window.open(photoUrl, '_blank')}>
+                                View Bill
+                            </Button>
+                        ) : (
+                            <span className="text-muted-foreground text-xs">-</span>
+                        )}
+                        {user?.administrate && (
+                            <label className={`cursor-pointer inline-flex items-center justify-center h-7 w-7 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                                {isUploading ? <Loader size={12} color="currentColor" /> : <Upload size={12} />}
+                                <input
+                                    type="file"
+                                    className="sr-only"
+                                    accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+                                    onChange={handleFileChange}
+                                    disabled={isUploading}
+                                />
+                            </label>
+                        )}
                     </div>
                 );
             },

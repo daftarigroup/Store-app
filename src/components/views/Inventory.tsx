@@ -219,9 +219,9 @@ export default () => {
                         date: is.planned1 || is.timestamp,
                         refNo: is.issueNo,
                         quantity: Number(is.givenQty || 0),
-                        party: is.issueTo || 'N/A',
+                        party: is.issuePersonName || is.issueTo || 'N/A',
                         projectName: is.projectName || is.firm_name || 'N/A',
-                        siteLocation: is.location || 'N/A'
+                        siteLocation: is.siteLocation || 'N/A'
                     }));
                 break;
             case 'Issue Return':
@@ -233,7 +233,7 @@ export default () => {
                         quantity: Number(is.rejected_damage_qty || 0),
                         party: is.returnPersonName || is.return_person_name || 'N/A',
                         projectName: is.projectName || is.firm_name || 'N/A',
-                        siteLocation: is.location || 'N/A'
+                        siteLocation: is.siteLocation || 'N/A'
                     }));
                 break;
             case 'Purchase Return':
