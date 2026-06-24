@@ -90,6 +90,7 @@ export interface StoreInRecord {
     challanImage: string;
     receiverName: string;
     firm_id?: number;
+    materialDate?: string | null;
 }
 
 
@@ -202,6 +203,7 @@ export async function fetchStoreInRecords(permittedFirms?: string[]): Promise<St
             challanImage: r.challan_image || '',
             receiverName: r.receiver_name || '',
             firm_id: r.firm_id,
+            materialDate: r.material_date || null,
         }));
 
     } catch (error) {
@@ -836,6 +838,27 @@ export async function uploadChallanImage(file: File, liftNumber: string): Promis
         console.error('Challan image upload error:', error);
         throw error;
     }
+}
+
+/**
+ * Admin-only: update photo_of_bill and/or material_date on a store_in row
+ * @param id - Primary key of the store_in row
+ * @param data - Fields to update
+ */
+export async function updateLiftHistoryAdmin(
+    id: number,
+    data: { photoOfBill?: string | null; materialDate?: string | null }
+): Promise<void> {
+    const payload: Record<string, any> = {};
+    if (data.photoOfBill !== undefined) payload.photo_of_bill = data.photoOfBill;
+    if (data.materialDate !== undefined) payload.material_date = data.materialDate;
+
+    const { error } = await supabase
+        .from('store_in')
+        .update(payload)
+        .eq('id', id);
+
+    if (error) throw error;
 }
 
 /**

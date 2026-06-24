@@ -192,7 +192,7 @@ export default () => {
                 rows = filteredStoreIns
                     .filter((s: any) => s.productName === itemName && Number(s.receivedQuantity || 0) > 0)
                     .map((s: any) => ({
-                        date: s.planned6 || s.timestamp,
+                        date: s.materialDate || s.planned6 || s.timestamp,
                         refNo: s.billNo || s.liftNumber,
                         quantity: Number(s.receivedQuantity || 0),
                         party: s.vendorName || 'N/A',
@@ -219,9 +219,8 @@ export default () => {
                         date: is.planned1 || is.timestamp,
                         refNo: is.issueNo,
                         quantity: Number(is.givenQty || 0),
-                        party: is.issuePersonName || is.issueTo || 'N/A',
+                        party: is.constructorName || 'N/A',
                         projectName: is.projectName || is.firm_name || 'N/A',
-                        siteLocation: is.siteLocation || 'N/A'
                     }));
                 break;
             case 'Issue Return':
@@ -452,7 +451,7 @@ export default () => {
                 <DialogContent className="max-w-[95vw] lg:max-w-[90vw] xl:max-w-[1400px] max-h-[90dvh] flex flex-col">
                     <DialogHeader className="flex flex-row items-center justify-between space-x-4">
                         <DialogTitle className="shrink-0">{detailDialog.title}</DialogTitle>
-                        {detailDialog.title.includes('Lifting Quantity') && (
+                        {(detailDialog.title.includes('Lifting Quantity') || detailDialog.title.startsWith('Issued History')) && (
                             <div className="relative flex-1 max-w-xs">
                                 <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
                                 <Input
@@ -504,18 +503,21 @@ export default () => {
                                 >
                                     Project Name
                                 </DropdownMenuCheckboxItem>
-                                <DropdownMenuCheckboxItem
-                                    checked={visibleCols.siteLocation}
-                                    onCheckedChange={(checked) => setVisibleCols(v => ({ ...v, siteLocation: !!checked }))}
-                                >
-                                    Site Location
-                                </DropdownMenuCheckboxItem>
+                                {!detailDialog.title.startsWith('Issued History') && (
+                                    <DropdownMenuCheckboxItem
+                                        checked={visibleCols.siteLocation}
+                                        onCheckedChange={(checked) => setVisibleCols(v => ({ ...v, siteLocation: !!checked }))}
+                                    >
+                                        Site Location
+                                    </DropdownMenuCheckboxItem>
+                                )}
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </DialogHeader>
                     {(() => {
                         const q = dialogSearch.toLowerCase();
-                        const visibleRows = detailDialog.title.includes('Lifting Quantity') && q
+                        const isSearchable = detailDialog.title.includes('Lifting Quantity') || detailDialog.title.startsWith('Issued History');
+                        const visibleRows = isSearchable && q
                             ? detailDialog.rows.filter(row =>
                                 row.refNo?.toLowerCase().includes(q) ||
                                 row.party?.toLowerCase().includes(q) ||
@@ -538,7 +540,7 @@ export default () => {
                                                 {visibleCols.projectName && (
                                                     <TableHead>{detailDialog.title.includes('Stock Transfer') ? 'To' : 'Project'}</TableHead>
                                                 )}
-                                                {visibleCols.siteLocation && <TableHead>Site Location</TableHead>}
+                                                {visibleCols.siteLocation && !detailDialog.title.startsWith('Issued History') && <TableHead>Site Location</TableHead>}
                                                 {visibleCols.quantity && <TableHead className="text-right">Qty</TableHead>}
                                             </TableRow>
                                         </TableHeader>
@@ -554,7 +556,7 @@ export default () => {
                                                         {visibleCols.refNo && <TableCell className="font-mono text-sm whitespace-nowrap">{row.refNo}</TableCell>}
                                                         {visibleCols.party && <TableCell className="whitespace-nowrap">{row.party}</TableCell>}
                                                         {visibleCols.projectName && <TableCell className="whitespace-nowrap">{row.projectName}</TableCell>}
-                                                        {visibleCols.siteLocation && <TableCell className="whitespace-nowrap">{row.siteLocation || 'N/A'}</TableCell>}
+                                                        {visibleCols.siteLocation && !detailDialog.title.startsWith('Issued History') && <TableCell className="whitespace-nowrap">{row.siteLocation || 'N/A'}</TableCell>}
                                                         {visibleCols.quantity && <TableCell className="text-right font-bold">{row.quantity}</TableCell>}
                                                     </TableRow>
                                                 ))

@@ -1,5 +1,5 @@
 import type { ColumnDef, Row } from '@tanstack/react-table';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import DataTable from '../element/DataTable';
 import { z } from 'zod';
 import { useForm, useFieldArray } from 'react-hook-form';
@@ -15,7 +15,7 @@ import {
     DialogTrigger,
     DialogClose,
 } from '../ui/dialog';
-import { Truck, Building, FileText, IndianRupee, Plus } from 'lucide-react';
+import { Truck, Building, FileText, IndianRupee, Plus, Pencil } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel } from '../ui/form';
 import { toast } from 'sonner';
@@ -37,6 +37,7 @@ import {
     uploadProductPhoto,
     uploadChallanImage,
     uploadBillCopy,
+    updateLiftHistoryAdmin,
     createDirectRecord,
     createPaymentEntry,
     type StoreInRecord,
@@ -80,6 +81,7 @@ interface StoreInPendingData {
 }
 
 interface StoreInHistoryData {
+    id: number;
     liftNumber: string;
     indentNo: string;
     billNo: string;
@@ -122,6 +124,7 @@ interface StoreInHistoryData {
     planned6Date: string;
     hodStatus: string;
     hodRemark: string;
+    materialDate?: string | null;
 }
 
 interface DirectStoreInData {
@@ -235,6 +238,10 @@ export default () => {
     const [completedItems, setCompletedItems] = useState<Set<number>>(new Set());
     const [openDirectDialog, setOpenDirectDialog] = useState(false);
     const [options, setOptions] = useState<MasterData | null>(null);
+    const [editHistoryRow, setEditHistoryRow] = useState<StoreInHistoryData | null>(null);
+    const [editSubmitting, setEditSubmitting] = useState(false);
+    const [editDeliveryDate, setEditDeliveryDate] = useState('');
+    const [editPhotoFile, setEditPhotoFile] = useState<File | null>(null);
     const [vendorOptions, setVendorOptions] = useState<{ label: string; value: string }[]>([]);
     const [productOptions, setProductOptions] = useState<{ label: string; value: string }[]>([]);
 
@@ -321,6 +328,7 @@ export default () => {
         const historyItems = filteredByFirm.filter(i => i.actual6 !== '' && !i.liftNumber.startsWith('DIRECT-'));
 
         setHistoryData(historyItems.map((i) => ({
+            id: i.id,
             liftNumber: i.liftNumber || '',
             indentNo: i.indentNo || '',
             billNo: String(i.billNo) || '',
@@ -363,6 +371,7 @@ export default () => {
             planned6Date: i.planned6 || '',
             hodStatus: i.hodStatus || '',
             hodRemark: i.hodRemark || '',
+            materialDate: i.materialDate || null,
             challanNo: i.challanNo || '',
             challanImage: i.challanImage || '',
             receiverName: i.receiverName || '',
@@ -460,7 +469,9 @@ export default () => {
         { accessorKey: 'amount', header: 'Freight Amount' },
     ];
 
-    const historyColumns: ColumnDef<HistoryData>[] = [
+    const isAdmin = user?.administrate === true || (user?.administrate as any) === 'true';
+
+    const historyColumns = useMemo<ColumnDef<HistoryData>[]>(() => [
         { accessorKey: 'timestamp', header: 'Timestamp' },
         { accessorKey: 'liftNumber', header: 'Lift Number', cell: textWrapCell },
         { accessorKey: 'indentNo', header: 'Indent No.', cell: textWrapCell },
@@ -570,7 +581,32 @@ export default () => {
             header: 'Planned Date',
             cell: ({ row }) => formatPlannedDate(row.original.planned6Date)
         },
-    ];
+        {
+            accessorKey: 'materialDate',
+            header: 'Delivery Date',
+            cell: ({ row }) => row.original.materialDate ? formatPlannedDate(row.original.materialDate) : '-'
+        },
+        ...[{
+            id: 'adminEdit',
+            header: 'Edit',
+            cell: ({ row }: { row: Row<HistoryData> }) => (
+                <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2 text-xs gap-1"
+                    onClick={() => {
+                        setEditHistoryRow(row.original);
+                        setEditDeliveryDate(row.original.materialDate || '');
+                        setEditPhotoFile(null);
+                    }}
+                >
+                    <Pencil size={12} />
+                    Edit
+                </Button>
+            ),
+        }] as ColumnDef<HistoryData>[],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    ], [setEditHistoryRow, setEditDeliveryDate, setEditPhotoFile]);
 
     const schema = z.object({
         status: z.enum(['Received', 'Not Received']),
@@ -1552,6 +1588,85 @@ export default () => {
                         </Form>
                     </DialogContent>
                 )}
+            </Dialog>
+
+            {/* Admin edit dialog for Lifting History */}
+            <Dialog open={!!editHistoryRow} onOpenChange={(open) => { if (!open) setEditHistoryRow(null); }}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Pencil size={18} />
+                            Edit Lifting Record
+                        </DialogTitle>
+                        <DialogDescription>
+                            Update delivery date and photo of bill for lift <span className="font-mono font-semibold">{editHistoryRow?.liftNumber}</span>
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-2">
+                        <div className="space-y-1.5">
+                            <label className="text-sm font-medium">Delivery Date</label>
+                            <Input
+                                type="date"
+                                value={editDeliveryDate}
+                                onChange={(e) => setEditDeliveryDate(e.target.value)}
+                                className="h-10"
+                            />
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <label className="text-sm font-medium">Photo of Bill</label>
+                            {editHistoryRow?.photoOfBill && (
+                                <a
+                                    href={editHistoryRow.photoOfBill}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="block text-xs text-blue-600 underline mb-1"
+                                >
+                                    View current photo
+                                </a>
+                            )}
+                            <Input
+                                type="file"
+                                accept="image/*,.pdf"
+                                onChange={(e) => setEditPhotoFile(e.target.files?.[0] || null)}
+                                className="h-10 file:bg-primary/10 file:text-primary file:border-0 file:rounded-md cursor-pointer"
+                            />
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="outline" disabled={editSubmitting}>Cancel</Button>
+                        </DialogClose>
+                        <Button
+                            disabled={editSubmitting}
+                            onClick={async () => {
+                                if (!editHistoryRow) return;
+                                setEditSubmitting(true);
+                                try {
+                                    let photoUrl: string | undefined;
+                                    if (editPhotoFile) {
+                                        photoUrl = await uploadBillCopy(editPhotoFile, editHistoryRow.liftNumber);
+                                    }
+                                    await updateLiftHistoryAdmin(editHistoryRow.id, {
+                                        materialDate: editDeliveryDate || null,
+                                        ...(photoUrl !== undefined && { photoOfBill: photoUrl }),
+                                    });
+                                    toast.success('Record updated successfully');
+                                    setEditHistoryRow(null);
+                                    fetchAllData();
+                                } catch {
+                                    toast.error('Failed to update record');
+                                } finally {
+                                    setEditSubmitting(false);
+                                }
+                            }}
+                        >
+                            {editSubmitting ? 'Saving…' : 'Save Changes'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
             </Dialog>
         </div>
     );

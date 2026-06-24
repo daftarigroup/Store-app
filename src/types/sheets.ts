@@ -537,6 +537,7 @@ export type StoreInSheet = {
     hodRemark: string;
     plannedHod: string;
     actualHod: string;
+    materialDate?: string | null;
 
 }
 

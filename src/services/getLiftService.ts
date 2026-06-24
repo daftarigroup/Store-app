@@ -39,6 +39,7 @@ export interface GetLiftIndentRecord {
 }
 
 export interface GetLiftStoreInRecord {
+    id: number;
     liftNumber: string;
     indentNo: string;
     firmNameMatch: string;
@@ -167,7 +168,7 @@ export async function fetchStoreInRecords(permittedFirms?: string[]) {
 
         let query = supabase
             .from('store_in')
-            .select('lift_number, indent_no, firm_name, firm_id, vendor_name, product_name, po_number, qty, received_quantity, photo_of_bill, timestamp, material_date')
+            .select('id, lift_number, indent_no, firm_name, firm_id, vendor_name, product_name, po_number, qty, received_quantity, photo_of_bill, timestamp, material_date')
             .order('timestamp', { ascending: false });
 
         const filteredQuery = applyFirmAccessFilter(query, permittedFirms);
@@ -178,6 +179,7 @@ export async function fetchStoreInRecords(permittedFirms?: string[]) {
         if (error) throw error;
 
         return (data || []).map((r: any) => ({
+            id: r.id,
             liftNumber: r.lift_number || '',
             indentNo: r.indent_no || '',
             firmNameMatch: r.firm_name,

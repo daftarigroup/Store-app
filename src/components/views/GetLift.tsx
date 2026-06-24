@@ -21,7 +21,7 @@ import { Input } from '../ui/input';
 import { PuffLoader as Loader } from 'react-spinners';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { ShoppingCart, X, Truck, FileText, IndianRupee, CreditCard, User, Phone, CheckCircle2, Package, Info, Upload } from 'lucide-react';
+import { ShoppingCart, X, Truck, FileText, IndianRupee, CreditCard, User, Phone, CheckCircle2, Package, Info, Upload, Pencil, Check } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
 import { formatDate, formatDateTime, parseCustomDate } from '@/lib/utils';
@@ -69,6 +69,7 @@ interface GetPurchaseData {
 }
 
 interface HistoryData {
+    id: number;
     indentNo: string;
     firmNameMatch: string;
     firm_id?: number;
@@ -76,6 +77,7 @@ interface HistoryData {
     poNumber: string;
     poDate: string;
     deliveryDate: string;
+    materialDateRaw?: string;
     product?: string;
     photoOfBill?: string;
     liftNumber?: string;
@@ -103,6 +105,70 @@ interface AuthUser {
     administrate?: boolean;
 }
 
+function InlineDeliveryDate({
+    row,
+    onSave,
+}: {
+    row: HistoryData;
+    onSave: (liftNumber: string, date: string) => Promise<void>;
+}) {
+    const [editing, setEditing] = useState(false);
+    const [value, setValue] = useState('');
+    const [saving, setSaving] = useState(false);
+
+    if (!editing) {
+        return (
+            <div className="flex items-center gap-1.5">
+                <span>{row.deliveryDate || '-'}</span>
+                {row.liftNumber && (
+                    <button
+                        type="button"
+                        className="text-muted-foreground hover:text-primary"
+                        onClick={() => { setValue(row.materialDateRaw || ''); setEditing(true); }}
+                    >
+                        <Pencil size={12} />
+                    </button>
+                )}
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex items-center gap-1">
+            <Input
+                type="date"
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                className="h-7 w-36 text-xs"
+            />
+            <button
+                type="button"
+                disabled={saving}
+                className="text-green-600 hover:text-green-700 disabled:opacity-40"
+                onClick={async () => {
+                    if (!row.liftNumber) return;
+                    setSaving(true);
+                    try {
+                        await onSave(row.liftNumber, value);
+                        setEditing(false);
+                    } finally {
+                        setSaving(false);
+                    }
+                }}
+            >
+                <Check size={14} />
+            </button>
+            <button
+                type="button"
+                className="text-destructive hover:text-destructive/70"
+                onClick={() => setEditing(false)}
+            >
+                <X size={14} />
+            </button>
+        </div>
+    );
+}
+
 export default function GetPurchase() {
     const { user } = useAuth() as { user: AuthUser };
     const [selectedIndent, setSelectedIndent] = useState<GetPurchaseData | null>(null);
@@ -115,6 +181,7 @@ export default function GetPurchase() {
     const [indentRecords, setIndentRecords] = useState<GetLiftIndentRecord[]>([]);
     const [storeInRecords, setStoreInRecords] = useState<GetLiftStoreInRecord[]>([]);
     const [uploadingLiftNo, setUploadingLiftNo] = useState<string | null>(null);
+
 
     useEffect(() => {
         const fetchAllData = async () => {
@@ -280,6 +347,7 @@ export default function GetPurchase() {
             const pendingAfterThisLift = Math.max(0, approvedQty - runningReceived - cancelQtySafe);
 
             return {
+                id: store.id,
                 indentNo: store.indentNo || '',
                 firmNameMatch: store.firmNameMatch || '',
                 firm_id: store.firm_id,
@@ -287,6 +355,7 @@ export default function GetPurchase() {
                 poNumber: store.poNumber || indentMatch?.poNumber || '-',
                 poDate: indentMatch?.poDate ? formatDate(parseCustomDate(indentMatch.poDate)) : '-',
                 deliveryDate: store.materialDate ? formatDate(parseCustomDate(store.materialDate)) : (indentMatch?.deliveryDate ? formatDate(parseCustomDate(indentMatch.deliveryDate)) : '-'),
+                materialDateRaw: store.materialDate || '',
                 product: store.productName || indentMatch?.productName || '-',
                 quantity: approvedQty,
                 liftedQty: Number(store.qty) || 0, // NEW: Specific lift quantity
@@ -410,6 +479,23 @@ export default function GetPurchase() {
         },
     ];
 
+    const handleSaveDeliveryDate = async (liftNumber: string, date: string) => {
+        const { error } = await supabase
+            .from('store_in')
+            .update({ material_date: date || null })
+            .eq('lift_number', liftNumber);
+        if (error) throw error;
+        setHistoryData(prev => prev.map(r =>
+            r.liftNumber === liftNumber
+                ? { ...r, materialDateRaw: date, deliveryDate: date ? formatDate(parseCustomDate(date)) : r.deliveryDate }
+                : r
+        ));
+        setStoreInRecords(prev => prev.map(r =>
+            r.liftNumber === liftNumber ? { ...r, materialDate: date || null } : r
+        ));
+        toast.success('Delivery date updated');
+    };
+
     const historyColumns: ColumnDef<HistoryData>[] = [
         {
             accessorKey: 'timestamp',
@@ -494,7 +580,7 @@ export default function GetPurchase() {
         {
             accessorKey: 'deliveryDate',
             header: 'Delivery Date',
-            cell: ({ getValue }) => <div>{(getValue() as string) || '-'}</div>,
+            cell: ({ row }) => <InlineDeliveryDate row={row.original} onSave={handleSaveDeliveryDate} />,
         },
         {
             accessorKey: 'product',
@@ -1455,6 +1541,7 @@ export default function GetPurchase() {
                     </DialogContent>
                 )}
             </Dialog>
+
         </div>
     );
 }
